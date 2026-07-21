@@ -104,7 +104,11 @@ For implementation tasks (features, bug fixes, refactors, tests) - not for quest
   - Immediately after launching a task, start `~/.claude/scripts/codex_watch.sh <job-id>`
     as a background watcher. It polls every 30 s, reports progress every 5 minutes, and
     emits a single line on phase change, stale detection, or any terminal state.
-  - Get the job id from `codex-companion.mjs status --json`.
+  - Get the job id from `codex-companion.mjs status --json`, and **confirm it is the
+    right job before attaching**: match `summary` against the brief you just sent and
+    require `write: true`. Never just take the first entry in `running[]` -- idle
+    read-only sessions appear there too, and watching one reports a instant bogus
+    "terminal" while the real task runs on unobserved.
   - **Stale = broker says `running` but the pid is dead** (`kill -0` fails). When that
     happens: `codex-companion.mjs cancel <job-id>`, then relaunch as a **fresh** thread
     (`--fresh`), never `--resume` -- the dead thread cannot be continued.

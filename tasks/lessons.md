@@ -67,3 +67,10 @@ nothing surfaced that. Silence is indistinguishable from progress.
 fails). Then: cancel the job, relaunch as a **fresh** thread — a dead thread cannot be
 resumed. Always confirm against artefacts on disk (file mtimes, `git status`) rather
 than trusting any status report, including the watcher's.
+
+**Corollary (T-1.4).** Identify the job before watching it. Taking the first entry of
+`running[]` attached the watcher to an idle read-only session (`write: false`), which
+reported "terminal" within seconds while the real task ran on unobserved — a false
+*success* signal, which is more dangerous than the silence the watcher was built to fix.
+Match the job's `summary` against the brief just sent and require `write: true`. The
+disk check is what caught it: the watcher said done, and `embeddings.py` did not exist.
