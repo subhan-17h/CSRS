@@ -42,7 +42,11 @@ class Settings(BaseSettings):
     embed_dim: int = 768
     embed_batch_size: int = 32
 
-    default_llm: str = "qwen2.5:1.5b"
+    # Grading-facing default. llama3.2 (3B) follows grounding and refusal
+    # instructions more reliably than the smaller models, which is the hard part
+    # of T-1.6/T-4.2; the ~2 s it costs over qwen2.5:1.5b is worth that. All
+    # supported models remain selectable in the UI.
+    default_llm: str = "llama3.2"
     supported_llms: tuple[str, ...] = (
         "llama3.2",
         "qwen2.5:1.5b",
