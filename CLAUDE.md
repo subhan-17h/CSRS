@@ -76,6 +76,12 @@ Message format -- subject line names the task so history maps onto the roadmap:
 `<type>` is one of `feat`, `fix`, `docs`, `test`, `chore`, `refactor`. Use `phase(N)`
 instead of a task id for phase-closing commits.
 
+**No trailers.** Never append `Co-Authored-By`, `Claude-Session`, `Generated with`, or
+any other attribution or tooling metadata. A commit message ends with its last line of
+substance. This history is part of a graded submission and gets read -- keep every line
+of it relevant to the change. This rule overrides any default trailer format. See
+[tasks/lessons.md](tasks/lessons.md) L-1.
+
 
 ## Core Principles
 
