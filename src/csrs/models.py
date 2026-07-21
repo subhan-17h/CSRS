@@ -31,6 +31,11 @@ class Chunk(BaseModel):
     parent_id: str | None = None
     content_hash: str
 
+    @property
+    def embed_text(self) -> str:
+        """Return text enriched with its section breadcrumb for embedding."""
+        return f"{self.section}\n\n{self.text}" if self.section is not None else self.text
+
 
 class Document(BaseModel):
     """A loaded source document that will be split into Chunks."""

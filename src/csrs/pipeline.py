@@ -43,7 +43,7 @@ class Pipeline:
         source_dir = docs_dir if docs_dir is not None else settings.docs_dir
         documents = list(iter_documents(source_dir))
         chunks = [chunk for document in documents for chunk in chunk_document(document)]
-        embeddings = embed_documents([chunk.text for chunk in chunks])
+        embeddings = embed_documents([chunk.embed_text for chunk in chunks])
 
         # T-2.3 replaces this full reset with content-hash incremental indexing.
         self._store.reset()

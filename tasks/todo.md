@@ -111,6 +111,39 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     number. `reader.page_labels` returns plain sequential labels on all three PDFs, so it
     does not carry the printed number (index 45 of SP 800-53 prints "PAGE 19"), and the
     printed-number line is now stripped as furniture anyway.
+- [x] **T-2.2** Structure-aware chunking with embedded hierarchy breadcrumbs
+  - [x] Detect markdown, numeric, control, enhancement, and CSF headings with a depth stack.
+  - [x] Emit page-local blocks so a chunk's page number is never ambiguous.
+  - [x] Carry the breadcrumb into the embedded text via `Chunk.embed_text`, keeping `text`
+    clean for display, and switch `Pipeline.index()` to embed it.
+  - [x] Reject table-of-contents dot leaders; rebuild CSF labels from the match; cap labels
+    at 80 characters.
+  - [x] Prove lint, offline tests, CSF metrics, one SP 800-53 parse, and ASCII source/tests.
+  - Verified: ruff clean, 54 offline tests pass on a dead Ollama port. SP 800-53 gives 1820
+    chunks with `control_id` on 92.1%, 0 dot-leader breadcrumbs, and AC-2 resolving to
+    `NIST.SP.800-53r5.pdf > ACCESS CONTROL > AC-2 ACCOUNT MANAGEMENT` at page 46. CSF
+    breadcrumbs went from 72/244/263 to 72/114/147 characters and from 120 non-ASCII to 0.
+  - ⚠ Known defect, deliberately NOT patched: every CSF breadcrumb carries a false ancestor,
+    `Subcategories that were relocated in CSF 2.0.`. Traced to the source line
+    `1.1 Subcategories that were relocated in CSF 2.0.` on page 19 -- a numbered **table
+    caption** that the numeric-section pattern reads as a depth-2 heading, which then
+    persists on the stack for the rest of the document. It is not a legitimate heading.
+    A measured one-line fix exists (reject numeric headings whose label ends in a period:
+    rejects exactly this caption, keeps all 62 SP 800-53 numeric headings) but was left
+    unwritten because the parser is being replaced -- see below.
+  - **Decision — the regex heading layer is being superseded.** Four rounds of heuristics
+    across T-2.1/T-2.2 each fixed a real defect and each was found only by testing against
+    a document the previous round had not seen. That is the signature of a corpus-tuned
+    approach, and it works against the spec's "extensible to new standards" requirement.
+    Docling's DocLayNet layout model classifies `Page-header`, `Page-footer` and
+    `Section-header` structurally and suppresses furniture by construction, which replaces
+    the whole T-2.1 furniture fix and the fragile numeric-section detection. Control-ID
+    regexes (`AC-2`, `GV.OC-01`) stay either way -- no layout model knows NIST numbering.
+    Cost, from Docling's own benchmark: 1.27-1.34 pages/s on an M3 Max versus the 9.5
+    pages/s measured here, so SP 800-53 goes from 52 s to roughly 6 min, plus a GB-scale
+    model warm-up. T-2.3's incremental indexing and T-2.5's progress UI both mitigate that
+    and are already on the roadmap. This commit is the working fallback if the migration
+    does not hold up.
 
 ---
 
