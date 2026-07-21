@@ -33,6 +33,11 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
   - [x] Unit-test prefixes, asymmetry, batching/order, and wrong-width failures offline.
   - [x] Run lint, offline tests, live Ollama comparison, API-call isolation, and ASCII proof.
 - [ ] **T-1.5** Chroma store with `hnsw:space=cosine`, own embeddings passed in
+  - [ ] Persist `Chunk` documents and metadata while omitting Chroma-invalid `None` values.
+  - [ ] Reconstruct equal `Chunk`s and convert cosine distance to `1.0 - distance` scores.
+  - [ ] Support caller-selected `k`, count, and delete-and-recreate reset behavior.
+  - [ ] Prove sensible first-place ranking, cosine configuration, round-trip, score order,
+    reset, offline operation, lint, ASCII source, and no repository-local index leakage.
 - [ ] **T-1.6** Grounded generation + literal refusal string
 - [ ] **T-1.7** `Pipeline` facade (`index()`, `ask()`)
 - [ ] **T-1.8** 🎉 Minimal Streamlit app — **first end-to-end answer**
