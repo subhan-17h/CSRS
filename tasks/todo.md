@@ -21,7 +21,11 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     non-recursive scan finds zero documents. Do not "simplify" this to `glob`.
   - Note for T-2.1: adding the PDF parser is a one-line change to `_PARSERS` in
     `src/csrs/loaders/__init__.py`; no caller should need touching.
-- [ ] **T-1.3** Naive recursive chunker (~400 tok / ~60 overlap)
+- [x] **T-1.3** Naive recursive chunker (~400 tok / ~60 overlap)
+  - [x] Implement recursive separator splitting with a hard-cut fallback.
+  - [x] Assemble bounded chunks with real text overlap and stable `Chunk` metadata.
+  - [x] Cover size, overlap, sentence survival, determinism, and pathological inputs.
+  - [x] Run lint, the full test suite, real-corpus evidence, and the ASCII proof.
 - [ ] **T-1.4** ⚠ Embeddings with `search_document:` / `search_query:` prefixes + unit tests
 - [ ] **T-1.5** Chroma store with `hnsw:space=cosine`, own embeddings passed in
 - [ ] **T-1.6** Grounded generation + literal refusal string
@@ -80,7 +84,13 @@ problem, already handled in the sample extraction.
 session process, not a `brew services` daemon.
 
 ### Phase 1
-_not started_
+
+**T-1.3:** Added the recursive naive chunker and pure splitter. The synthetic 10k-character
+fixture yields 8-10 bounded chunks, and tests prove literal 240-character overlap,
+sentence-boundary survival, deterministic IDs and hashes, and hard-cut termination.
+The real OWASP sample yielded 100 chunks (597-1600 characters, mean 1439.3), with exact
+overlap visible across consecutive chunks. Full verification: ruff clean, 5 tests passed,
+and both new Python files decode as ASCII.
 
 ---
 
