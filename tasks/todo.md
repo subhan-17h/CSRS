@@ -32,12 +32,14 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
   - [x] Reject every embedding whose width differs from the configured dimension.
   - [x] Unit-test prefixes, asymmetry, batching/order, and wrong-width failures offline.
   - [x] Run lint, offline tests, live Ollama comparison, API-call isolation, and ASCII proof.
-- [ ] **T-1.5** Chroma store with `hnsw:space=cosine`, own embeddings passed in
-  - [ ] Persist `Chunk` documents and metadata while omitting Chroma-invalid `None` values.
-  - [ ] Reconstruct equal `Chunk`s and convert cosine distance to `1.0 - distance` scores.
-  - [ ] Support caller-selected `k`, count, and delete-and-recreate reset behavior.
-  - [ ] Prove sensible first-place ranking, cosine configuration, round-trip, score order,
+- [x] **T-1.5** Chroma store with `hnsw:space=cosine`, own embeddings passed in
+  - [x] Persist `Chunk` documents and metadata while omitting Chroma-invalid `None` values.
+  - [x] Reconstruct equal `Chunk`s and convert cosine distance to `1.0 - distance` scores.
+  - [x] Support caller-selected `k`, count, and delete-and-recreate reset behavior.
+  - [x] Prove sensible first-place ranking, cosine configuration, round-trip, score order,
     reset, offline operation, lint, ASCII source, and no repository-local index leakage.
+  - Ticked late by review: the Codex job died mid-verification (watcher caught it stale at
+    180 s), so it never reached this step. Code was verified and committed as `16ee54a`.
 - [x] **T-1.6** Grounded generation + literal refusal string
   - [x] Build a pure prompt assembler with `[S1]...` context, question, then instruction.
   - [x] Return an immediate refusal for empty context without calling Ollama.
@@ -55,7 +57,20 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     in-corpus 0.7402 / 0.7388 / 0.6841 · out-of-corpus 0.6535 / 0.5981 / 0.4922 / 0.4863.
     A `refusal_threshold` between 0.654 and 0.684 separates all seven, but the margin is
     ~0.03 -- calibrate against the full golden set (T-3.1), not these seven points.
-- [ ] **T-1.7** `Pipeline` facade (`index()`, `ask()`)
+- [x] **T-1.7** `Pipeline` facade (`index()`, `ask()`)
+  - [x] Compose loading, chunking, embedding, storage, and generation behind one facade.
+  - [x] Return indexing counts and expose document names and chunk count for UI callers.
+  - [x] Cover repeatable full rebuilds, empty-store refusal, and caller-selected retrieval.
+  - [x] Prove lint, offline tests on a dead Ollama port, live two-call use, boundary isolation,
+    ASCII source, and repository hygiene.
+  - ⚠ Finding for **T-3.5**: `ask()` sends all `top_k_dense` (20) chunks straight to
+    generation, because Phase 1 has no reranker yet. Measured prompt size on the OWASP
+    corpus: k=5 -> ~1900 tok (23% of `num_ctx`), k=10 -> ~3854 (47%), **k=20 -> ~7568
+    (92.4%)**. It fits today, but a longer question or a denser corpus overflows, and
+    Ollama truncates silently rather than erroring. `top_k_dense` is meant to be the
+    *retrieval candidate pool*, not the generation context: once T-3.4/T-3.5 land, RRF and
+    the reranker must narrow it to `rerank_top_n` (5) before generation. Until then, treat
+    20 as the ceiling and do not raise it.
 - [ ] **T-1.8** 🎉 Minimal Streamlit app — **first end-to-end answer**
 
 ---
@@ -133,6 +148,15 @@ Ruff passed and all 24 non-Ollama tests passed against a dead port. The real OWA
 answered "What is Broken Access Control?" with `refused=False`; the same top-5 retrieval
 flow answered "What is the capital of France?" with the exact configured refusal and
 `refused=True`. Both new Python files decode as ASCII, and the index lived in a temp dir.
+
+**T-1.7:** Added the public `Pipeline` composition boundary with full-rebuild indexing,
+structured document/chunk counts, document names, chunk count, retrieval defaults, and an
+empty-store refusal that skips both embedding and generation. Four offline facade tests cover
+the repeat-index regression and caller-selected `k`; the full dead-port suite passed 28 tests.
+The live two-call proof indexed the real OWASP TXT into a temporary Chroma directory (1 document,
+100 chunks, 4.65 s), answered Broken Access Control, and refused the France question exactly.
+Ruff, byte-level ASCII decoding, dependency-boundary grep, diff checks, and worktree hygiene all
+passed.
 
 ---
 
