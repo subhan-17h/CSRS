@@ -38,7 +38,23 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
   - [ ] Support caller-selected `k`, count, and delete-and-recreate reset behavior.
   - [ ] Prove sensible first-place ranking, cosine configuration, round-trip, score order,
     reset, offline operation, lint, ASCII source, and no repository-local index leakage.
-- [ ] **T-1.6** Grounded generation + literal refusal string
+- [x] **T-1.6** Grounded generation + literal refusal string
+  - [x] Build a pure prompt assembler with `[S1]...` context, question, then instruction.
+  - [x] Return an immediate refusal for empty context without calling Ollama.
+  - [x] Call the configured Ollama client and classify only literal-refusal variants.
+  - [x] Cover prompt order, complete context, call arguments, and refusal behavior offline.
+  - [x] Prove lint, offline tests, live grounded/refusal behavior, ASCII, and repo hygiene.
+  - Finding for **T-4.2**: prompt-only refusal is right at the margin. Across 7 probes
+    llama3.2 never hallucinated, but on one out-of-scope question it refused *in its own
+    words* ("I was unable to find any information about NIST CSF 2.0 functions") instead
+    of emitting the literal string, so the exact-match `refused` flag read False. This is
+    a detection false negative, not a grounding failure, and it is exactly why T-4.2 adds
+    a structural confidence gate rather than trusting the prompt. Do NOT fix it by making
+    `_is_refusal` fuzzy.
+  - Calibration data for **T-4.2**, top retrieval score by question type:
+    in-corpus 0.7402 / 0.7388 / 0.6841 · out-of-corpus 0.6535 / 0.5981 / 0.4922 / 0.4863.
+    A `refusal_threshold` between 0.654 and 0.684 separates all seven, but the margin is
+    ~0.03 -- calibrate against the full golden set (T-3.1), not these seven points.
 - [ ] **T-1.7** `Pipeline` facade (`index()`, `ask()`)
 - [ ] **T-1.8** 🎉 Minimal Streamlit app — **first end-to-end answer**
 
@@ -109,6 +125,14 @@ and dimension validation. Offline tests exercise both prefix paths, explicit asy
 verification: ruff clean, 11 non-Ollama tests passed, live document/query vectors were both
 768 dimensions, prefixed versus unprefixed cosine changed (0.861095 versus 0.864256), no
 other source module calls `.embed()`, and both new Python files decode as ASCII.
+
+**T-1.6:** Added pure, directly tested prompt assembly with source-labelled chunks followed
+by the question and a final compact grounding instruction containing the literal refusal.
+Empty retrieval skips Ollama, while generated replies use narrow literal-refusal matching.
+Ruff passed and all 24 non-Ollama tests passed against a dead port. The real OWASP corpus
+answered "What is Broken Access Control?" with `refused=False`; the same top-5 retrieval
+flow answered "What is the capital of France?" with the exact configured refusal and
+`refused=True`. Both new Python files decode as ASCII, and the index lived in a temp dir.
 
 ---
 
