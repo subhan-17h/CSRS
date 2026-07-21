@@ -49,6 +49,36 @@ This file provides guidance to CODEX AGENT when working with code in this reposi
 5. Document Results: Add review section to tasks/todo.md
 6. Capture Lessons: Update tasks/lessons.md after corrections
 
+### Keep tasks/todo.md current -- every task, every time
+
+`tasks/todo.md` is the live status of the build and must never go stale. It tracks the
+roadmap tasks in [ROADMAP.md](ROADMAP.md) (`T-1.4`, `T-2.1`, ...).
+
+- **Before you start:** confirm the task you were given has an entry. If it does not,
+  add one.
+- **When its "Done when" is demonstrated:** tick the checkbox `- [ ]` -> `- [x]` in the
+  same change as the code. Never tick it on intent -- only on demonstrated behaviour.
+- **If you discover something that changes a later task** (a wrong assumption, a library
+  trap, a missing prerequisite), add a one-line note under that task so the next agent
+  inherits it instead of rediscovering it.
+- `tasks/todo.md` is therefore ALWAYS an allowed file to edit, even when the task brief
+  names a narrower set of files.
+
+## Working constraints in this repository
+
+- **ASCII only in Python source.** No em dashes, smart quotes or unicode arrows; use
+  `->`. Markdown files may use non-ASCII.
+- **Never run `git commit`.** Claude reviews every change and owns the commit. Leaving
+  changes unstaged or staged is fine; committing is not.
+- **Never add attribution or tooling trailers** to any message or file.
+- Line length 100. Ruff lint rules `E`, `F`, `I`, `UP`, `B`; `uv run ruff check .` must
+  pass clean before you report done.
+- `uv` may fail if it tries to initialise a cache under a read-only `~/.cache`. If so,
+  prefix commands with `UV_CACHE_DIR=/private/tmp/csrs-uv-cache`.
+- Verify with a check that could actually fail. `grep -n '[^\x00-\x7F]'` does **not**
+  detect non-ASCII on macOS; use a byte-level `.decode("ascii")` instead. See
+  [tasks/lessons.md](tasks/lessons.md) L-2.
+
 
 ## Core Principles
 

@@ -15,8 +15,12 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
 ## Phase 1 — Walking skeleton
 
-- [ ] **T-1.1** Data models (`Chunk`, `Document`, `RetrievedChunk`, `Answer`)
-- [ ] **T-1.2** `DocumentParser` protocol + TXT loader
+- [x] **T-1.1** Data models (`Chunk`, `Document`, `RetrievedChunk`, `Answer`)
+- [x] **T-1.2** `DocumentParser` protocol + TXT loader
+  - Note: `iter_documents` uses `rglob`. Both samples live in `docs/samples/`, so a
+    non-recursive scan finds zero documents. Do not "simplify" this to `glob`.
+  - Note for T-2.1: adding the PDF parser is a one-line change to `_PARSERS` in
+    `src/csrs/loaders/__init__.py`; no caller should need touching.
 - [ ] **T-1.3** Naive recursive chunker (~400 tok / ~60 overlap)
 - [ ] **T-1.4** ⚠ Embeddings with `search_document:` / `search_query:` prefixes + unit tests
 - [ ] **T-1.5** Chroma store with `hnsw:space=cosine`, own embeddings passed in
