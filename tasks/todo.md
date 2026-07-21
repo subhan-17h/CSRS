@@ -93,9 +93,24 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     Streamlit launch now looks hung for a minute. That is exactly what T-2.3's content-hash
     incremental indexing and T-2.5's `st.status` progress exist to fix -- do not work around
     it by narrowing the corpus.
-  - Note for **T-2.2**: the parser removes running headers but deliberately keeps each page's
-    own number line, so `pages[19]` of the CSF sample begins with `15` -- the *printed* page
-    number, which differs from the 0-based index. Cite the printed number, not the index.
+  - [x] **Follow-up fix** — the sample passed but the full corpus did not. Boilerplate
+    survived on SP 800-53 for two reasons: NIST's block is *four* lines deep while detection
+    looked at three (the DOI line was never even counted — 490/492 pages), and
+    `CHAPTER THREE PAGE 19` changes every page so exact matching never counted it
+    (465/492 pages). Fixed by widening the window to 5 and matching a digit-masked
+    signature. A second pass caught chapter-scoped footers (`APPENDIX C PAGE #` and five
+    others, 107 pages) that never reach a document-wide majority: a signature is also
+    furniture when it sits in one fixed boundary slot on 3+ pages with a distinct number
+    each time. Measured result **490 → 0** and **465 → 0**, with 728 control headings and
+    2647 table rows intact.
+    - ⚠ Do **not** "simplify" this to a plain low page threshold. Measured: a bare
+      "3+ pages" rule also strips `Related Controls: AC-2.`, `[Withdrawn: Moved to SC-7(1).]`,
+      `References: [SP 800-53].` and `[CNSSI 4009]`. The fixed-slot and distinct-number
+      conditions are what separate a page stamp from real content.
+  - Decision for **T-2.2**: cite the **1-based PDF page position**, not the printed page
+    number. `reader.page_labels` returns plain sequential labels on all three PDFs, so it
+    does not carry the printed number (index 45 of SP 800-53 prints "PAGE 19"), and the
+    printed-number line is now stripped as furniture anyway.
 
 ---
 

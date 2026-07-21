@@ -10,6 +10,37 @@ from csrs.loaders.pdf import (
     _strip_repeated_lines,
 )
 
+_PAGE_LABELS = (
+    "alpha",
+    "bravo",
+    "charlie",
+    "delta",
+    "echo",
+    "foxtrot",
+    "golf",
+    "hotel",
+    "india",
+    "juliet",
+)
+
+
+def _unique_page_lines(label: str) -> list[str]:
+    return [
+        f"{label} {part}"
+        for part in (
+            "heading",
+            "introduction",
+            "topic",
+            "body",
+            "detail",
+            "example",
+            "discussion",
+            "summary",
+            "notes",
+            "tail",
+        )
+    ]
+
 
 def test_normalisation_folds_ligatures_and_collapses_whitespace() -> None:
     text = "of\ufb01ce\u00ad\t  controls  \n\n\n\nready   "
@@ -49,6 +80,92 @@ def test_running_lines_are_not_removed_from_short_pdfs() -> None:
 
     assert _find_repeated_lines(pages) == set()
     assert _strip_repeated_lines(pages) == pages
+
+
+def test_four_line_deep_running_boilerplate_is_removed() -> None:
+    pages = [
+        "Running header\nDivider\nPublication note\nDOI boilerplate\n"
+        "Unique alpha\nBody apple\nDetail red\nTail north",
+        "Running header\nDivider\nPublication note\nDOI boilerplate\n"
+        "Unique beta\nBody banana\nDetail green\nTail south",
+        "Running header\nDivider\nPublication note\nDOI boilerplate\n"
+        "Unique gamma\nBody cherry\nDetail blue\nTail west",
+    ]
+
+    stripped = _strip_repeated_lines(pages)
+
+    assert stripped == [
+        "Unique alpha\nBody apple\nDetail red\nTail north",
+        "Unique beta\nBody banana\nDetail green\nTail south",
+        "Unique gamma\nBody cherry\nDetail blue\nTail west",
+    ]
+
+
+def test_varying_page_number_is_removed_without_stripping_rare_digit_heading() -> None:
+    pages = [
+        "SECTION 2 OVERVIEW\nUnique alpha\nCHAPTER THREE PAGE 19",
+        "SECTION 2 OVERVIEW\nUnique beta\nCHAPTER THREE PAGE 20",
+        "Unique gamma\nCHAPTER THREE PAGE 21",
+        "Unique delta\nCHAPTER THREE PAGE 22",
+        "Unique epsilon\nCHAPTER THREE PAGE 23",
+    ]
+
+    stripped = _strip_repeated_lines(pages)
+
+    assert stripped == [
+        "SECTION 2 OVERVIEW\nUnique alpha",
+        "SECTION 2 OVERVIEW\nUnique beta",
+        "Unique gamma",
+        "Unique delta",
+        "Unique epsilon",
+    ]
+
+
+def test_chapter_scoped_numbered_footer_in_fixed_slot_is_removed() -> None:
+    pages = []
+    for page_number, label in enumerate(_PAGE_LABELS, start=1):
+        lines = _unique_page_lines(label)
+        if page_number <= 4:
+            lines[2] = f"CHAPTER TWO PAGE {page_number}"
+        pages.append("\n".join(lines))
+
+    stripped = _strip_repeated_lines(pages)
+
+    assert _find_repeated_lines(pages) == {"CHAPTER TWO PAGE #"}
+    assert all("CHAPTER TWO PAGE" not in page for page in stripped[:4])
+
+
+def test_numbered_content_at_varying_boundary_slots_is_not_removed() -> None:
+    pages = []
+    for page_number, label in enumerate(_PAGE_LABELS, start=1):
+        lines = _unique_page_lines(label)
+        if page_number <= 2:
+            lines[0] = f"Related Controls: AC-{page_number}."
+        elif page_number <= 4:
+            lines[-1] = f"Related Controls: AC-{page_number}."
+        pages.append("\n".join(lines))
+
+    stripped = _strip_repeated_lines(pages)
+
+    assert _find_repeated_lines(pages) == set()
+    assert all(
+        f"Related Controls: AC-{index + 1}." in page.splitlines()
+        for index, page in enumerate(stripped[:4])
+    )
+
+
+def test_fixed_slot_unchanging_literal_is_not_removed_as_page_stamp() -> None:
+    pages = []
+    for page_number, label in enumerate(_PAGE_LABELS, start=1):
+        lines = _unique_page_lines(label)
+        if page_number <= 4:
+            lines[2] = "CONTROL"
+        pages.append("\n".join(lines))
+
+    stripped = _strip_repeated_lines(pages)
+
+    assert _find_repeated_lines(pages) == set()
+    assert all("CONTROL" in page.splitlines() for page in stripped[:4])
 
 
 def test_pdf_parser_is_registered() -> None:

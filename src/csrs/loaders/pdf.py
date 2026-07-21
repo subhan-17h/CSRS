@@ -10,6 +10,10 @@ from pypdf import PdfReader
 
 from csrs.models import Document
 
+_BOUNDARY_LINE_COUNT = 5
+_DIGIT_RUN = re.compile(r"\d+")
+_MIN_PAGE_STAMP_PAGES = 3
+
 
 def _normalise_text(text: str) -> str:
     """Return stable retrieval text while preserving paragraph boundaries."""
@@ -17,6 +21,11 @@ def _normalise_text(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r" +\n", "\n", text)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _line_signature(line: str) -> str:
+    """Return a stable key for matching running lines across pages."""
+    return _DIGIT_RUN.sub("#", " ".join(line.split()))
 
 
 def _render_table(rows: Sequence[Sequence[str | None]]) -> str:
@@ -36,23 +45,47 @@ def _render_table(rows: Sequence[Sequence[str | None]]) -> str:
 
 
 def _find_repeated_lines(pages: Sequence[str]) -> set[str]:
-    """Return boundary lines that occur on at least half of three or more pages."""
+    """Return boundary signatures detected as running furniture."""
     if len(pages) < 3:
         return set()
 
     counts: dict[str, int] = {}
-    for page in pages:
-        lines = [line.strip() for line in page.splitlines() if line.strip()]
-        for line in set(lines[:3] + lines[-3:]):
-            counts[line] = counts.get(line, 0) + 1
-    return {line for line, count in counts.items() if count * 2 >= len(pages)}
+    stamp_pages: dict[str, set[int]] = {}
+    stamp_slots: dict[str, set[int]] = {}
+    stamp_forms: dict[str, set[str]] = {}
+    for page_index, page in enumerate(pages):
+        lines = [" ".join(line.split()) for line in page.splitlines() if line.strip()]
+        signatures = [_line_signature(line) for line in lines]
+        boundary = signatures[:_BOUNDARY_LINE_COUNT] + signatures[-_BOUNDARY_LINE_COUNT:]
+        for signature in set(boundary):
+            counts[signature] = counts.get(signature, 0) + 1
+
+        leading = enumerate(lines[:_BOUNDARY_LINE_COUNT])
+        trailing = enumerate(
+            lines[-_BOUNDARY_LINE_COUNT:], start=-min(_BOUNDARY_LINE_COUNT, len(lines))
+        )
+        for slot, line in (*leading, *trailing):
+            signature = _line_signature(line)
+            stamp_pages.setdefault(signature, set()).add(page_index)
+            stamp_slots.setdefault(signature, set()).add(slot)
+            stamp_forms.setdefault(signature, set()).add(line)
+
+    repeated = {signature for signature, count in counts.items() if count * 2 >= len(pages)}
+    page_stamps = {
+        signature
+        for signature, signature_pages in stamp_pages.items()
+        if len(signature_pages) >= _MIN_PAGE_STAMP_PAGES
+        and len(stamp_slots[signature]) == 1
+        and len(stamp_forms[signature]) == len(signature_pages)
+    }
+    return repeated | page_stamps
 
 
 def _strip_repeated_lines(pages: Sequence[str]) -> list[str]:
     """Remove detected running headers and footers from page text."""
     repeated = _find_repeated_lines(pages)
     return [
-        "\n".join(line for line in page.splitlines() if line.strip() not in repeated)
+        "\n".join(line for line in page.splitlines() if _line_signature(line) not in repeated)
         for page in pages
     ]
 
