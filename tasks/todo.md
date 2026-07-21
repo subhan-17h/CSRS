@@ -26,7 +26,12 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
   - [x] Assemble bounded chunks with real text overlap and stable `Chunk` metadata.
   - [x] Cover size, overlap, sentence survival, determinism, and pathological inputs.
   - [x] Run lint, the full test suite, real-corpus evidence, and the ASCII proof.
-- [ ] **T-1.4** ⚠ Embeddings with `search_document:` / `search_query:` prefixes + unit tests
+- [x] **T-1.4** ⚠ Embeddings with `search_document:` / `search_query:` prefixes + unit tests
+  - [x] Encapsulate distinct document/query prefixes behind exactly two public functions.
+  - [x] Batch documents in configured groups while preserving input order.
+  - [x] Reject every embedding whose width differs from the configured dimension.
+  - [x] Unit-test prefixes, asymmetry, batching/order, and wrong-width failures offline.
+  - [x] Run lint, offline tests, live Ollama comparison, API-call isolation, and ASCII proof.
 - [ ] **T-1.5** Chroma store with `hnsw:space=cosine`, own embeddings passed in
 - [ ] **T-1.6** Grounded generation + literal refusal string
 - [ ] **T-1.7** `Pipeline` facade (`index()`, `ask()`)
@@ -91,6 +96,14 @@ sentence-boundary survival, deterministic IDs and hashes, and hard-cut terminati
 The real OWASP sample yielded 100 chunks (597-1600 characters, mean 1439.3), with exact
 overlap visible across consecutive chunks. Full verification: ruff clean, 5 tests passed,
 and both new Python files decode as ASCII.
+
+**T-1.4:** Added the sole Ollama embedding boundary with separate, internal document and
+query prefixes, configured 32-item batching, stable output order, and loud response count
+and dimension validation. Offline tests exercise both prefix paths, explicit asymmetry,
+70 inputs across 32/32/6 batches, order encoding, and 5-dimension failures. Full
+verification: ruff clean, 11 non-Ollama tests passed, live document/query vectors were both
+768 dimensions, prefixed versus unprefixed cosine changed (0.861095 versus 0.864256), no
+other source module calls `.embed()`, and both new Python files decode as ASCII.
 
 ---
 
