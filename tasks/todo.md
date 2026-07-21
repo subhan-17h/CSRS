@@ -2,7 +2,7 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phases 0 and 1 complete and verified. Phase 2 is next.
+**Status:** Phases 0 and 1 complete and verified. T-2.1 is complete.
 
 ---
 
@@ -77,6 +77,25 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
   - [x] Render a focused Ollama connection remedy without hiding unrelated failures.
   - [x] Prove lint, offline tests, headless serving, a live answer, boundary isolation, ASCII,
     and repository hygiene.
+
+## Phase 2 — Standards-aware ingestion
+
+- [x] **T-2.1** PDF parsing with page numbers
+  - [x] Add per-page text to the shared `Document` contract without changing TXT behavior.
+  - [x] Parse PDF text and table rows while removing repeated running lines.
+  - [x] Register PDF ingestion without changing callers.
+  - [x] Cover pure helpers, registry lookup, and the committed CSF sample offline.
+  - [x] Prove lint, offline tests, real-corpus behavior and timing, ASCII, and worktree hygiene.
+  - ⚠ Finding for **T-2.3 / T-2.5**: registering `.pdf` changed what `iter_documents` sees.
+    `docs/` now yields 3 PDFs + 1 TXT instead of 1 TXT, and `NIST.SP.800-53r5.pdf` alone
+    takes **52.5 s to parse** (492 pages, 1.57 M characters) *before* a single embedding
+    call. Phase 1's `Pipeline.index()` still does a full rebuild every run, so the first
+    Streamlit launch now looks hung for a minute. That is exactly what T-2.3's content-hash
+    incremental indexing and T-2.5's `st.status` progress exist to fix -- do not work around
+    it by narrowing the corpus.
+  - Note for **T-2.2**: the parser removes running headers but deliberately keeps each page's
+    own number line, so `pages[19]` of the CSF sample begins with `15` -- the *printed* page
+    number, which differs from the 0-based index. Cite the printed number, not the index.
 
 ---
 
@@ -171,6 +190,16 @@ headless app returned HTTP 200 and was stopped, the real OWASP TXT indexed into 
 temporary directory and answered the Broken Access Control question, and a dead-port Streamlit
 run rendered the expected remedy. Boundary grep, byte-level ASCII decoding, and repository hygiene
 also passed.
+
+### Phase 2 — in progress
+
+**T-2.1:** Added page-preserving PDF extraction with pypdf, targeted pdfplumber table rendering,
+Unicode and whitespace normalization, and repeated running-line removal. The PDF parser is in the
+existing extension registry, while TXT documents and chunk metadata retain their prior defaults.
+Ruff and all 34 offline tests passed against a dead Ollama port. The CSF sample parsed as 32 pages,
+kept its unique Appendix A sentence on page index 19, rendered the `GV.OC` pipe row, and removed the
+full running header. SP 1299 parsed all 8 pages, and SP 800-53r5 parsed 492 pages in 49.412 seconds.
+All 19 Python files passed byte-level ASCII decoding.
 
 ### Phase 1 checkpoint — what the system actually gets wrong
 

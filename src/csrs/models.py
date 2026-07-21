@@ -39,6 +39,8 @@ class Document(BaseModel):
     path: Path
     text: str
     page_count: int | None = None
+    # Index 0 is page 1; TXT leaves this None, and T-2.2 maps chunk offsets onto it.
+    pages: list[str] | None = None
 
 
 class RetrievedChunk(BaseModel):

@@ -4,12 +4,13 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from csrs.loaders.base import DocumentParser
+from csrs.loaders.pdf import PdfParser
 from csrs.loaders.text import TextParser
 from csrs.models import Document
 
-__all__ = ("DocumentParser", "TextParser", "get_parser", "iter_documents")
+__all__ = ("DocumentParser", "PdfParser", "TextParser", "get_parser", "iter_documents")
 
-_PARSERS: tuple[DocumentParser, ...] = (TextParser(),)
+_PARSERS: tuple[DocumentParser, ...] = (TextParser(), PdfParser())
 _PARSERS_BY_EXTENSION = {
     extension.lower(): parser for parser in _PARSERS for extension in parser.extensions
 }
