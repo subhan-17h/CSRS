@@ -2,7 +2,7 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phase 0 complete and verified. Phase 1 is next.
+**Status:** Phases 0 and 1 complete and verified. Phase 2 is next.
 
 ---
 
@@ -71,7 +71,12 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     *retrieval candidate pool*, not the generation context: once T-3.4/T-3.5 land, RRF and
     the reranker must narrow it to `rerank_top_n` (5) before generation. Until then, treat
     20 as the ceiling and do not raise it.
-- [ ] **T-1.8** 🎉 Minimal Streamlit app — **first end-to-end answer**
+- [x] **T-1.8** 🎉 Minimal Streamlit app — **first end-to-end answer**
+  - [x] Build a cached `Pipeline` and index once on the first Streamlit run.
+  - [x] Show indexing progress, indexed document/chunk details, and one question/answer input.
+  - [x] Render a focused Ollama connection remedy without hiding unrelated failures.
+  - [x] Prove lint, offline tests, headless serving, a live answer, boundary isolation, ASCII,
+    and repository hygiene.
 
 ---
 
@@ -124,7 +129,7 @@ problem, already handled in the sample extraction.
 **Deliberately not done:** no git commit (not requested); `ollama serve` is running as a
 session process, not a `brew services` daemon.
 
-### Phase 1
+### Phase 1 — complete
 
 **T-1.3:** Added the recursive naive chunker and pure splitter. The synthetic 10k-character
 fixture yields 8-10 bounded chunks, and tests prove literal 240-character overlap,
@@ -157,6 +162,62 @@ The live two-call proof indexed the real OWASP TXT into a temporary Chroma direc
 100 chunks, 4.65 s), answered Broken Access Control, and refused the France question exactly.
 Ruff, byte-level ASCII decoding, dependency-boundary grep, diff checks, and worktree hygiene all
 passed.
+
+**T-1.8:** Added the minimal Streamlit walking skeleton: a cached first-run index behind the
+`Pipeline` facade, visible indexing progress, indexed document/chunk details, one question input,
+and the answer text. Connection failures during indexing or answering render the exact `ollama
+serve` remedy while unrelated errors remain visible. Ruff and all 28 offline tests passed; the
+headless app returned HTTP 200 and was stopped, the real OWASP TXT indexed into 100 chunks in a
+temporary directory and answered the Broken Access Control question, and a dead-port Streamlit
+run rendered the expected remedy. Boundary grep, byte-level ASCII decoding, and repository hygiene
+also passed.
+
+### Phase 1 checkpoint — what the system actually gets wrong
+
+The roadmap's checkpoint says to ask it several questions and note the failures, because
+those failures are what Phases 3 and 4 exist to fix. Seven questions over the OWASP corpus
+(llama3.2, k=20). **Five answered well. Two failure modes are real and reproducible.**
+
+**1. It hallucinated. This is the important one.**
+`"What does AC-2 require?"` returned, with `refused=False`:
+
+> "AC-2 requires that access control enforces policy such that users cannot act outside of
+> their intended permissions."
+
+AC-2 is a NIST SP 800-53 control and the Phase 1 corpus is OWASP Top 10 only. Confirmed
+`"AC-2"` appears in **none** of the retrieved chunks — the model invented a plausible
+answer from adjacent access-control text. This is exactly the spec requirement
+("avoid generating information not present in the documents") failing, and prompt-only
+grounding did not stop it.
+
+**The good news: the T-4.2 gate would catch it.** Top retrieval score was **0.5685**,
+comfortably below the 0.654-0.684 threshold band derived at T-1.6. That is independent
+evidence the confidence gate is the right fix, and a real data point for calibrating it.
+
+**2. It mislabelled a category even with correct context.**
+Asked for the Top 10 list, it returned "A03:2021-Insecure Design". A03 is Injection;
+Insecure Design is A04. The context was present and correct, so this is small-model
+sloppiness rather than retrieval failure. T-4.1's inline citations make this kind of error
+checkable by the reader instead of invisible.
+
+**3. Latency is 3x the research estimate, and the cause is measured.**
+Mean 19.1 s per answer (min 15.0, max 23.2) against RESEARCH.md section 9's predicted
+3-5 s. Latency scales almost linearly with `k`:
+
+| k | latency | context used |
+|---|---|---|
+| 5 | 5.2 s | 23% of `num_ctx` |
+| 10 | 8.9 s | 47% |
+| 20 | 15.0 s | 92.4% |
+
+At k=5 the system hits the predicted 3-5 s exactly. So this is not a slow stack, it is
+Phase 1 sending the whole retrieval pool to the model because there is no reranker yet.
+T-3.5 narrowing 20 -> `rerank_top_n` (5) should recover roughly 3x on latency **and** drop
+context pressure from 92% to 23%. That makes the reranker a latency fix as much as a
+quality fix, which was not obvious before measuring.
+
+**What works:** indexing (100 chunks, 4.1 s), semantic retrieval on paraphrase, multi-part
+answers, and clean refusal on clearly out-of-corpus questions.
 
 ---
 
