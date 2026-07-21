@@ -41,3 +41,29 @@ have become confusing failures later.
 **How to apply.** Pair every probe with a negative control — the registry check only
 meant something because `gemma4:e99b` returned 404. A check that cannot fail proves
 nothing.
+
+**Corollary, learned the hard way (T-1.1).** `grep -n '[^\x00-\x7F]' file` does **not**
+detect non-ASCII on macOS — BSD grep does not decode `\xNN` inside bracket expressions,
+so the pattern silently means something else entirely. The right check is a byte-level
+decode: `python -c "Path(p).read_bytes().decode('ascii')"`. The grep gave the correct
+answer by accident, which is worse than giving the wrong one. Verify that a verification
+actually works.
+
+---
+
+## L-3 · Never wait passively on a Codex task
+
+**Date:** 2026-07-21 · **Trigger:** a T-1.1 handoff appeared stuck for ~20 minutes.
+
+**Rule.** Attach `~/.claude/scripts/codex_watch.sh <job-id>` as a background watcher
+immediately after launching any Codex task. Prefer `--wait` for the handoff itself.
+
+**Why.** Codex jobs can die mid-run and leave a zombie `running` entry in the broker —
+process gone, no completion notification, and every resume blocked by the stale record.
+It happened: the process died at 15:27 having actually completed all its checks, and
+nothing surfaced that. Silence is indistinguishable from progress.
+
+**How to apply.** Stale means broker status is `running` but the pid is dead (`kill -0`
+fails). Then: cancel the job, relaunch as a **fresh** thread — a dead thread cannot be
+resumed. Always confirm against artefacts on disk (file mtimes, `git status`) rather
+than trusting any status report, including the watcher's.

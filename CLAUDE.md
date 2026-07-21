@@ -97,6 +97,21 @@ For implementation tasks (features, bug fixes, refactors, tests) - not for quest
 - Hand off each subtask to Codex via `/codex:rescue`, explicitly passing `--model gpt-5.6-sol --effort high`.
 - Codex must run write-capable and with network access so it can edit files and run tests. `~/.codex/config.toml` already sets `network_access = true` under `[sandbox_workspace_write]`, and `codex:rescue` defaults to write-capable runs; do not disable either. If either is ever off, fix it in `~/.codex/config.toml` rather than working around it.
 - Give Codex complete context per `/Users/rowdy/Downloads/codex-best-prompting-practices.md`: state the concrete task and relevant repo context, the exact output/done-state contract, the verification steps (which tests or commands prove it worked), and the constraints from this file that apply (surgical changes only, no unrequested abstractions, ASCII, no invented data, etc.).
+- **Always watch every Codex task.** Codex jobs can die mid-run and leave a zombie
+  `running` entry in the broker: the process is gone, no completion notification fires,
+  and every resume attempt is blocked by the stale record. Silence is indistinguishable
+  from progress, so never wait passively on a notification.
+  - Immediately after launching a task, start `~/.claude/scripts/codex_watch.sh <job-id>`
+    as a background watcher. It polls every 30 s, reports progress every 5 minutes, and
+    emits a single line on phase change, stale detection, or any terminal state.
+  - Get the job id from `codex-companion.mjs status --json`.
+  - **Stale = broker says `running` but the pid is dead** (`kill -0` fails). When that
+    happens: `codex-companion.mjs cancel <job-id>`, then relaunch as a **fresh** thread
+    (`--fresh`), never `--resume` -- the dead thread cannot be continued.
+  - Prefer `--wait` (foreground) over background for handoffs, since background
+    completion notifications have proven unreliable.
+  - Whatever the watcher says, confirm against the artefacts on disk (file mtimes,
+    `git status`) before believing a task did or did not do its work.
 - After each handoff, review Codex's response yourself: read the actual diff, rerun the relevant tests/proofs, and confirm the change matches this file's conventions. Do not accept Codex's self-report as verification.
 - If review finds a problem, send it back to Codex with `/codex:rescue --resume` describing the specific issue instead of fixing it directly.
 - Only move on to the next subtask once the current one is verified.
