@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local environment
+.env
+
+# Generated indexes and caches
+chroma_db/
+bm25_index/
+.csrs_cache/
+
+# Corpus: standards are fetched by scripts/fetch_docs.py, not committed.
+# The exception is docs/samples/, which ships public-domain text so a fresh
+# clone runs immediately.
+docs/*.pdf
+docs/*.txt
+!docs/samples/
+
+# Evaluation runs
+eval/results/
+
+# macOS
+.DS_Store
