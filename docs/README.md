@@ -13,20 +13,30 @@ python scripts/fetch_docs.py       # stdlib only; works before `uv sync`
 Most of this directory is **not** committed. The standards are downloaded on demand,
 because some are large and some are not ours to redistribute.
 
-## What ships in the repo
+## What ships in the repo — `docs/samples/`
 
-| File | Why it's committed |
-|---|---|
-| `samples/NIST_CSF_2.0.txt` | Public-domain sample so a fresh clone is queryable immediately, with no download. Text extracted from the official CSF 2.0 PDF; running headers removed, nothing else changed. |
+Two standards are committed so a fresh clone is queryable with **no download at all**,
+one per supported format, so both the PDF and TXT paths are exercised immediately.
+
+| File | Format | Licence | Why this one |
+|---|---|---|---|
+| `samples/NIST.CSWP.29_CSF-2.0.pdf` | PDF | US Government work — **public domain** (17 U.S.C. 105) | The spec's headline example standard; answers its example questions about the Framework Functions. Exercises PDF parsing. |
+| `samples/OWASP_Top_10_2021.txt` | TXT | **CC BY 4.0** © OWASP Foundation | A *different* standard, so nothing is indexed twice. Exercises the TXT path, which is all Phase 1 supports. |
+
+Deliberately two different standards rather than one standard in two formats: shipping
+CSF 2.0 as both a PDF and a TXT would index the same content twice and produce
+duplicated chunks and duplicated citations.
 
 ## What the fetch script downloads
 
 | Standard | File | Source | Licence |
 |---|---|---|---|
-| NIST Cybersecurity Framework (CSF) 2.0 | `NIST.CSWP.29_CSF-2.0.pdf` | [nvlpubs.nist.gov](https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf) | US Government work — **public domain** (17 U.S.C. 105) |
 | NIST SP 800-53 Rev. 5 | `NIST.SP.800-53r5.pdf` | [nvlpubs.nist.gov](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf) | US Government work — **public domain** |
 | NIST SP 1299 (CSF 2.0 Quick-Start Guide) | `NIST.SP.1299.pdf` | [nvlpubs.nist.gov](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.1299.pdf) | US Government work — **public domain** |
-| OWASP Top 10:2021 | `OWASP_Top_10_2021.txt` | [owasp.org/Top10](https://owasp.org/Top10/) · [github.com/OWASP/Top10](https://github.com/OWASP/Top10) | **CC BY 4.0** © OWASP Foundation |
+
+The script also knows how to fetch CSF 2.0 and the OWASP Top 10, but **skips both when it
+finds them already committed in `docs/samples/`** — again, so no standard is ever indexed
+twice. Use `--force` to re-download everything regardless.
 
 The OWASP Top 10 is published as MkDocs markdown rather than a PDF, so the script
 assembles the official English sources into a single TXT in reading order. The content

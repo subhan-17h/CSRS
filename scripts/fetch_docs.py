@@ -30,6 +30,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = PROJECT_ROOT / "docs"
+SAMPLES_DIR = DOCS_DIR / "samples"
 
 USER_AGENT = "csrs-fetch-docs/1.0 (offline cybersecurity standards RAG; educational use)"
 TIMEOUT = 120
@@ -158,6 +159,13 @@ def _write(path: Path, data: bytes) -> None:
 def fetch(source: Source, force: bool) -> tuple[str, int]:
     """Fetch one source. Returns (status, bytes_on_disk)."""
     target = DOCS_DIR / source.filename
+
+    # Two standards ship in docs/samples/ so a fresh clone is queryable with no
+    # download. Downloading them again into docs/ would index the same standard
+    # twice, which shows up as duplicated chunks and duplicated citations.
+    committed = SAMPLES_DIR / source.filename
+    if committed.exists() and not force:
+        return "skipped (committed in docs/samples/)", committed.stat().st_size
 
     if target.exists() and not force:
         return "skipped (already present)", target.stat().st_size
