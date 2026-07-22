@@ -2,7 +2,11 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phases 0, 1, and 2 complete and verified. Next: Phase 3 retrieval quality.
+**Status:** Phases 0, 1, and 2 complete and verified, and the Phase 2 checkpoint passes --
+`CSRS.md` §1-6 is demonstrable against the running app. **This is the submittable state.**
+Next: submission documentation (README.md + ENGINEERING.md). Phases 3-5 are deferred as
+extended optimization; the limitations that leaves behind are listed in the checkpoint below
+and must be stated honestly in the README.
 
 ---
 
@@ -591,7 +595,7 @@ temporary directory and answered the Broken Access Control question, and a dead-
 run rendered the expected remedy. Boundary grep, byte-level ASCII decoding, and repository hygiene
 also passed.
 
-### Phase 2 — in progress
+### Phase 2 — complete
 
 **T-2.1:** Added page-preserving PDF extraction with pypdf, targeted pdfplumber table rendering,
 Unicode and whitespace normalization, and repeated running-line removal. The PDF parser is in the
@@ -697,6 +701,96 @@ quality fix, which was not obvious before measuring.
 
 **What works:** indexing (100 chunks, 4.1 s), semantic retrieval on paraphrase, multi-part
 answers, and clean refusal on clearly out-of-corpus questions.
+
+### Phase 2 checkpoint — `CSRS.md` §1-6 walked against the running system
+
+Run against the real corpus indexed into `chroma_db/`: **4 documents, 2506 chunks, 316.0 s**
+cold. Every row below is measured, not read off the source. §5 was checked by rendering
+`app.py` through `streamlit.testing.v1.AppTest` and inspecting the real widget tree, because
+grepping for `st.selectbox` proves the call exists, not that it renders with the right options.
+
+**§1 Document Management**
+
+| Requirement | Evidence |
+|---|---|
+| Accept PDF and TXT | Registry resolves `.pdf` -> `DoclingParser`, `.txt` -> `TextParser`, `.docx` -> `None`. Live index holds both formats |
+| Auto-load every supported document from `docs/` | 4 discovered by recursive scan, including 2 inside `docs/samples/` |
+| Support multiple documents simultaneously | CSF 32 p/209 ch, SP 1299 8 p/31 ch, SP 800-53 492 p/2119 ch, OWASP TXT 147 ch |
+| Detect new documents with no code change | Dropped a TXT into `docs/`, incremental reindex `added=1 skipped=4` in **0.35 s**, answered from it at 0.6552, then `removed=1` and back to 2506 chunks |
+| Restart & Reload button | Rendered, plus a separate explicitly-costly full rebuild |
+
+**§2 Knowledge Base Construction** — `nomic-embed-text` (768 d) into local Chroma at
+`chroma_db/`; 2506 chunks embedded and stored. Embedding runs automatically on load and
+reload, and a second run over an unchanged corpus is **0.057 s, `skipped=4`**.
+
+**§3 Semantic Retrieval** — the spec's "keyword search alone is not sufficient" was tested
+with a query sharing **no content word** with its target: *"How should a company keep track
+of the equipment and software it owns?"* Top 3 are `ID.AM-01` (0.7523), `ID.AM-02` (0.7401),
+`ID.AM-08` (0.7175) — hardware and software inventory. No lexical overlap could have found
+those. Only the retrieved chunks reach the model.
+
+**§4 Question Answering** — the spec's own five example questions, default `llama3.2`, k=5:
+
+| Question | Result |
+|---|---|
+| Functions of the NIST CSF? | All six correct (Govern...Recover), 3.2 s |
+| Explain the Identify function. | ⚠ **Wrong — see below** |
+| What does ISO 27001 require for access control? | **Refused**, which is correct: ISO 27001 is deliberately excluded on licensing grounds |
+| How is Incident Response handled? | Correct, cites `IR-4` and `RS.MA-01` across three documents, 5.9 s |
+| Requirements for Asset Management? | Correct, cites `ID.AM`, `ID.AM-05`, `ID.AM-08`, 3.7 s |
+
+Negative controls both refused with the exact configured string: *capital of France*,
+*sourdough bread*.
+
+**§5 User Interface** — every required element rendered, with no uncaught exception:
+question input `'Ask a question about the indexed documents'`; the answer written back with
+`Answered by llama3.2`; the document list showing all four files with chunk and page counts
+and the honest `page count not applicable` for TXT; a `Model` selector defaulting to
+`llama3.2` over all five supported LLMs; `Restart & Reload Documents`; and a sidebar whose
+`Application settings` header carries the model selector, `top_k` (5, capped 20),
+`Temperature` (0.1) and `Ollama: Connected`.
+
+**§6 Local LLM Integration** — Ollama at `127.0.0.1:11434`, `nomic-embed-text` mandatory for
+all embedding, all **5 of 5** supported LLMs selectable in configured order with none
+missing. Switching the dropdown changes the answering model: `llama3.2` 1.2 s,
+`qwen2.5:1.5b` 4.5 s, `gemma2:2b` 5.8 s, each returning its own name in `Answer.model`.
+
+#### The one real failure, and what it actually is
+
+`"Explain the Identify function."` answered confidently and **wrongly**, with
+`refused=False`: it described SI-19 *de-identification of PII*. Retrieval, not generation,
+is at fault — the model was faithful to the context it was given. This is a different
+failure mode from the Phase 1 hallucination, and worse in one specific way (below).
+
+**Diagnosed rather than guessed.** The content is present and ranks well; the query is the
+problem:
+
+| Query | Top hit |
+|---|---|
+| `Explain the Identify function.` | 0.7127 `SI-19 DE-IDENTIFICATION` |
+| `Explain the Identify function of the NIST Cybersecurity Framework.` | 0.8082 CSF Abstract, then SP 1299 `IDENTIFY` at 0.8017 |
+
+Bare "Identify" collides with SP 800-53's `DE-IDENTIFICATION` and `IDENTIFICATION AND
+AUTHENTICATION`, and 2119 of 2506 chunks are SP 800-53, so the dense pool is dominated by
+it. Eleven words of context move the right chunks from absent to rank 1-2.
+
+⚠ **This is the measurable cost of the unimplemented bonus.** In `CSRS.md` §4 the example
+questions are a *sequence*: "What are the functions of the NIST Cybersecurity Framework?"
+is immediately followed by "Explain the Identify function." The second is a **follow-up**,
+and §4's "preserve conversational context for follow-up questions (bonus if implemented)"
+is exactly what would resolve it. So this is not an unexplained defect — it is the one
+optional requirement not built, showing up precisely where the spec predicted it would.
+The README must say this plainly rather than quoting the four questions that worked.
+
+⚠ **Finding that invalidates part of the T-4.2 calibration.** The bad answer's top score
+was **0.7127**, *above* the 0.654-0.684 refusal band derived at T-1.6 and above the 0.5685
+that would have caught the Phase 1 hallucination. A score-threshold confidence gate
+calibrated on those points **would not catch this**. Confidently-wrong-but-well-retrieved is
+a distinct failure class from nothing-relevant-retrieved, and a single scalar threshold does
+not separate them. If T-4.2 is ever built, this data point belongs in its golden set.
+
+**Suite state at checkpoint:** ruff clean, 96 offline tests pass on a dead Ollama port,
+working tree clean.
 
 ---
 
