@@ -945,6 +945,28 @@ untouched at 4 documents / 2506 chunks throughout.
 ### Frontend
 
 - [ ] **T-7.6** Strip the Unibot domain, rebrand to CSRS, vendor fonts locally (offline)
+  - [ ] Replace the copied frontend types and API client with the non-streaming CSRS contract.
+  - [ ] Remove the SQL/data-view surface and rebrand the remaining chat experience.
+  - [ ] Vendor every used font weight as a local Latin WOFF2 asset.
+  - [ ] Prove the production build, static audits, proxied live answer with citations, and clean shutdown.
+  - Reviewed independently: `npm run build` passes with zero TypeScript errors (39 modules,
+    156 kB JS / 39 kB CSS). Rebrand greps for `unibot|fyp|thesis|phdcs|registrar|supervisor`
+    return nothing across `src/`, `index.html` and `public/`.
+  - **Offline compliance restored** (CSRS.md §6 line 6): the Google Fonts CDN tags are gone
+    and 7 woff2 files (~92 kB, latin subset) are vendored to `public/fonts/`, copied into
+    `dist/fonts/` by the build and served at 200. The only URLs left anywhere in the built
+    bundle are the SVG namespace and React's error-docs string -- neither is ever fetched.
+  - End to end **through the vite proxy** (which proves path, contract and proxy all align,
+    not just the backend in isolation): `POST localhost:5173/api/chat` returned the six
+    correct CSF 2.0 Functions with 5 citations, top hit `NIST.CSWP.29_CSF-2.0.pdf` p.2 at
+    0.8049. `/api/health`, `/api/documents` and `/api/models` all 200 through the proxy.
+  - `conversation_context` deleted from the contract rather than kept inert -- multi-turn is
+    deliberately unimplemented, and a field the backend ignores would misrepresent it.
+  - ⚠ Finding for **T-7.8**: `ProgressEvent` in `types.ts` still declares a required
+    `detail: Record<string, unknown>`, but the backend's stage events never send it. Harmless
+    today because the stream is only cast, not validated -- fix the type when wiring streaming.
+  - Not visually verified: there is no browser in this environment, so rendering was proven
+    by a passing type-check and a live contract round-trip, not by looking at the page.
 - [ ] **T-7.7** `SourcesCard` (citations with page/section/control-ID) + markdown answers
 - [ ] **T-7.8** Wire streaming and live progress stages into `App.tsx`
 - [ ] **T-7.9** Sidebar settings — full spec-§5 parity (model, top_k, temperature, reload)
