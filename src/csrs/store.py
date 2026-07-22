@@ -1,16 +1,71 @@
 """Persistent Chroma storage for chunks and caller-supplied embeddings."""
 
+import hashlib
+import json
 from collections.abc import Sequence
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import chromadb
 
 from csrs.config import settings
 from csrs.models import Chunk, RetrievedChunk
 
-__all__ = ("ChunkStore",)
+__all__ = (
+    "ChunkStore",
+    "file_content_hash",
+    "load_manifest",
+    "save_manifest",
+)
 
 _COSINE_METADATA = {"hnsw:space": "cosine"}
+_EMPTY_DOCUMENTS_METADATA = "csrs:empty_documents"
+_HASH_BLOCK_SIZE = 1024 * 1024
+
+
+def file_content_hash(path: Path) -> str:
+    """Return a SHA-256 digest of a file's bytes without loading it all into memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while block := source.read(_HASH_BLOCK_SIZE):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def load_manifest(path: Path) -> dict[str, str]:
+    """Load a path-to-hash manifest, treating unreadable or invalid data as empty."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict) or not all(
+        isinstance(key, str) and isinstance(value, str) for key, value in data.items()
+    ):
+        return {}
+    return data
+
+
+def save_manifest(path: Path, manifest: dict[str, str]) -> None:
+    """Atomically replace the manifest with deterministic JSON."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            json.dump(manifest, temporary, indent=2, sort_keys=True)
+            temporary.write("\n")
+            temporary.flush()
+            temporary_path = Path(temporary.name)
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 class ChunkStore:
@@ -106,6 +161,39 @@ class ChunkStore:
     def count(self) -> int:
         """Return the number of chunks in the collection."""
         return self._collection.count()
+
+    def delete_document(self, doc_name: str) -> None:
+        """Delete every chunk whose metadata identifies the given document."""
+        self._collection.delete(where={"doc_name": doc_name})
+
+    def document_names(self) -> list[str]:
+        """Return all distinct document names currently stored in the collection."""
+        result = self._collection.get(include=["metadatas"])
+        metadatas = result["metadatas"] or []
+        names = {metadata["doc_name"] for metadata in metadatas}
+        names.update(self.empty_document_names())
+        return sorted(names)
+
+    def empty_document_names(self) -> list[str]:
+        """Return indexed document names that legitimately produced no chunks."""
+        raw_names = (self._collection.metadata or {}).get(_EMPTY_DOCUMENTS_METADATA, "[]")
+        try:
+            names = json.loads(raw_names)
+        except (TypeError, json.JSONDecodeError):
+            return []
+        if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
+            return []
+        return sorted(set(names))
+
+    def set_empty_document_names(self, names: Sequence[str]) -> None:
+        """Persist names for indexed documents that have no chunk metadata to inspect."""
+        unique_names = sorted(set(names))
+        if unique_names == self.empty_document_names():
+            return
+        metadata = dict(self._collection.metadata or {})
+        metadata.pop("hnsw:space", None)
+        metadata[_EMPTY_DOCUMENTS_METADATA] = json.dumps(unique_names)
+        self._collection.modify(metadata=metadata)
 
     def reset(self) -> None:
         """Delete every stored chunk by replacing the collection with a fresh one."""

@@ -7,7 +7,9 @@ import pytest
 
 from csrs import pipeline
 from csrs.config import settings
-from csrs.models import Answer, RetrievedChunk
+from csrs.loaders.text import TextParser
+from csrs.models import Answer, Document, RetrievedChunk
+from csrs.store import load_manifest
 
 
 def fake_document_embeddings(texts: Sequence[str]) -> list[list[float]]:
@@ -25,20 +27,27 @@ def test_index_returns_counts_and_exposes_store_summary(
     tmp_path: Path,
 ) -> None:
     docs_dir = tmp_path / "docs"
-    docs_dir.mkdir()
-    (docs_dir / "standard.txt").write_text(
+    nested_dir = docs_dir / "nested"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "standard.txt").write_text(
         "Broken Access Control permits users to act outside their permissions.",
         encoding="utf-8",
     )
 
     result = offline_pipeline.index(docs_dir)
 
-    assert result == pipeline.IndexResult(documents_indexed=1, chunks_created=1)
+    assert result == pipeline.IndexResult(
+        documents_indexed=1,
+        chunks_created=1,
+        added=1,
+    )
     assert offline_pipeline.chunk_count() == result.chunks_created
     assert offline_pipeline.document_names() == ["standard.txt"]
+    assert set(load_manifest(offline_pipeline._manifest_path)) == {"nested/standard.txt"}
 
 
-def test_index_twice_does_not_duplicate_chunks(
+def test_second_index_skips_unchanged_files_before_parsing(
+    monkeypatch: pytest.MonkeyPatch,
     offline_pipeline: pipeline.Pipeline,
     tmp_path: Path,
 ) -> None:
@@ -47,10 +56,248 @@ def test_index_twice_does_not_duplicate_chunks(
     (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
 
     first = offline_pipeline.index(docs_dir)
+
+    def fail_parse(self: TextParser, path: Path) -> Document:
+        raise AssertionError(f"unchanged file must not be parsed: {path}")
+
+    monkeypatch.setattr(TextParser, "parse", fail_parse)
     second = offline_pipeline.index(docs_dir)
 
-    assert first == second
+    assert second == pipeline.IndexResult(
+        documents_indexed=1,
+        chunks_created=1,
+        skipped=1,
+    )
     assert offline_pipeline.chunk_count() == first.chunks_created
+    assert offline_pipeline.document_names() == ["standard.txt"]
+
+
+def test_changing_one_files_content_reprocesses_only_that_file(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    first_path = docs_dir / "first.txt"
+    second_path = docs_dir / "second.txt"
+    first_path.write_text("First access control guidance.", encoding="utf-8")
+    second_path.write_text("Second access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    parsed_paths: list[Path] = []
+    original_parse = TextParser.parse
+
+    def record_parse(self: TextParser, path: Path) -> Document:
+        parsed_paths.append(path)
+        return original_parse(self, path)
+
+    monkeypatch.setattr(TextParser, "parse", record_parse)
+    first_path.write_text("Changed access control guidance.", encoding="utf-8")
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result == pipeline.IndexResult(
+        documents_indexed=2,
+        chunks_created=2,
+        updated=1,
+        skipped=1,
+    )
+    assert parsed_paths == [first_path]
+
+
+def test_rewriting_identical_content_stays_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    source_path = docs_dir / "standard.txt"
+    content = "Access control guidance."
+    source_path.write_text(content, encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    source_path.write_text(content, encoding="utf-8")
+
+    def fail_parse(self: TextParser, path: Path) -> Document:
+        raise AssertionError(f"identical file must not be parsed: {path}")
+
+    monkeypatch.setattr(TextParser, "parse", fail_parse)
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result.skipped == 1
+    assert result.updated == 0
+
+
+def test_deleting_file_removes_chunks_and_manifest_entry(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    kept_path = docs_dir / "kept.txt"
+    removed_path = docs_dir / "removed.txt"
+    kept_path.write_text("Keep this guidance.", encoding="utf-8")
+    removed_path.write_text("Remove this guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    removed_path.unlink()
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result == pipeline.IndexResult(
+        documents_indexed=1,
+        chunks_created=1,
+        skipped=1,
+        removed=1,
+    )
+    assert offline_pipeline.document_names() == ["kept.txt"]
+    assert load_manifest(offline_pipeline._manifest_path) == {
+        "kept.txt": pipeline.file_content_hash(kept_path)
+    }
+
+
+def test_force_reprocesses_every_file(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    for name in ("first.txt", "second.txt"):
+        (docs_dir / name).write_text(f"Guidance from {name}.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    parsed_paths: list[Path] = []
+    original_parse = TextParser.parse
+
+    def record_parse(self: TextParser, path: Path) -> Document:
+        parsed_paths.append(path)
+        return original_parse(self, path)
+
+    monkeypatch.setattr(TextParser, "parse", record_parse)
+
+    result = offline_pipeline.index(docs_dir, force=True)
+
+    assert result == pipeline.IndexResult(
+        documents_indexed=2,
+        chunks_created=2,
+        added=2,
+    )
+    assert parsed_paths == [docs_dir / "first.txt", docs_dir / "second.txt"]
+
+
+def test_corrupt_manifest_rebuilds_without_raising(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    offline_pipeline._manifest_path.write_text("not json", encoding="utf-8")
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result.added == 1
+    assert result.skipped == 0
+    assert offline_pipeline.chunk_count() == 1
+
+
+def test_empty_store_with_populated_manifest_rebuilds(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    assert load_manifest(offline_pipeline._manifest_path)
+    offline_pipeline._store.reset()
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result.added == 1
+    assert result.skipped == 0
+    assert offline_pipeline.chunk_count() == 1
+
+
+def test_partially_missing_store_rebuilds(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    for name in ("first.txt", "second.txt"):
+        (docs_dir / name).write_text(f"Guidance from {name}.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    offline_pipeline._store.delete_document("first.txt")
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result == pipeline.IndexResult(
+        documents_indexed=2,
+        chunks_created=2,
+        added=2,
+    )
+    assert offline_pipeline.document_names() == ["first.txt", "second.txt"]
+
+
+def test_unchanged_empty_document_is_skipped(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "empty.txt").write_text("", encoding="utf-8")
+    first = offline_pipeline.index(docs_dir)
+
+    second = offline_pipeline.index(docs_dir)
+
+    assert first == pipeline.IndexResult(documents_indexed=1, chunks_created=0, added=1)
+    assert second == pipeline.IndexResult(documents_indexed=1, chunks_created=0, skipped=1)
+    assert offline_pipeline.document_names() == ["empty.txt"]
+
+
+def test_duplicate_basenames_are_rejected_before_indexing(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    for directory in (docs_dir / "first", docs_dir / "second"):
+        directory.mkdir(parents=True)
+        (directory / "standard.txt").write_text("Guidance.", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Document filenames must be unique"):
+        offline_pipeline.index(docs_dir)
+
+    assert offline_pipeline.chunk_count() == 0
+    assert not offline_pipeline._manifest_path.exists()
+
+
+def test_moving_file_between_directories_preserves_its_chunks(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    old_dir = docs_dir / "old"
+    new_dir = docs_dir / "new"
+    old_dir.mkdir(parents=True)
+    source_path = old_dir / "standard.txt"
+    source_path.write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    new_dir.mkdir()
+    moved_path = source_path.rename(new_dir / source_path.name)
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result == pipeline.IndexResult(
+        documents_indexed=1,
+        chunks_created=1,
+        added=1,
+        removed=1,
+    )
+    assert offline_pipeline.document_names() == ["standard.txt"]
+    assert set(load_manifest(offline_pipeline._manifest_path)) == {"new/standard.txt"}
+    assert moved_path.exists()
 
 
 def test_ask_on_empty_store_refuses_without_embedding_or_generation(

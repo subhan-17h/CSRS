@@ -16,6 +16,7 @@ __all__ = (
     "PdfParser",
     "TextParser",
     "get_parser",
+    "iter_document_paths",
     "iter_documents",
 )
 
@@ -33,11 +34,16 @@ def get_parser(path: Path) -> DocumentParser | None:
     return _PARSERS_BY_EXTENSION.get(extension)
 
 
+def iter_document_paths(docs_dir: Path) -> Iterator[Path]:
+    """Yield supported file paths recursively without parsing their contents."""
+    for path in sorted(docs_dir.rglob("*")):
+        if path.is_file() and get_parser(path) is not None:
+            yield path
+
+
 def iter_documents(docs_dir: Path) -> Iterator[Document]:
     """Yield supported documents recursively in deterministic path order."""
-    for path in sorted(docs_dir.rglob("*")):
-        if not path.is_file():
-            continue
+    for path in iter_document_paths(docs_dir):
         parser = get_parser(path)
         if parser is not None:
             yield parser.parse(path)

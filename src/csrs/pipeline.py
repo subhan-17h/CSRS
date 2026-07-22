@@ -1,5 +1,6 @@
 """Public facade composing the CSRS indexing and question-answering pipeline."""
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -7,19 +8,23 @@ from csrs.chunking import chunk_document
 from csrs.config import settings
 from csrs.embeddings import embed_documents, embed_query
 from csrs.generation import generate_answer
-from csrs.loaders import iter_documents
+from csrs.loaders import get_parser, iter_document_paths
 from csrs.models import Answer
-from csrs.store import ChunkStore
+from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
 
 __all__ = ("IndexResult", "Pipeline")
 
 
 @dataclass(frozen=True, slots=True)
 class IndexResult:
-    """Counts produced by a completed full-corpus indexing run."""
+    """Current index totals and activity counts from one indexing run."""
 
     documents_indexed: int
     chunks_created: int
+    added: int = 0
+    updated: int = 0
+    skipped: int = 0
+    removed: int = 0
 
 
 class Pipeline:
@@ -29,30 +34,105 @@ class Pipeline:
         self,
         chroma_path: str | Path | None = None,
         collection_name: str | None = None,
+        manifest_path: str | Path | None = None,
     ) -> None:
+        resolved_chroma_path = (
+            Path(chroma_path) if chroma_path is not None else settings.chroma_dir
+        )
         self._store = ChunkStore(
-            path=chroma_path if chroma_path is not None else settings.chroma_dir,
+            path=resolved_chroma_path,
             collection_name=(
                 collection_name if collection_name is not None else settings.collection_name
             ),
         )
-        self._document_names: list[str] = []
+        if manifest_path is not None:
+            self._manifest_path = Path(manifest_path)
+        elif chroma_path is not None:
+            self._manifest_path = resolved_chroma_path / "manifest.json"
+        else:
+            self._manifest_path = settings.manifest_path
 
-    def index(self, docs_dir: Path | None = None) -> IndexResult:
-        """Load, chunk, embed, and replace the complete document index."""
+    def index(self, docs_dir: Path | None = None, *, force: bool = False) -> IndexResult:
+        """Incrementally index files whose source bytes changed."""
         source_dir = docs_dir if docs_dir is not None else settings.docs_dir
-        documents = list(iter_documents(source_dir))
-        chunks = [chunk for document in documents for chunk in chunk_document(document)]
-        embeddings = embed_documents([chunk.embed_text for chunk in chunks])
+        paths_by_identity = {
+            path.relative_to(source_dir).as_posix(): path
+            for path in iter_document_paths(source_dir)
+        }
+        doc_names = [path.name for path in paths_by_identity.values()]
+        duplicate_names = sorted(
+            name for name, count in Counter(doc_names).items() if count > 1
+        )
+        if duplicate_names:
+            joined_names = ", ".join(duplicate_names)
+            raise ValueError(
+                f"Document filenames must be unique across the docs directory: {joined_names}"
+            )
 
-        # T-2.3 replaces this full reset with content-hash incremental indexing.
-        self._store.reset()
-        self._store.add_chunks(chunks, embeddings)
-        self._document_names = sorted({document.name for document in documents})
+        manifest = load_manifest(self._manifest_path)
+        manifest_doc_names = [Path(identity).name for identity in manifest]
+        manifest_names = set(manifest_doc_names)
+        manifest_has_duplicate_names = len(manifest_doc_names) != len(manifest_names)
+        if (
+            force
+            or manifest_has_duplicate_names
+            or manifest_names != set(self._store.document_names())
+        ):
+            self._store.reset()
+            manifest = {}
+        empty_document_names = set(self._store.empty_document_names())
+        added = 0
+        updated = 0
+        skipped = 0
+        removed = 0
+        current_doc_names = set(doc_names)
+
+        for identity, path in paths_by_identity.items():
+            source_hash = file_content_hash(path)
+            previous_hash = manifest.get(identity)
+            if previous_hash == source_hash:
+                skipped += 1
+                continue
+
+            parser = get_parser(path)
+            if parser is None:
+                continue
+            document = parser.parse(path)
+            chunks = chunk_document(document)
+            embeddings = (
+                embed_documents([chunk.embed_text for chunk in chunks]) if chunks else []
+            )
+
+            self._store.delete_document(document.name)
+            self._store.add_chunks(chunks, embeddings)
+            if chunks:
+                empty_document_names.discard(document.name)
+            else:
+                empty_document_names.add(document.name)
+            manifest[identity] = source_hash
+            if previous_hash is None:
+                added += 1
+            else:
+                updated += 1
+
+        for identity in sorted(set(manifest) - set(paths_by_identity)):
+            doc_name = Path(identity).name
+            if doc_name not in current_doc_names:
+                self._store.delete_document(doc_name)
+                empty_document_names.discard(doc_name)
+            del manifest[identity]
+            removed += 1
+
+        self._store.set_empty_document_names(empty_document_names)
+        save_manifest(self._manifest_path, manifest)
 
         return IndexResult(
-            documents_indexed=len(documents),
-            chunks_created=len(chunks),
+            documents_indexed=len(manifest),
+            chunks_created=self._store.count(),
+            added=added,
+            updated=updated,
+            skipped=skipped,
+            removed=removed,
         )
 
     def ask(
@@ -78,8 +158,8 @@ class Pipeline:
         return generate_answer(question, chunks, selected_model)
 
     def document_names(self) -> list[str]:
-        """Return document names from the most recent indexing run."""
-        return list(self._document_names)
+        """Return document names from the complete persistent index."""
+        return self._store.document_names()
 
     def chunk_count(self) -> int:
         """Return the number of chunks currently available for retrieval."""

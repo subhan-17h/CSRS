@@ -2,8 +2,8 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1, T-2.2 and
-T-2.7 (Docling as the default parser) are complete. Next: T-2.3 incremental indexing.
+**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1, T-2.2, T-2.3
+and T-2.7 (Docling as the default parser) are complete. Next: T-2.4 model selection.
 
 ---
 
@@ -145,6 +145,45 @@ T-2.7 (Docling as the default parser) are complete. Next: T-2.3 incremental inde
     model warm-up. T-2.3's incremental indexing and T-2.5's progress UI both mitigate that
     and are already on the roadmap. This commit is the working fallback if the migration
     does not hold up.
+
+- [x] **T-2.3** Content-hash incremental indexing
+  - [x] Enumerate supported source paths without parsing and hash source bytes with SHA-256.
+  - [x] Persist an atomic relative-path manifest and recover from corrupt manifest data.
+  - [x] Add per-document chunk deletion and whole-store document-name inspection.
+  - [x] Skip unchanged files before parsing; update changed files and remove deleted files.
+  - [x] Rebuild on manifest/store disagreement and support an explicit forced rebuild.
+  - [x] Preserve total document/chunk summaries while reporting run activity counts.
+  - [x] Cover unchanged, changed-content, identical-content rewrite, deletion, force, corrupt
+    manifest, empty-store recovery, and fully-skipped document names offline.
+  - [x] Prove lint, offline tests, Docling test, ASCII source/tests/scripts, repository status,
+    and a measured sub-second skip-before-parse demonstration.
+  - **Verified independently on the real corpus**, because the roadmap's "Done when" is a claim
+    about *where* the hash check sits in the call order, and a passing test suite cannot tell
+    "skipped before parsing" apart from "parsed, then discarded". The proof sabotages
+    `DoclingParser.parse` to raise on the second run:
+
+    | Run | Result |
+    |---|---|
+    | 1 — cold index | **309.2 s**, 4 documents, 2506 chunks, added=4 |
+    | 2 — unchanged, `parse()` rigged to raise | **0.057 s**, skipped=4, **parse never called** -> 5404x |
+    | 3 — rewrite identical bytes (mtime changes) | skipped=4, updated=0 — content, not mtime |
+    | 4 — change one file's content | updated=1, skipped=3, 4.3 s |
+    | 5 — delete a file | removed=1, its chunks gone, names correct |
+
+    `document_names()` stayed correct after the fully-skipped run — the trap where an
+    incremental no-op would blank the UI caption. Ruff clean, **79 offline tests** (62 + 17
+    new), Docling test passes, ASCII OK.
+  - Checked, not assumed: `set_empty_document_names` pops `hnsw:space` before
+    `collection.modify()`, which looks like it would silently drop the cosine space that T-1.5
+    exists to guarantee. Probed behaviourally with orthogonal unit vectors — scores stay
+    `[1.0, 0.0]` before, after, and across a reopen from disk, so the space is genuinely
+    immutable collection config and only the descriptive metadata dict changes. Not a bug.
+  - ⚠ Follow-up (**refactor**): the `empty_documents` mechanism — three store methods that
+    serialise a JSON array into Chroma collection metadata — exists only so `document_names()`
+    includes documents that produced zero chunks. The manifest already lists every indexed
+    document, so deriving names from it is simpler and needs no store API. Note the coupling
+    before changing it: the consistency guard compares manifest names against
+    `store.document_names()`, which is *why* zero-chunk documents had to be tracked at all.
 
 - [x] **T-2.7** Docling as the default PDF parser *(absorbs T-5.3; supersedes the T-2.1
   furniture heuristics and the T-2.2 numeric-heading regex)*
@@ -450,6 +489,18 @@ matching. Cached SP 800-53 Markdown produced 1853 chunks with `control_id` on 16
 `AC-2(1)` enhancement, and zero terminal `Control:` breadcrumbs. Cached CSF Markdown produced 206
 chunks with `control_id` on 160 and zero relocated-caption breadcrumbs. Ruff passed, 62 offline
 tests passed, the Docling-marked test passed, and Python source/tests passed byte-level ASCII decode.
+
+**T-2.3:** Added deterministic supported-path enumeration so source bytes are SHA-256 hashed
+before parser invocation. A relative-path JSON manifest is replaced atomically; corrupt data and
+manifest/store disagreement trigger a rebuild. Changed and removed documents are deleted by
+`doc_name`, while Chroma collection metadata preserves zero-chunk document state for complete
+consistency checks and document listings. Duplicate basenames are rejected because the existing
+Chunk/Document identity contract cannot represent them safely. `IndexResult` now reports run
+activity while its original fields remain current index totals, and `force=True` rebuilds all
+sources. Ruff passed; 79 offline tests and the one Docling test passed; byte-level ASCII decoding
+passed. A two-TXT throwaway proof replaced `TextParser.parse` with a failure before the second run:
+the run still reported `skipped=2` and completed in 0.001140 seconds, directly proving the parser
+was not called.
 
 ### Phase 1 checkpoint — what the system actually gets wrong
 
