@@ -1,6 +1,7 @@
 """Offline tests for the FastAPI endpoints."""
 
-from collections.abc import Iterator
+import json
+from collections.abc import Generator, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,6 +46,11 @@ class FakePipeline:
             question="What guidance applies?",
         )
         self.ask_calls: list[tuple[str, int | None, str | None, float | None]] = []
+        self.ask_stream_calls: list[
+            tuple[str, int | None, str | None, float | None]
+        ] = []
+        self.stream_tokens = ["Use the documented ", "cybersecurity guidance."]
+        self.stream_error_after: int | None = None
         self.raise_connection_error = False
 
     def index(self) -> None:
@@ -70,6 +76,24 @@ class FakePipeline:
         if self.raise_connection_error:
             raise ConnectionError("Ollama is unavailable")
         return self.answer
+
+    def ask_stream(
+        self,
+        question: str,
+        k: int | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+    ) -> Generator[str, None, Answer]:
+        self.ask_stream_calls.append((question, k, model, temperature))
+
+        def tokens() -> Generator[str, None, Answer]:
+            for position, token in enumerate(self.stream_tokens, start=1):
+                yield token
+                if self.stream_error_after == position:
+                    raise ConnectionError("Ollama disconnected")
+            return self.answer
+
+        return tokens()
 
 
 @pytest.fixture
@@ -278,4 +302,96 @@ def test_chat_returns_exact_ollama_503_message(
     assert response.status_code == 503
     assert response.json() == {
         "detail": "Could not connect to Ollama. Start Ollama with `ollama serve`.",
+    }
+
+
+def test_chat_stream_emits_compact_ordered_ndjson_with_final_response(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    response = client.post(
+        "/api/chat/stream",
+        json={
+            "question": "What guidance applies?",
+            "model": "gemma2:2b",
+            "top_k": 3,
+            "temperature": 0.8,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    lines = response.text.splitlines()
+    events = [json.loads(line) for line in lines]
+    assert all(
+        json.dumps(event, separators=(",", ":")) == line
+        for event, line in zip(events, lines, strict=True)
+    )
+    assert [event["event"] for event in events] == [
+        "stage_start",
+        "stage_end",
+        "stage_start",
+        "token",
+        "token",
+        "stage_end",
+        "final",
+    ]
+    assert [event.get("stage") for event in events if "stage" in event] == [
+        "retrieve",
+        "retrieve",
+        "generate",
+        "generate",
+    ]
+    token_events = [event for event in events if event["event"] == "token"]
+    assert "".join(event["text"] for event in token_events) == fake_pipeline.answer.text
+    assert fake_pipeline.ask_stream_calls == [
+        ("What guidance applies?", 3, "gemma2:2b", 0.8)
+    ]
+    assert isinstance(events[0]["ts"], float)
+    assert isinstance(events[1]["elapsed_ms"], int)
+    assert isinstance(events[5]["elapsed_ms"], int)
+    assert isinstance(events[6]["total_ms"], int)
+    final_response = events[6]["response"]
+    assert final_response == {
+        "answer": "Use the documented cybersecurity guidance.",
+        "refused": False,
+        "model": settings.default_llm,
+        "question": "What guidance applies?",
+        "elapsed_ms": events[6]["total_ms"],
+        "sources": [
+            {
+                "doc_name": "guidance.txt",
+                "page": None,
+                "section": None,
+                "control_id": None,
+                "score": 0.875,
+                "rank": None,
+                "text": "Cybersecurity guidance from a plain-text document.",
+            }
+        ],
+    }
+
+
+def test_chat_stream_emits_error_event_on_midstream_connection_failure(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    fake_pipeline.stream_error_after = 1
+
+    response = client.post(
+        "/api/chat/stream",
+        json={"question": "What guidance applies?"},
+    )
+
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert [event["event"] for event in events] == [
+        "stage_start",
+        "stage_end",
+        "stage_start",
+        "token",
+        "error",
+    ]
+    assert events[-1] == {
+        "event": "error",
+        "message": "Could not connect to Ollama. Start Ollama with `ollama serve`.",
     }

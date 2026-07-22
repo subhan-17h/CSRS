@@ -2,7 +2,7 @@
 
 import runpy
 import sys
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -11,7 +11,7 @@ import pytest
 
 from csrs import generation
 from csrs.config import settings
-from csrs.models import Chunk, RetrievedChunk
+from csrs.models import Answer, Chunk, RetrievedChunk
 
 
 def make_retrieved_chunk(index: int, text: str) -> RetrievedChunk:
@@ -38,6 +38,31 @@ class FakeClient:
         return SimpleNamespace(
             models=[SimpleNamespace(model=name) for name in self.models]
         )
+
+
+class FakeStreamingClient(FakeClient):
+    def __init__(self, tokens: Sequence[str]) -> None:
+        super().__init__("".join(tokens))
+        self.tokens = tokens
+
+    def chat(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        if kwargs.get("stream"):
+            return iter(
+                {"message": {"content": token}} for token in self.tokens
+            )
+        return {"message": {"content": self.reply}}
+
+
+def consume_stream(
+    stream: Generator[str, None, Answer],
+) -> tuple[list[str], Answer]:
+    tokens = []
+    while True:
+        try:
+            tokens.append(next(stream))
+        except StopIteration as completed:
+            return tokens, completed.value
 
 
 def test_list_installed_models_uses_existing_client_and_omits_unnamed_entries(
@@ -227,3 +252,61 @@ def test_chat_uses_explicit_temperature(
     )
 
     assert client.calls[0]["options"]["temperature"] == 0.8
+
+
+def test_stream_uses_identical_grounding_payload_and_assembles_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeStreamingClient(["A grounded ", "streamed answer."])
+    monkeypatch.setattr(generation, "_client", client)
+    chunks = [make_retrieved_chunk(0, "The standard provides grounded facts.")]
+    question = "What does the standard provide?"
+
+    answer = generation.generate_answer(question, chunks, "gemma2:2b", 0.8)
+    tokens, streamed_answer = consume_stream(
+        generation.generate_answer_stream(question, chunks, "gemma2:2b", 0.8)
+    )
+
+    assert client.calls[1] == client.calls[0] | {"stream": True}
+    assert tokens == ["A grounded ", "streamed answer."]
+    assert streamed_answer == answer
+    assert streamed_answer.text == "".join(tokens)
+
+
+def test_stream_checks_refusal_only_after_assembling_all_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    refusal = settings.refusal_message
+    split_at = len(refusal) // 2
+    client = FakeStreamingClient([refusal[:split_at], refusal[split_at:]])
+    monkeypatch.setattr(generation, "_client", client)
+    chunks = [make_retrieved_chunk(0, "Access control guidance.")]
+
+    tokens, answer = consume_stream(
+        generation.generate_answer_stream("An unrelated question?", chunks)
+    )
+
+    assert all(token != settings.refusal_message for token in tokens)
+    assert answer.text == settings.refusal_message
+    assert answer.refused is True
+
+
+def test_stream_empty_chunks_refuses_without_calling_ollama(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeStreamingClient(["This must never be returned."])
+    monkeypatch.setattr(generation, "_client", client)
+
+    tokens, answer = consume_stream(
+        generation.generate_answer_stream("What is the capital of France?", [])
+    )
+
+    assert tokens == []
+    assert answer == Answer(
+        text=settings.refusal_message,
+        sources=[],
+        refused=True,
+        model=settings.default_llm,
+        question="What is the capital of France?",
+    )
+    assert client.calls == []

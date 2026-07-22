@@ -1,6 +1,6 @@
 """Grounded answer generation through Ollama."""
 
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 
 import ollama
 
@@ -12,6 +12,7 @@ __all__ = (
     "build_prompt",
     "canonical_model_name",
     "generate_answer",
+    "generate_answer_stream",
     "list_installed_models",
 )
 
@@ -75,6 +76,51 @@ def generate_answer(
         keep_alive=settings.keep_alive,
     )
     text = response["message"]["content"]
+    return Answer(
+        text=text,
+        sources=sources,
+        refused=_is_refusal(text),
+        model=selected_model,
+        question=question,
+    )
+
+
+def generate_answer_stream(
+    question: str,
+    chunks: Sequence[RetrievedChunk],
+    model: str | None = None,
+    temperature: float | None = None,
+) -> Generator[str, None, Answer]:
+    """Yield Ollama response tokens, then return their assembled grounded answer."""
+    selected_model = model if model is not None else settings.default_llm
+    selected_temperature = (
+        temperature if temperature is not None else settings.temperature
+    )
+    sources = list(chunks)
+    if not sources:
+        return Answer(
+            text=settings.refusal_message,
+            sources=sources,
+            refused=True,
+            model=selected_model,
+            question=question,
+        )
+
+    response = _client.chat(
+        model=selected_model,
+        messages=[{"role": "user", "content": build_prompt(question, sources)}],
+        options={"num_ctx": settings.num_ctx, "temperature": selected_temperature},
+        keep_alive=settings.keep_alive,
+        stream=True,
+    )
+    tokens = []
+    for part in response:
+        token = part["message"]["content"]
+        tokens.append(token)
+        if token:
+            yield token
+
+    text = "".join(tokens)
     return Answer(
         text=text,
         sources=sources,

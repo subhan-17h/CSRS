@@ -1,13 +1,19 @@
 """Public facade composing the CSRS indexing and question-answering pipeline."""
 
 from collections import Counter
+from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 
 from csrs.chunking import chunk_document
 from csrs.config import settings
 from csrs.embeddings import embed_documents, embed_query
-from csrs.generation import canonical_model_name, generate_answer, list_installed_models
+from csrs.generation import (
+    canonical_model_name,
+    generate_answer,
+    generate_answer_stream,
+    list_installed_models,
+)
 from csrs.loaders import get_parser, iter_document_paths
 from csrs.models import Answer
 from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
@@ -186,6 +192,38 @@ class Pipeline:
         query_embedding = embed_query(question)
         chunks = self._store.search(query_embedding, selected_k)
         return generate_answer(
+            question,
+            chunks,
+            selected_model,
+            selected_temperature,
+        )
+
+    def ask_stream(
+        self,
+        question: str,
+        k: int | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+    ) -> Generator[str, None, Answer]:
+        """Retrieve grounded context now and return its lazy answer token stream."""
+        selected_model = model if model is not None else settings.default_llm
+        if self._store.count() == 0:
+            return generate_answer_stream(
+                question,
+                [],
+                selected_model,
+                temperature,
+            )
+
+        # Keep this retrieval path visibly identical to ask(); stage events depend on
+        # retrieval finishing when this method returns, before generation is advanced.
+        selected_k = k if k is not None else settings.rerank_top_n
+        selected_temperature = (
+            temperature if temperature is not None else settings.temperature
+        )
+        query_embedding = embed_query(question)
+        chunks = self._store.search(query_embedding, selected_k)
+        return generate_answer_stream(
             question,
             chunks,
             selected_model,

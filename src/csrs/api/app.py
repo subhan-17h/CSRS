@@ -1,13 +1,16 @@
 """FastAPI interface for CSRS pipeline queries and read-only state."""
 
+import json
+from collections.abc import Iterator
 from threading import Lock
-from time import perf_counter
+from time import perf_counter, time
 from typing import Annotated, Literal
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+from starlette.responses import StreamingResponse
 
 from csrs.config import settings
 from csrs.pipeline import Pipeline
@@ -20,6 +23,11 @@ _ALLOWED_ORIGINS = (
 )
 _pipeline: Pipeline | None = None
 _pipeline_lock = Lock()
+
+
+def _ndjson(payload: dict[str, object]) -> str:
+    """Serialize one compact object with the sole framing newline outside its JSON."""
+    return f"{json.dumps(payload, separators=(',', ':'))}\n"
 
 
 class HealthResponse(BaseModel):
@@ -195,6 +203,128 @@ def create_app() -> FastAPI:
                 for source in result.sources
             ],
         )
+
+    @application.post("/api/chat/stream")
+    def chat_stream(
+        request: ChatRequest,
+        pipeline: Annotated[Pipeline, Depends(get_pipeline)],
+    ) -> StreamingResponse:
+        def events() -> Iterator[str]:
+            total_started_at = perf_counter()
+            retrieve_started_at = perf_counter()
+            yield _ndjson(
+                {
+                    "event": "stage_start",
+                    "key": "retrieve",
+                    "stage": "retrieve",
+                    "message": "Retrieving relevant passages",
+                    "ts": time(),
+                }
+            )
+
+            try:
+                selected_k = (
+                    request.top_k
+                    if request.top_k is not None
+                    else settings.rerank_top_n
+                )
+                retrieved_count = min(pipeline.chunk_count(), selected_k)
+                answer_stream = pipeline.ask_stream(
+                    request.question,
+                    k=request.top_k,
+                    model=request.model,
+                    temperature=request.temperature,
+                )
+            except ConnectionError:
+                yield _ndjson(
+                    {
+                        "event": "error",
+                        "message": (
+                            "Could not connect to Ollama. Start Ollama with `ollama serve`."
+                        ),
+                    }
+                )
+                return
+
+            yield _ndjson(
+                {
+                    "event": "stage_end",
+                    "key": "retrieve",
+                    "stage": "retrieve",
+                    "message": f"Retrieved {retrieved_count} passages",
+                    "elapsed_ms": int((perf_counter() - retrieve_started_at) * 1000),
+                    "ts": time(),
+                }
+            )
+            generate_started_at = perf_counter()
+            yield _ndjson(
+                {
+                    "event": "stage_start",
+                    "key": "generate",
+                    "stage": "generate",
+                    "message": "Generating answer",
+                    "ts": time(),
+                }
+            )
+
+            while True:
+                try:
+                    token = next(answer_stream)
+                except StopIteration as completed:
+                    result = completed.value
+                    break
+                except ConnectionError:
+                    yield _ndjson(
+                        {
+                            "event": "error",
+                            "message": (
+                                "Could not connect to Ollama. Start Ollama with "
+                                "`ollama serve`."
+                            ),
+                        }
+                    )
+                    return
+                yield _ndjson({"event": "token", "text": token})
+
+            yield _ndjson(
+                {
+                    "event": "stage_end",
+                    "key": "generate",
+                    "stage": "generate",
+                    "message": "Generated answer",
+                    "elapsed_ms": int((perf_counter() - generate_started_at) * 1000),
+                    "ts": time(),
+                }
+            )
+            total_ms = int((perf_counter() - total_started_at) * 1000)
+            response = ChatResponse(
+                answer=result.text,
+                refused=result.refused,
+                model=result.model,
+                question=result.question,
+                elapsed_ms=total_ms,
+                sources=[
+                    SourceResponse(
+                        doc_name=source.chunk.doc_name,
+                        page=source.chunk.page,
+                        section=source.chunk.section,
+                        control_id=source.chunk.control_id,
+                        score=source.score,
+                        rank=source.rank,
+                        text=source.chunk.text,
+                    )
+                    for source in result.sources
+                ],
+            )
+            yield _ndjson(
+                {
+                    "event": "final",
+                    "response": response.model_dump(),
+                    "total_ms": total_ms,
+                }
+            )
+
+        return StreamingResponse(events(), media_type="application/x-ndjson")
 
     return application
 

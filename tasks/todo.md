@@ -848,7 +848,36 @@ Plan: `/Users/rowdy/.claude/plans/ok-for-the-open-radiant-owl.md`
     is honored. All six validation cases 422 as intended, whitespace-only included.
   - This is the payload the Streamlit UI never renders: `answer.sources` reaches a client
     for the first time here, with page, section breadcrumb, control ID and cosine score.
-- [ ] **T-7.3** `POST /api/chat/stream` — NDJSON stage events + Ollama token streaming
+- [x] **T-7.3** `POST /api/chat/stream` — NDJSON stage events + Ollama token streaming
+  - [x] Add generator-based Ollama streaming with prompt/options parity and final refusal detection.
+  - [x] Add the retrieval-identical `Pipeline.ask_stream()` facade path.
+  - [x] Emit ordered compact NDJSON stage, token, final, and connection-error events.
+  - [x] Cover generation parity, final assembly/refusal, empty input, endpoint flow, and errors.
+  - [x] Prove lint, full offline tests, live incremental delivery, grounded parity, and shutdown.
+  - **Verified:** Ruff clean; **116 offline tests pass** on a dead Ollama port (111 existing
+    plus 5 streaming tests), with one Docling test deselected. All 25 Python files under
+    `src/` and `tests/` decode as ASCII. The critical parity test compares the complete
+    non-streaming Ollama call with the streaming call plus only `stream=True`, covering the
+    exact prompt, model, `num_ctx`, temperature, and `keep_alive` payload.
+  - Live default-model streaming retrieved 5 passages and emitted 38 separate token events.
+    Measured client receipt was incremental: token 1 at 0.291 s, token 10 at 0.500 s, token
+    20 at 0.735 s, token 30 at 0.969 s, and the final event at 1.186 s. The final response
+    cited `NIST.CSWP.29_CSF-2.0.pdf` pages 2, 6, and 5 plus `NIST.SP.1299.pdf` pages 2 and 1.
+    A same-question `/api/chat` comparison returned the same six CSF Functions and the exact
+    same `(doc_name, page)` citation set. Uvicorn shut down cleanly and `lsof` confirmed port
+    8000 was free.
+  - Reviewed independently — **parity proved on the real corpus**, which was the whole risk
+    of this task. At `temperature: 0.0` the AC-2 question returned a **byte-identical**
+    576-character answer from `/api/chat` and `/api/chat/stream`, citing the same five
+    chunks in the same order (AC-2 p.46, AC-2 p.47, AC-2(7) p.49, AC-2(3) p.48, AC-2(1) p.47).
+  - Tokens confirmed genuinely incremental, not buffered: 41 tokens with the first at 0.31 s
+    and the last at 1.26 s (0.95 s spread), stages in order with real timings (retrieve 96 ms,
+    generate 1209 ms). A dead Ollama port yields `stage_start` then the exact `error` event
+    under HTTP 200 -- the status cannot change once the stream has begun, so the event is how
+    the client learns.
+  - `ask_stream()` deliberately contains no `yield`, so retrieval runs eagerly when it is
+    called and only generation stays lazy. That is what lets the endpoint close the retrieve
+    stage before advancing generation. Do not "tidy" it into a generator function.
 - [ ] **T-7.4** Index reload/rebuild endpoints with streaming progress and a concurrency lock
 - [ ] **T-7.5** `ChunkStore.chunks_for_document()` + chunk endpoint + static `dist/` serving
 
