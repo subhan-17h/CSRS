@@ -828,7 +828,26 @@ Plan: `/Users/rowdy/.claude/plans/ok-for-the-open-radiant-owl.md`
     *and* documents changed, initialization raises and `/api/health` 500s instead of
     reporting the outage. Invisible while the index is warm, because content hashes skip
     before any embedding call. The reload endpoints must not widen that window.
-- [ ] **T-7.2** `POST /api/chat` — serialize `Answer` with `sources[]`, 503 on Ollama down
+- [x] **T-7.2** `POST /api/chat` — serialize `Answer` with `sources[]`, 503 on Ollama down
+  - [x] Validate the question, supported model, top-k range, and temperature at the API boundary.
+  - [x] Forward posted values unchanged and preserve pipeline defaults when fields are omitted.
+  - [x] Serialize grounded citations with nullable TXT and unstructured-chunk metadata intact.
+  - [x] Map only Ollama connection failures to the established 503 response.
+  - [x] Cover success, refusal, forwarding, validation, and connection failure offline.
+  - [x] Prove lint, the full offline suite, live grounded citations, 422/503 behavior, and shutdown.
+  - **Verified:** Ruff clean; **111 offline tests pass** on a dead Ollama port (101 existing
+    plus 10 chat cases), with one Docling test deselected. A live default-model request answered
+    the CSF question in 7462 ms with five citations from `NIST.CSWP.29_CSF-2.0.pdf` and
+    `NIST.SP.1299.pdf`, including real page numbers. Whitespace returned 422; a server pointed
+    at port 9 returned the exact established 503 detail. Both servers shut down cleanly and
+    `lsof` confirmed port 8000 was free.
+  - Reviewed independently: the CSF question returned the six correct 2.0 Functions (Govern,
+    Identify, Protect, Detect, Respond, Recover) grounded in 5 sources, top hit
+    `NIST.CSWP.29_CSF-2.0.pdf` p.2 at 0.8049. An SP 800-53 question confirmed `control_id`
+    populates for real (AC-2 p.46 at 0.8056, AC-2 p.47, AC-2(7) p.49) and that `top_k: 3`
+    is honored. All six validation cases 422 as intended, whitespace-only included.
+  - This is the payload the Streamlit UI never renders: `answer.sources` reaches a client
+    for the first time here, with page, section breadcrumb, control ID and cosine score.
 - [ ] **T-7.3** `POST /api/chat/stream` — NDJSON stage events + Ollama token streaming
 - [ ] **T-7.4** Index reload/rebuild endpoints with streaming progress and a concurrency lock
 - [ ] **T-7.5** `ChunkStore.chunks_for_document()` + chunk endpoint + static `dist/` serving

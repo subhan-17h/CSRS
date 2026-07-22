@@ -1,12 +1,13 @@
-"""FastAPI interface for read-only CSRS pipeline state."""
+"""FastAPI interface for CSRS pipeline queries and read-only state."""
 
 from threading import Lock
+from time import perf_counter
 from typing import Annotated, Literal
 
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from csrs.config import settings
 from csrs.pipeline import Pipeline
@@ -52,6 +53,46 @@ class ModelsResponse(BaseModel):
     missing_models: list[str]
     ollama_reachable: bool
     default_model: str
+
+
+class ChatRequest(BaseModel):
+    """Question and optional generation overrides."""
+
+    question: str = Field(min_length=1, pattern=r"\S")
+    model: str | None = None
+    top_k: int | None = Field(default=None, ge=1, le=20)
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+
+    @field_validator("model")
+    @classmethod
+    def model_must_be_supported(cls, value: str | None) -> str | None:
+        """Keep the API boundary limited to the configured supported model contract."""
+        if value is not None and value not in settings.supported_llms:
+            raise ValueError("model must be one of the supported LLMs")
+        return value
+
+
+class SourceResponse(BaseModel):
+    """Citation metadata and text for one retrieved chunk."""
+
+    doc_name: str
+    page: int | None
+    section: str | None
+    control_id: str | None
+    score: float
+    rank: int | None
+    text: str
+
+
+class ChatResponse(BaseModel):
+    """Generated answer with timing and grounded citations."""
+
+    answer: str
+    refused: bool
+    model: str
+    question: str
+    elapsed_ms: int
+    sources: list[SourceResponse]
 
 
 def get_pipeline() -> Pipeline:
@@ -113,6 +154,46 @@ def create_app() -> FastAPI:
             missing_models=list(availability.missing_models),
             ollama_reachable=availability.ollama_reachable,
             default_model=settings.default_llm,
+        )
+
+    @application.post("/api/chat", response_model=ChatResponse)
+    def chat(
+        request: ChatRequest,
+        pipeline: Annotated[Pipeline, Depends(get_pipeline)],
+    ) -> ChatResponse:
+        started_at = perf_counter()
+        try:
+            result = pipeline.ask(
+                request.question,
+                k=request.top_k,
+                model=request.model,
+                temperature=request.temperature,
+            )
+        except ConnectionError as error:
+            raise HTTPException(
+                status_code=503,
+                detail="Could not connect to Ollama. Start Ollama with `ollama serve`.",
+            ) from error
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+
+        return ChatResponse(
+            answer=result.text,
+            refused=result.refused,
+            model=result.model,
+            question=result.question,
+            elapsed_ms=elapsed_ms,
+            sources=[
+                SourceResponse(
+                    doc_name=source.chunk.doc_name,
+                    page=source.chunk.page,
+                    section=source.chunk.section,
+                    control_id=source.chunk.control_id,
+                    score=source.score,
+                    rank=source.rank,
+                    text=source.chunk.text,
+                )
+                for source in result.sources
+            ],
         )
 
     return application
