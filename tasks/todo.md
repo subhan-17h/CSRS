@@ -173,11 +173,62 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     - **Done when** the CSF sample yields 32 pages with the running header gone, the GV.OC
       table renders as a Markdown table, `CSRS_PDF_PARSER=pypdf` still reproduces T-2.1
       behaviour, and the existing suite passes.
-  - [ ] **S2** Collapse the chunker's heading layer onto real Markdown headings.
-    - Delete `_numeric_heading` (the CSF defect's cause) and the raw-text-only patterns; keep
-      Markdown ATX for depth and the control/enhancement/CSF patterns for `control_id`.
-    - **Done when** SP 800-53 `control_id` coverage is restored to ~92% *and* CSF false-ancestor
+  - [x] **S2** Collapse the chunker's heading layer onto real Markdown headings.
+    - [x] Classify ATX labels by content, preserve raw control/enhancement/CSF matching, and
+      remove dotted numeric headings.
+    - [x] Resolve bare enhancement IDs from the nearest stacked control without treating
+      colon-terminated field labels as structural headings.
+    - [x] Cover Markdown controls, bare enhancements, field labels, and raw CSF IDs offline.
+    - [x] Measure both cached Markdown exports and run the required lint, test, and ASCII proofs.
+    - ⚠ **Revised after measuring the real SP 800-53 Markdown — this is NOT the simple
+      deletion the plan assumed.** That assumption came from CSF alone. SP 800-53 breaks it:
+      | Measured on Docling's SP 800-53 Markdown | Count |
+      |---|---|
+      | Total headings, **all at flat `##`** | 1075 |
+      | Controls, `## AC-2 ACCOUNT MANAGEMENT` | 322 |
+      | Enhancements, `## (1) TITLE ...` (**not** `AC-2(1)`) | 303 |
+      | Generic field labels, `## Control:` / `## Control Enhancements:` | 274 |
+    - Consequences the implementation must handle:
+      1. **Markdown depth is useless for hierarchy.** Every heading is `##`, so taking depth
+         from the marker makes each heading pop the previous one. Depth has to come from what
+         the heading *is* (control vs enhancement vs section), not from how many `#` it has.
+      2. **Field labels must not reset control context.** `## Control:` follows
+         `## AC-2 ACCOUNT MANAGEMENT`; if it is treated as a sibling heading, every chunk of
+         AC-2's actual control text gets the breadcrumb `... > Control:` and loses `AC-2`.
+      3. **Enhancements carry no parent.** `## (1) ACCOUNT MANAGEMENT | ...` needs the
+         enclosing control from the heading stack to become `AC-2(1)`; the existing
+         `_enhancement_heading` regex expects `AC-2(1)` inline and will never match.
+    - ⚠ **Accepted regression, to be settled by measurement not opinion.** T-2.2's breadcrumb
+      was `... > ACCESS CONTROL > AC-2 ACCOUNT MANAGEMENT`. That `ACCESS CONTROL` came from
+      SP 800-53's *running page header*, which Docling correctly classifies as furniture and
+      drops — it never appears as a heading (42 occurrences, 0 as `^## ACCESS CONTROL`). The
+      family name could be restored with a 20-entry `AC -> ACCESS CONTROL` lookup, but that is
+      exactly the corpus-tuned hardcoding this task exists to remove, and the roadmap's rule is
+      measure before optimising. **Deferred to T-3.2:** if the eval harness shows family-level
+      breadcrumbs matter, add the map then, with evidence.
+    - **Done when** SP 800-53 `control_id` coverage is restored to ~92% (it is **0.0%** if the
+      Markdown pattern is left to match first), an enhancement chunk resolves to `AC-2(1)`,
+      no AC-2 chunk has `Control:` as its terminal breadcrumb, and CSF false-ancestor
       breadcrumbs stay at 0.
+    - **Verified independently** (re-measured against the cached Docling exports, not taken
+      from the handoff's report):
+
+      | Gate | Result |
+      |---|---|
+      | SP 800-53 `control_id` | 1670/1853 = **90.1%**, up from 0.0% |
+      | Breadcrumbs ending `Control:` | **0** |
+      | Enhancement resolution | `AC-2(1)`, breadcrumb `... > AC-2 ACCOUNT MANAGEMENT > (1) ACCOUNT MANAGEMENT | AUTOMATED SYSTEM ACCOUNT MANAGEMENT` |
+      | CSF `control_id` | 160/206, **up** from 128 |
+      | CSF false ancestors | **0** |
+
+      Plus ruff clean, **62 offline tests** pass on a dead Ollama port (59 + 3 new), the
+      `docling` test passes, and ASCII decode is clean.
+    - **On the 90.1% vs T-2.2's 92.1%:** this is not a shortfall. All 183 chunks without a
+      `control_id` are content that legitimately has no control to attribute -- Errata (67),
+      Table of Contents (20), `2.2 CONTROL STRUCTURE AND ORGANIZATION`, `Executive Summary`,
+      `INTRODUCTION`. The two percentages are also over different chunk populations (1853
+      Docling chunks vs 1820 pypdf chunks), so they were never directly comparable. 90.1% is
+      the correct ceiling for this corpus rather than a regression to chase.
   - [ ] **S3** `scripts/warm_models.py` so the weights are a deliberate, documented step.
     - Pulled forward from T-5.3; T-3.5 needs the same script for FlashRank, and T-6.3's
       offline proof depends on it existing.
@@ -351,6 +402,15 @@ Ruff and all 34 offline tests passed against a dead Ollama port. The CSF sample 
 kept its unique Appendix A sentence on page index 19, rendered the `GV.OC` pipe row, and removed the
 full running header. SP 1299 parsed all 8 pages, and SP 800-53r5 parsed 492 pages in 49.412 seconds.
 All 19 Python files passed byte-level ASCII decoding.
+
+**T-2.7 S2:** Reclassified flat Docling ATX headings from their labels: controls use depth 4,
+bare enhancements use depth 5 and inherit the nearest stacked control, field labels ending in a
+colon remain body text, and other Markdown headings use depth 6 beneath recognized domain
+structure. Removed dotted numeric headings while preserving raw control, enhancement, and CSF
+matching. Cached SP 800-53 Markdown produced 1853 chunks with `control_id` on 1670 (90.1%), an
+`AC-2(1)` enhancement, and zero terminal `Control:` breadcrumbs. Cached CSF Markdown produced 206
+chunks with `control_id` on 160 and zero relocated-caption breadcrumbs. Ruff passed, 62 offline
+tests passed, the Docling-marked test passed, and Python source/tests passed byte-level ASCII decode.
 
 ### Phase 1 checkpoint — what the system actually gets wrong
 

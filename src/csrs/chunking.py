@@ -14,17 +14,6 @@ SEPARATORS = ["\n\n", "\n", ". ", " "]
 Heading = tuple[int, str, str | None]
 HeadingParser = Callable[[str, re.Match[str]], Heading]
 
-
-def _markdown_heading(line: str, match: re.Match[str]) -> Heading:
-    """Return metadata for a Markdown ATX heading."""
-    return len(match.group(1)), match.group(2), None
-
-
-def _numeric_heading(line: str, match: re.Match[str]) -> Heading:
-    """Return metadata for a dotted numeric section heading."""
-    return len(match.group(1).split(".")), match.group(2), None
-
-
 def _control_heading(line: str, match: re.Match[str]) -> Heading:
     """Return metadata for a dashed control heading."""
     control_id = match.group(1)
@@ -50,17 +39,18 @@ def _csf_parent_heading(line: str, match: re.Match[str]) -> Heading:
     return 4, f"{control_id} {match.group(1)}", control_id
 
 
+_MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+)$")
+_BARE_ENHANCEMENT_PATTERN = re.compile(r"^\((\d+)\)\s+.+$")
+_ENHANCEMENT_HEADING_PATTERN = re.compile(
+    r"^([A-Z]{2}-\d+\(\d+\))\s+([A-Z][A-Z0-9 ,\-()/]{3,})$"
+)
+_CONTROL_HEADING_PATTERN = re.compile(
+    r"^([A-Z]{2}-\d+)\s+([A-Z][A-Z0-9 ,\-()/]{3,})$"
+)
+
 _HEADING_PATTERNS: tuple[tuple[re.Pattern[str], HeadingParser], ...] = (
-    (re.compile(r"^(#{1,6})\s+(.+)$"), _markdown_heading),
-    (re.compile(r"^(\d+(?:\.\d+)+)\s+([A-Z].*)$"), _numeric_heading),
-    (
-        re.compile(r"^([A-Z]{2}-\d+\(\d+\))\s+([A-Z][A-Z0-9 ,\-()/]{3,})$"),
-        _enhancement_heading,
-    ),
-    (
-        re.compile(r"^([A-Z]{2}-\d+)\s+([A-Z][A-Z0-9 ,\-()/]{3,})$"),
-        _control_heading,
-    ),
+    (_ENHANCEMENT_HEADING_PATTERN, _enhancement_heading),
+    (_CONTROL_HEADING_PATTERN, _control_heading),
     (re.compile(r"^[-o*\s]*([A-Z]{2}\.[A-Z]{2}(?:-\d+)?)\s*:"), _csf_heading),
     (
         re.compile(r"^\W*(.+?)\s+\(([A-Z]{2}\.[A-Z]{2})\)\s*:"),
@@ -83,6 +73,19 @@ def _match_heading(line: str) -> Heading | None:
     """Return structural metadata for a heading line, if recognised."""
     if "...." in line:
         return None
+    if markdown_match := _MARKDOWN_HEADING_PATTERN.fullmatch(line):
+        label = markdown_match.group(2)
+        if label.endswith(":"):
+            return None
+        for pattern, parser in (
+            (_ENHANCEMENT_HEADING_PATTERN, _enhancement_heading),
+            (_CONTROL_HEADING_PATTERN, _control_heading),
+        ):
+            if label_match := pattern.fullmatch(label):
+                depth, parsed_label, control_id = parser(label, label_match)
+                return depth, parsed_label[:80], control_id
+        depth = 5 if _BARE_ENHANCEMENT_PATTERN.fullmatch(label) else 6
+        return depth, label[:80], None
     for pattern, parser in _HEADING_PATTERNS:
         if match := pattern.search(line):
             depth, label, control_id = parser(line, match)
@@ -118,9 +121,15 @@ def _document_blocks(document: Document) -> list[_Block]:
             if block_text.strip():
                 blocks.append(_Block(block_text, snapshot, control_id, page))
 
-            depth, _, _ = heading
+            depth, label, heading_control_id = heading
             while headings and headings[-1][0] >= depth:
                 headings.pop()
+            if (
+                heading_control_id is None
+                and (enhancement := _BARE_ENHANCEMENT_PATTERN.fullmatch(label))
+                and (parent_control_id := _nearest_control(headings))
+            ):
+                heading = (depth, label, f"{parent_control_id}({enhancement.group(1)})")
             headings.append(heading)
             lines = [line]
             snapshot = tuple(headings)

@@ -79,8 +79,8 @@ def test_pathological_inputs_terminate_without_empty_chunks() -> None:
 @pytest.mark.parametrize(
     ("line", "expected"),
     [
-        ("### Access Policy", (3, "Access Policy", None)),
-        ("1.1 PURPOSE AND APPLICABILITY", (2, "PURPOSE AND APPLICABILITY", None)),
+        ("### Access Policy", (6, "Access Policy", None)),
+        ("## AC-2 ACCOUNT MANAGEMENT", (4, "AC-2 ACCOUNT MANAGEMENT", "AC-2")),
         ("AC-2 ACCOUNT MANAGEMENT", (4, "AC-2 ACCOUNT MANAGEMENT", "AC-2")),
         (
             "AC-2(1) AUTOMATED SYSTEM ACCOUNT MANAGEMENT",
@@ -108,7 +108,7 @@ def test_toc_dot_leader_is_not_a_heading() -> None:
     toc_entry = "3.9 MAINTENANCE ......................................................... 162"
 
     assert _match_heading(toc_entry) is None
-    assert _match_heading("3.9 MAINTENANCE") == (2, "MAINTENANCE", None)
+    assert _match_heading("3.9 MAINTENANCE") is None
 
 
 def test_csf_parent_label_excludes_bullet_and_definition() -> None:
@@ -135,33 +135,75 @@ def test_csf_subcategory_label_is_control_id_only() -> None:
 def test_heading_label_is_truncated_to_80_characters() -> None:
     heading = _match_heading("# " + "A" * 100)
 
-    assert heading == (1, "A" * 80, None)
+    assert heading == (6, "A" * 80, None)
 
 
 def test_heading_stack_pushes_and_pops_on_dedent() -> None:
     document = _document(
-        "# Security\n"
-        "## Access\n"
         "AC-2 ACCOUNT MANAGEMENT\n"
         "Account requirements.\n"
         "AC-2(1) AUTOMATED SYSTEM ACCOUNT MANAGEMENT\n"
         "Enhancement requirements.\n"
-        "## Audit\n"
-        "Audit requirements."
+        "AC-3 ACCESS ENFORCEMENT\n"
+        "Access enforcement requirements."
     )
 
     chunks = chunk_document(document)
     account = next(chunk for chunk in chunks if "Account requirements." in chunk.text)
     enhancement = next(chunk for chunk in chunks if "Enhancement requirements." in chunk.text)
-    audit = next(chunk for chunk in chunks if "Audit requirements." in chunk.text)
-
-    assert account.section == "standard.txt > Security > Access > AC-2 ACCOUNT MANAGEMENT"
-    assert enhancement.section == (
-        "standard.txt > Security > Access > AC-2 ACCOUNT MANAGEMENT > "
-        "AC-2(1) AUTOMATED SYSTEM ACCOUNT MANAGEMENT"
+    access_enforcement = next(
+        chunk for chunk in chunks if "Access enforcement requirements." in chunk.text
     )
-    assert audit.section == "standard.txt > Security > Audit"
-    assert audit.control_id is None
+
+    assert account.section == "standard.txt > AC-2 ACCOUNT MANAGEMENT"
+    assert enhancement.section == (
+        "standard.txt > AC-2 ACCOUNT MANAGEMENT > AC-2(1) AUTOMATED SYSTEM ACCOUNT MANAGEMENT"
+    )
+    assert access_enforcement.section == "standard.txt > AC-3 ACCESS ENFORCEMENT"
+    assert access_enforcement.control_id == "AC-3"
+
+
+def test_markdown_enhancement_inherits_nearest_control_id() -> None:
+    document = _document(
+        "## AC-2 ACCOUNT MANAGEMENT\n"
+        "Control requirements.\n"
+        "## (1) ACCOUNT MANAGEMENT | AUTOMATED SYSTEM ACCOUNT MANAGEMENT\n"
+        "Enhancement requirements."
+    )
+
+    enhancement = next(
+        chunk for chunk in chunk_document(document) if "Enhancement requirements." in chunk.text
+    )
+
+    assert enhancement.control_id == "AC-2(1)"
+    assert enhancement.section == (
+        "standard.txt > AC-2 ACCOUNT MANAGEMENT > "
+        "(1) ACCOUNT MANAGEMENT | AUTOMATED SYSTEM ACCOUNT MANAGEMENT"
+    )
+
+
+def test_markdown_field_label_preserves_control_context() -> None:
+    document = _document(
+        "## AC-2 ACCOUNT MANAGEMENT\n"
+        "## Control:\n"
+        "Define account requirements."
+    )
+
+    chunk = next(
+        chunk for chunk in chunk_document(document) if "Define account requirements." in chunk.text
+    )
+
+    assert _match_heading("## Control:") is None
+    assert chunk.control_id == "AC-2"
+    assert chunk.section == "standard.txt > AC-2 ACCOUNT MANAGEMENT"
+    assert chunk.section is not None
+    assert not chunk.section.endswith("Control:")
+
+
+def test_non_markdown_csf_line_preserves_control_id() -> None:
+    heading = _match_heading("GV.OC-01: The organizational context is understood.")
+
+    assert heading == (5, "GV.OC-01", "GV.OC-01")
 
 
 def test_breadcrumb_is_embedded_but_not_stored_in_raw_text() -> None:
