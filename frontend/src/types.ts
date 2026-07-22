@@ -44,9 +44,18 @@ export type ModelsResponse = {
   default_model: string;
 };
 
+export type IndexResult = {
+  documents_indexed: number;
+  chunks_created: number;
+  added: number;
+  updated: number;
+  skipped: number;
+  removed: number;
+};
+
 export type ProgressStepStatus = "running" | "done" | "error";
 
-export type ProgressEvent =
+type StageProgressEvent =
   | {
       event: "stage_start";
       key: string;
@@ -68,11 +77,21 @@ export type ProgressEvent =
       message: string;
       ts: number;
       elapsed_ms: number;
-    }
-  | { event: "token"; text: string }
-  | { event: "final"; response: ChatResponse; total_ms: number }
+    };
+
+type StreamControlEvent =
+  | StageProgressEvent
   | { event: "ping"; ts: number }
   | { event: "error"; message: string; ts?: number };
+
+export type ProgressEvent =
+  | StreamControlEvent
+  | { event: "token"; text: string }
+  | { event: "final"; response: ChatResponse; total_ms: number };
+
+export type IndexProgressEvent =
+  | StreamControlEvent
+  | { event: "final"; result: IndexResult; total_ms: number };
 
 export interface ProgressStep {
   key: string;

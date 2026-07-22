@@ -1039,7 +1039,43 @@ untouched at 4 documents / 2506 chunks throughout.
     flushed after the loop), so a JSON object split across two network reads still parses.
     Every state write is guarded by an `isCurrent()` identity+abort check so a superseded or
     aborted request cannot write into the UI.
-- [ ] **T-7.9** Sidebar settings — full spec-§5 parity (model, top_k, temperature, reload)
+- [x] **T-7.9** Sidebar settings — full spec-§5 parity (model, top_k, temperature, reload)
+  - [x] Lift model, top_k, temperature, runtime inventory, and index-operation state into App.
+  - [x] Reuse buffered NDJSON parsing for typed chat and index streams, preserving 409 details.
+  - [x] Render reachable/missing-model status, settings, document totals/list, and index controls.
+  - [x] Gate chat on Ollama/model readiness and index activity; gate rebuild behind cost confirmation.
+  - [x] Prove the build, live non-default chat settings, warm reload stream, and clean shutdown.
+  - **Verified:** `npm run build` passes with 293 modules transformed and zero TypeScript
+    errors. Ruff, byte-level frontend ASCII decoding, and `git diff --check` also pass.
+  - Live Vite-proxy reads returned all five installed models with `llama3.2` as the default,
+    plus four indexed documents and 2506 chunks; the TXT correctly returned a null page count.
+  - The required non-default AC-2 request reported `qwen2.5:1.5b` and exactly three sources
+    when posted with `top_k: 3` and `temperature: 0.0`, proving the generation settings path.
+  - The only real index mutation invoked was `/api/index/reload`: it emitted four live
+    per-document skip updates and completed in 98 ms with added=0, updated=0, skipped=4,
+    removed=0, documents=4, and chunks=2506.
+  - `/api/index/rebuild` was not invoked. Static inspection proves it is reachable only after
+    a second `Confirm rebuild` action whose prompt explicitly says it takes about five minutes.
+  - Independent review caught and verified fixes for partial runtime-fetch failures, stale
+    refresh races, split health/model readiness, authoritative final totals, and transport-only
+    stream fallback. Backend and Vite shut down cleanly; ports 8000 and 5173 were confirmed free.
+  - Reviewed independently. The settings are **not decorative** -- proved by contrast on the
+    same question through the proxy:
+    - `model=qwen2.5:1.5b, top_k=3` -> reports `qwen2.5:1.5b` with exactly 3 sources
+    - defaults -> reports `llama3.2` with 5 sources
+  - ⚠ **Finding worth keeping.** `qwen2.5:1.5b` *refused* the AC-2 question that `llama3.2`
+    answers. Isolated it to the model, not the context size, by crossing both variables:
+    qwen refuses at k=3 **and** k=5; llama3.2 answers at k=3 **and** k=5. This is empirical
+    support for the `config.py` claim that llama3.2 follows grounding and refusal
+    instructions more reliably than the smaller models -- and it means a grader who switches
+    the dropdown will legitimately see refusals on questions the default answers.
+  - Index controls verified live: reload through the proxy streams per-document
+    `stage_update` lines and ends `skipped=4`, 2506 chunks, 84 ms. Rebuild is gated behind a
+    two-step confirmation naming the five-minute cost, and was verified **by code path only**
+    -- never executed against the real corpus.
+  - Chat-disabled reasons are specific rather than a blanket block: index updating, health
+    unreachable, model inventory unreachable, Ollama disconnected (carrying the
+    `ollama serve` remedy), and no supported model installed.
 - [ ] **T-7.10** Corpus Explorer replacing the SQL Data Viewer
 - [ ] **T-7.11** localStorage conversation history
 

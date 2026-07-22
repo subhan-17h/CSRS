@@ -4,10 +4,24 @@ import { EmptyState } from "./components/EmptyState";
 import { Message, Typing } from "./components/Message";
 import { ProgressSteps } from "./components/ProgressSteps";
 import { Sidebar } from "./components/Sidebar";
-import { sendChat, streamChat, StreamUnavailableError } from "./lib/api";
+import {
+  fetchDocuments,
+  fetchHealth,
+  fetchModels,
+  sendChat,
+  streamChat,
+  streamIndex,
+  StreamUnavailableError
+} from "./lib/api";
+import type { IndexPath } from "./lib/api";
 import type {
   ChatResponse,
+  DocumentsResponse,
+  HealthResponse,
+  IndexProgressEvent,
+  IndexResult,
   Message as MessageType,
+  ModelsResponse,
   ProgressEvent,
   ProgressStep,
   ProgressTrace,
@@ -16,6 +30,10 @@ import type {
 
 let uid = 0;
 const nextId = () => `m${++uid}`;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function reduceProgress(steps: ProgressStep[], event: ProgressEvent): ProgressStep[] {
   if (
@@ -83,8 +101,76 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [liveSteps, setLiveSteps] = useState<ProgressStep[]>([]);
   const [fallbackPending, setFallbackPending] = useState(false);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [models, setModels] = useState<ModelsResponse | null>(null);
+  const [documents, setDocuments] = useState<DocumentsResponse | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [topK, setTopK] = useState(5);
+  const [temperature, setTemperature] = useState(0.1);
+  const [indexOperation, setIndexOperation] = useState<"reload" | "rebuild" | null>(null);
+  const [indexProgress, setIndexProgress] = useState<string[]>([]);
+  const [indexResult, setIndexResult] = useState<IndexResult | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const requestAbort = useRef<AbortController | null>(null);
+  const indexAbort = useRef<AbortController | null>(null);
+  const runtimeRequestId = useRef(0);
+
+  const refreshRuntime = useCallback(async () => {
+    const requestId = ++runtimeRequestId.current;
+    const [nextHealth, nextModels, nextDocuments] = await Promise.allSettled([
+      fetchHealth(),
+      fetchModels(),
+      fetchDocuments()
+    ]);
+    if (requestId !== runtimeRequestId.current) return;
+
+    if (nextHealth.status === "fulfilled") {
+      setHealth(nextHealth.value);
+      setHealthError(null);
+    } else {
+      setHealthError(errorMessage(nextHealth.reason));
+    }
+
+    if (nextModels.status === "fulfilled") {
+      setModels(nextModels.value);
+      setModelsError(null);
+      setSelectedModel((current) => {
+        if (nextModels.value.selectable_models.includes(current)) return current;
+        if (nextModels.value.selectable_models.includes(nextModels.value.default_model)) {
+          return nextModels.value.default_model;
+        }
+        return nextModels.value.selectable_models[0] ?? "";
+      });
+    } else {
+      setModelsError(errorMessage(nextModels.reason));
+    }
+
+    if (nextDocuments.status === "fulfilled") {
+      setDocuments(nextDocuments.value);
+      setDocumentsError(null);
+    } else {
+      setDocumentsError(errorMessage(nextDocuments.reason));
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshRuntime();
+    return () => {
+      runtimeRequestId.current += 1;
+    };
+  }, [refreshRuntime]);
+
+  useEffect(
+    () => () => {
+      requestAbort.current?.abort();
+      indexAbort.current?.abort();
+    },
+    []
+  );
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -160,8 +246,26 @@ export function App() {
     setBusy(false);
   };
 
+  const indexRunning = indexOperation !== null;
+  const ollamaReachable = Boolean(health?.ollama_reachable && models?.ollama_reachable);
+  const chatBlockedReason = indexRunning
+    ? "Chat is disabled while the document index is updating."
+    : !health
+      ? healthError
+        ? `Chat is disabled because Ollama status is unavailable: ${healthError}`
+        : "Chat is disabled while Ollama status is checked."
+      : !models
+        ? modelsError
+          ? `Chat is disabled because model inventory is unavailable: ${modelsError}`
+          : "Chat is disabled while model inventory is checked."
+        : !ollamaReachable
+          ? "Chat is disabled because Ollama is disconnected. Start Ollama with `ollama serve`."
+          : !selectedModel
+            ? "Chat is disabled because no supported answer model is installed."
+            : null;
+
   const send = (text: string) => {
-    if (busy || requestAbort.current) return;
+    if (busy || requestAbort.current || chatBlockedReason) return;
     setMessages((current) => [...current, { id: nextId(), role: "user", text }]);
     setBusy(true);
     setLiveSteps([]);
@@ -173,6 +277,12 @@ export function App() {
     let assistantStarted = false;
     let streamedText = "";
     let completed = false;
+    const chatOptions = {
+      model: selectedModel,
+      topK,
+      temperature,
+      signal: controller.signal
+    };
     requestAbort.current = controller;
 
     const isCurrent = () => requestAbort.current === controller && !controller.signal.aborted;
@@ -223,7 +333,7 @@ export function App() {
     const run = async () => {
       try {
         try {
-          const result = await streamChat(text, { signal: controller.signal }, onEvent);
+          const result = await streamChat(text, chatOptions, onEvent);
           if (!isCurrent()) return;
           if (!completed) {
             completeAssistant(assistantId, result, freezeProgress(steps, result.elapsed_ms));
@@ -238,7 +348,7 @@ export function App() {
           setLiveSteps([]);
           setMessages((current) => current.filter((message) => message.id !== assistantId));
           setFallbackPending(true);
-          const result = await sendChat(text, { signal: controller.signal });
+          const result = await sendChat(text, chatOptions);
           if (!isCurrent()) return;
           setFallbackPending(false);
           completeAssistant(assistantId, result);
@@ -264,6 +374,51 @@ export function App() {
     void run();
   };
 
+  const runIndex = (path: IndexPath) => {
+    if (indexAbort.current || indexRunning || busy) return;
+
+    const controller = new AbortController();
+    const operation = path.endsWith("/rebuild") ? "rebuild" : "reload";
+    indexAbort.current = controller;
+    setIndexOperation(operation);
+    setIndexProgress([]);
+    setIndexResult(null);
+    setIndexError(null);
+
+    const isCurrent = () => indexAbort.current === controller && !controller.signal.aborted;
+    const onEvent = (event: IndexProgressEvent) => {
+      if (!isCurrent()) return;
+      if (
+        event.event === "stage_start" ||
+        event.event === "stage_update" ||
+        event.event === "stage_end"
+      ) {
+        setIndexProgress((current) => [...current, event.message]);
+      }
+    };
+
+    const run = async () => {
+      try {
+        const finalEvent = await streamIndex(path, onEvent, controller.signal);
+        if (!isCurrent()) return;
+        setIndexResult(finalEvent.result);
+        await refreshRuntime();
+      } catch (error) {
+        if (!isCurrent()) return;
+        if (!(error instanceof Error && error.name === "AbortError")) {
+          setIndexError(errorMessage(error));
+        }
+      } finally {
+        if (indexAbort.current === controller) {
+          indexAbort.current = null;
+          setIndexOperation(null);
+        }
+      }
+    };
+
+    void run();
+  };
+
   const isEmpty = messages.length === 0 && !fallbackPending;
   const appClass =
     "app" + (sidebarCollapsed ? " collapsed" : "") + (isEmpty ? " is-empty" : "");
@@ -276,6 +431,25 @@ export function App() {
         onNewChat={newChat}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
+        health={health}
+        models={models}
+        documents={documents}
+        runtimeError={healthError ?? modelsError}
+        documentsError={documentsError}
+        ollamaReachable={ollamaReachable}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
+        topK={topK}
+        onTopKChange={setTopK}
+        temperature={temperature}
+        onTemperatureChange={setTemperature}
+        indexOperation={indexOperation}
+        indexProgress={indexProgress}
+        indexResult={indexResult}
+        indexError={indexError}
+        indexActionsDisabled={busy}
+        onReload={() => runIndex("/api/index/reload")}
+        onRebuild={() => runIndex("/api/index/rebuild")}
       />
       <main className="board mode-enter">
         <div className="stage">
@@ -288,9 +462,9 @@ export function App() {
               {fallbackPending && <Typing />}
             </div>
           </div>
-          <EmptyState onPick={send} active={isEmpty} />
+          <EmptyState onPick={send} active={isEmpty} disabled={Boolean(chatBlockedReason) || busy} />
         </div>
-        <Composer onSend={send} busy={busy} />
+        <Composer onSend={send} busy={busy} disabledReason={chatBlockedReason} />
       </main>
     </div>
   );

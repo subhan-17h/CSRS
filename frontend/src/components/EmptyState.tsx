@@ -12,9 +12,10 @@ const SUGGESTIONS = [
 type EmptyStateProps = {
   onPick: (prompt: string) => void;
   active: boolean;
+  disabled: boolean;
 };
 
-export function EmptyState({ onPick, active }: EmptyStateProps) {
+export function EmptyState({ onPick, active, disabled }: EmptyStateProps) {
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
   const timers = useRef<number[]>([]);
@@ -54,7 +55,12 @@ export function EmptyState({ onPick, active }: EmptyStateProps) {
       </div>
       <div className="hero-chips">
         {SUGGESTIONS.map((suggestion) => (
-          <button key={suggestion} className="suggest-chip" onClick={() => onPick(suggestion)}>
+          <button
+            key={suggestion}
+            className="suggest-chip"
+            onClick={() => onPick(suggestion)}
+            disabled={disabled}
+          >
             {suggestion}
           </button>
         ))}

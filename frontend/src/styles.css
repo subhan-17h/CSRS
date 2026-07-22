@@ -313,6 +313,126 @@ body {
 }
 .sidebar.collapsed .side-scroll { overflow: visible; }
 
+/* The settings live in the scrollable middle so long inventories never push the
+   status and theme controls off-screen. The whole panel leaves the collapsed rail. */
+.settings-panel {
+  display: flex; flex-direction: column; gap: 18px;
+  width: 100%; max-width: 100%; flex-shrink: 0;
+}
+.sidebar.collapsed .settings-panel { display: none; }
+.settings-section {
+  display: flex; flex-direction: column; gap: 10px;
+  min-width: 0; padding-top: 16px;
+  border-top: 1px solid var(--border-muted);
+}
+.settings-title {
+  color: var(--text); font-size: 12.5px; font-weight: 600;
+  letter-spacing: -.01em;
+}
+.runtime-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 9px; border: 1px solid var(--border-muted); border-radius: var(--r-xs);
+  background: var(--soft); color: var(--text-2); font-size: 11.5px; font-weight: 500;
+}
+.runtime-banner.connected { background: var(--success-soft); color: var(--success); }
+.runtime-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--text-muted); box-shadow: 0 0 0 3px var(--border-muted);
+}
+.runtime-banner.connected .runtime-dot {
+  background: var(--success); box-shadow: 0 0 0 3px var(--success-soft);
+}
+.settings-notice,
+.settings-warning {
+  color: var(--text-muted); font-size: 10.5px; line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.settings-notice code,
+.settings-warning code,
+.document-item code {
+  font-family: 'Geist Mono', monospace;
+}
+.settings-notice code { color: var(--text-2); }
+.settings-warning {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
+  background: var(--soft); color: var(--text-2);
+}
+.settings-warning code {
+  display: block; color: var(--cyan); font-size: 10px; overflow-wrap: anywhere;
+}
+.settings-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.settings-field > span {
+  color: var(--text-2); font-size: 11px; font-weight: 500;
+}
+.settings-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.settings-label-row output {
+  padding: 1px 6px; border: 1px solid var(--border-muted); border-radius: 6px;
+  background: var(--soft); color: var(--cyan);
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+}
+.settings-field select,
+.settings-field input[type="number"] {
+  width: 100%; min-width: 0; padding: 8px 9px;
+  border: 1px solid var(--border); border-radius: var(--r-xs);
+  background: var(--elevated); color: var(--text);
+  font: inherit; font-size: 11.5px; outline: none;
+}
+.settings-field select:focus,
+.settings-field input[type="number"]:focus {
+  border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan-ring);
+}
+.settings-field select:disabled { color: var(--text-muted); cursor: not-allowed; }
+.settings-field input[type="range"] {
+  width: 100%; accent-color: var(--cyan); cursor: pointer;
+}
+.settings-total { color: var(--text-muted); font-size: 10.5px; }
+.document-list { display: flex; flex-direction: column; gap: 7px; }
+.document-item {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 9px; border: 1px solid var(--border-muted); border-radius: var(--r-xs);
+  background: var(--elevated); min-width: 0;
+}
+.document-item code {
+  color: var(--text); font-size: 10px; line-height: 1.4; overflow-wrap: anywhere;
+}
+.document-item span { color: var(--text-muted); font-size: 10px; }
+.index-button {
+  width: 100%; padding: 9px 10px;
+  border: 1px solid var(--border); border-radius: var(--r-xs);
+  background: var(--elevated); color: var(--text-2);
+  font: inherit; font-size: 11px; font-weight: 500; cursor: pointer;
+  transition: border-color .18s, background .18s, color .18s;
+}
+.index-button.primary { background: var(--cyan-soft); border-color: var(--cyan); color: var(--cyan); }
+.index-button:hover:not(:disabled) { background: var(--soft); color: var(--text); }
+.index-button:disabled,
+.confirm-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.rebuild-confirm,
+.index-status,
+.index-result {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 9px; border: 1px solid var(--border); border-radius: var(--r-xs);
+  background: var(--soft); color: var(--text-2); font-size: 10.5px; line-height: 1.45;
+}
+.rebuild-confirm p { color: var(--text-2); }
+.confirm-actions { display: flex; gap: 6px; }
+.confirm-actions button {
+  flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--elevated); color: var(--text-2);
+  font: inherit; font-size: 10px; cursor: pointer;
+}
+.confirm-actions button:first-child { border-color: var(--cyan); color: var(--cyan); }
+.index-status strong,
+.index-result strong { color: var(--text); font-weight: 600; }
+.index-status ul {
+  display: flex; flex-direction: column; gap: 3px; padding-left: 15px;
+  color: var(--text-muted);
+}
+.index-result { border-color: var(--success); background: var(--success-soft); }
+.index-result span { color: var(--text-2); }
+.index-error { padding: 8px 9px; border: 1px solid var(--border); border-radius: var(--r-xs); }
+
 .side-label {
   font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
   text-transform: uppercase; color: var(--text-muted);
@@ -1069,6 +1189,7 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
 }
 .suggest-chip:hover { border-color: var(--graphite); color: var(--text); background: var(--soft); transform: translateY(-1px); }
 .suggest-chip:active { transform: translateY(0); }
+.suggest-chip:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
 /* ============================================================
    Composer
@@ -1099,6 +1220,7 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
   max-height: 140px; padding: 6px 0; min-height: 24px;
 }
 .composer textarea::placeholder { color: var(--text-muted); }
+.composer textarea:disabled { cursor: not-allowed; }
 .composer-tools { display: flex; align-items: center; gap: 4px; padding-bottom: 1px; }
 .tool-btn {
   width: 34px; height: 34px; border-radius: 10px;
@@ -1133,6 +1255,7 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
   padding: 2px 6px; border-radius: 5px; color: var(--text-2);
 }
 .composer-hint .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--border); }
+.composer-disabled-reason { color: var(--text-muted); line-height: 1.45; }
 .composer-hint .ro { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .composer-hint .ro svg { width: 12px; height: 12px; color: var(--steel); }
 

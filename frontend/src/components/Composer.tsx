@@ -4,9 +4,10 @@ import { Ico } from "./icons";
 type ComposerProps = {
   onSend: (text: string) => void;
   busy: boolean;
+  disabledReason: string | null;
 };
 
-export function Composer({ onSend, busy }: ComposerProps) {
+export function Composer({ onSend, busy, disabledReason }: ComposerProps) {
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -20,12 +21,13 @@ export function Composer({ onSend, busy }: ComposerProps) {
 
   const submit = () => {
     const trimmed = value.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || busy || disabledReason) return;
     onSend(trimmed);
     setValue("");
   };
 
-  const ready = value.trim().length > 0 && !busy;
+  const disabled = busy || Boolean(disabledReason);
+  const ready = value.trim().length > 0 && !disabled;
 
   return (
     <div className="composer-dock">
@@ -34,7 +36,10 @@ export function Composer({ onSend, busy }: ComposerProps) {
           <textarea
             ref={textareaRef}
             value={value}
-            placeholder="Ask about the indexed cybersecurity standards..."
+            placeholder={
+              disabledReason ?? "Ask about the indexed cybersecurity standards..."
+            }
+            disabled={disabled}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -57,7 +62,14 @@ export function Composer({ onSend, busy }: ComposerProps) {
           </button>
         </div>
         <div className="composer-hint">
-          <kbd>Enter</kbd> to send <span className="sep" /> <kbd>Shift</kbd>+<kbd>Enter</kbd> new line
+          {disabledReason ? (
+            <span className="composer-disabled-reason">{disabledReason}</span>
+          ) : (
+            <>
+              <kbd>Enter</kbd> to send <span className="sep" /> <kbd>Shift</kbd>+<kbd>Enter</kbd>{" "}
+              new line
+            </>
+          )}
         </div>
       </div>
     </div>
