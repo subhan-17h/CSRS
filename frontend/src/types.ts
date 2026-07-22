@@ -52,7 +52,6 @@ export type ProgressEvent =
       key: string;
       stage: string;
       message: string;
-      detail: Record<string, unknown>;
       ts: number;
     }
   | {
@@ -60,7 +59,6 @@ export type ProgressEvent =
       key: string;
       stage: string;
       message: string;
-      detail: Record<string, unknown>;
       ts: number;
     }
   | {
@@ -68,11 +66,11 @@ export type ProgressEvent =
       key: string;
       stage: string;
       message: string;
-      detail: Record<string, unknown>;
       ts: number;
       elapsed_ms: number;
     }
-  | { event: "final"; response: ChatResponse; total_ms: number; ts: number }
+  | { event: "token"; text: string }
+  | { event: "final"; response: ChatResponse; total_ms: number }
   | { event: "ping"; ts: number }
   | { event: "error"; message: string; ts?: number };
 

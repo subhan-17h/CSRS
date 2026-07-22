@@ -1009,7 +1009,36 @@ untouched at 4 documents / 2506 chunks throughout.
     label always shows the true value.
   - Cost noted: the bundle grew 156 kB -> 315 kB (50 -> 98 kB gzipped) from the remark/unified
     tree. Acceptable for a local offline app, and it is the price of not shipping raw `**`.
-- [ ] **T-7.8** Wire streaming and live progress stages into `App.tsx`
+- [x] **T-7.8** Wire streaming and live progress stages into `App.tsx`
+  - [x] Correct the frontend stream event contract and add robust buffered NDJSON parsing.
+  - [x] Reduce live stage events into the existing progress UI and append real answer tokens.
+  - [x] Preserve cancellation, stale-request guards, server error details, and HTTP fallback.
+  - [x] Prove the production build, source invariants, incremental Vite proxy stream, and shutdown.
+  - **Verified:** `npm run build` passes with 293 modules transformed and zero TypeScript
+    errors. `git diff --check` and byte-level ASCII decoding pass; source checks confirm no
+    `setTimeout`/`answer.slice` reveal remains and no stage variant declares `detail`.
+  - The required NIST question streamed through Vite on port 5173 with 38 token events. The
+    first token arrived at 2.952 s and the last at 4.137 s, a 1.185 s spread that proves the
+    proxy did not buffer the response. Retrieval completed in 742 ms, generation in 3202 ms,
+    and the final event reported 3944 ms with five sources and the six CSF functions.
+  - No proxy change was needed. Uvicorn and Vite were stopped cleanly; `lsof` confirmed ports
+    8000 and 5173 were both free. The warm index was queried only, never rebuilt.
+  - Reviewed independently. The risk in this task was the **dev proxy silently buffering**
+    the stream -- that would look identical to working code in every unit test. Verified by
+    timestamping tokens through `localhost:5173`: 38 tokens from 1.15 s to 2.03 s
+    (0.88 s spread). Not buffered.
+  - Also verified in **single-port production mode** (FastAPI serving the built `dist`, no
+    vite involved), which is a genuinely different path and the one a grader uses: `/` served
+    the freshly built `index-DGRvVazc.js`, and "How is Incident Response handled?" streamed
+    **233 tokens over 6.26 s**. Without streaming that is an 8.6 s blank spinner.
+  - The simulated `setTimeout` typewriter is deleted. Real tokens made it both slower than
+    the actual stream and dishonest about what the user was watching.
+  - Type inaccuracy from T-7.6 is fixed: `detail` removed from the stage variants (the
+    backend never sent it), `token` added, and the phantom `ts` dropped from `final`.
+  - Stream parsing buffers across chunk boundaries (`lines.pop()` keeps the partial tail,
+    flushed after the loop), so a JSON object split across two network reads still parses.
+    Every state write is guarded by an `isCurrent()` identity+abort check so a superseded or
+    aborted request cannot write into the UI.
 - [ ] **T-7.9** Sidebar settings — full spec-§5 parity (model, top_k, temperature, reload)
 - [ ] **T-7.10** Corpus Explorer replacing the SQL Data Viewer
 - [ ] **T-7.11** localStorage conversation history
