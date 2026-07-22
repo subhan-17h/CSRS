@@ -1076,7 +1076,43 @@ untouched at 4 documents / 2506 chunks throughout.
   - Chat-disabled reasons are specific rather than a blanket block: index updating, health
     unreachable, model inventory unreachable, Ollama disconnected (carrying the
     `ollama serve` remedy), and no supported model installed.
-- [ ] **T-7.10** Corpus Explorer replacing the SQL Data Viewer
+- [x] **T-7.10** Corpus Explorer replacing the SQL Data Viewer
+  - [x] Add typed chat/corpus mode navigation while keeping the chat subtree mounted.
+  - [x] Add typed document-chunk API access that preserves backend error details.
+  - [x] Render selectable documents, ordered chunk metadata/text, and honest page-local filtering.
+  - [x] Paginate with boundary-safe 50-chunk previous/next controls and reset on document change.
+  - [x] Reuse and extend the `.dv-*` design with theme tokens and responsive behavior.
+  - [x] Prove the frontend build, live proxy responses, pagination math, chat-state preservation,
+    frontend ASCII, diff hygiene, and clean shutdown of ports 8000 and 5173.
+  - **Verified:** `npm run build` passes with 294 modules transformed and zero TypeScript
+    errors; Ruff, byte-level frontend ASCII decoding, and `git diff --check` pass.
+  - Live Vite-proxy reads returned four documents and 2506 chunks. The OWASP request returned
+    chunks 0-4 with null page/control metadata; the SP 800-53 request at offset 700 returned
+    pages 164-165 and `IA-4(1)` / `IA-4(9)`. Their UI ranges are `Showing 1-5 of 147` and
+    `Showing 701-703 of 2119`.
+  - The real SP 800-53 last page at offset 2100 returned 19 chunks, IDs 2100-2118. At offset
+    zero Previous is disabled and Next requests 50; at offset 2100 Previous requests 2050 and
+    Next is disabled, so the component cannot request a negative or out-of-range offset.
+  - A real missing-document request returned HTTP 404 with `Document 'not-indexed.pdf' is not
+    in the index.`; the shared JSON reader propagates that backend detail into `.dv-state.error`.
+  - Chat and Corpus are mounted siblings. Mode changes only toggle the `inactive` class, while
+    messages, composer state, `busy`, and the in-flight AbortController remain mounted and no
+    mode-change path calls `abort()`.
+  - Only read endpoints were called. Both servers shut down cleanly and ports 8000 and 5173
+    were confirmed free; `/api/index/rebuild` and `Pipeline.index(force=True)` were not called.
+  - Reviewed independently. Pagination boundaries verified against the real 2119-chunk
+    document rather than reasoned about: `offset=2100&limit=50` returns 19 chunks, renders
+    "showing 2101-2119 of 2119", and next is correctly disabled
+    (`offset + limit >= total`). A past-the-end `offset=2200` returns 200 with an empty page
+    instead of crashing.
+  - Null metadata handled properly -- OWASP chunk `:0` has page, section and control_id all
+    null, and each is conditionally rendered, so "Page null" never appears.
+  - The filter is **labelled honestly**: the API has no server-side chunk search, so the
+    placeholder reads "Filter chunks on this page" and the count reads "N of M on this page".
+    It never implies a corpus-wide search that is not happening.
+  - Chat state survives tab switching: both panels stay mounted and the inactive one is
+    hidden with `display: none` plus `aria-hidden`, so it leaves the tab order entirely
+    while React keeps conversation state and any in-flight stream alive.
 - [ ] **T-7.11** localStorage conversation history
 
 ### Close-out

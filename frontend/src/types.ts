@@ -1,5 +1,7 @@
 export type Theme = "dark" | "light";
 
+export type AppMode = "chat" | "corpus";
+
 export type Source = {
   doc_name: string;
   page: number | null;
@@ -35,6 +37,22 @@ export type DocumentSummary = {
 export type DocumentsResponse = {
   documents: DocumentSummary[];
   total_chunks: number;
+};
+
+export type DocumentChunk = {
+  id: string;
+  text: string;
+  section: string | null;
+  page: number | null;
+  control_id: string | null;
+};
+
+export type DocumentChunksResponse = {
+  doc_name: string;
+  chunks: DocumentChunk[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type ModelsResponse = {

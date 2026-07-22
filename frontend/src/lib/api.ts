@@ -1,5 +1,6 @@
 import type {
   ChatResponse,
+  DocumentChunksResponse,
   DocumentsResponse,
   HealthResponse,
   IndexProgressEvent,
@@ -210,8 +211,22 @@ export async function fetchHealth(): Promise<HealthResponse> {
   return readJson<HealthResponse>(await fetch("/api/health"));
 }
 
-export async function fetchDocuments(): Promise<DocumentsResponse> {
-  return readJson<DocumentsResponse>(await fetch("/api/documents"));
+export async function fetchDocuments(signal?: AbortSignal): Promise<DocumentsResponse> {
+  return readJson<DocumentsResponse>(await fetch("/api/documents", { signal }));
+}
+
+export async function fetchDocumentChunks(
+  docName: string,
+  limit: number,
+  offset: number,
+  signal?: AbortSignal
+): Promise<DocumentChunksResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset)
+  });
+  const path = `/api/documents/${encodeURIComponent(docName)}/chunks?${params}`;
+  return readJson<DocumentChunksResponse>(await fetch(path, { signal }));
 }
 
 export async function fetchModels(): Promise<ModelsResponse> {

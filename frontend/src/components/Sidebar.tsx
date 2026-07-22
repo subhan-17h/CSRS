@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
+  AppMode,
   DocumentsResponse,
   HealthResponse,
   IndexResult,
@@ -10,6 +11,8 @@ import { Ico } from "./icons";
 import { Logo } from "./Logo";
 
 type SidebarProps = {
+  mode: AppMode;
+  onModeChange: (mode: AppMode) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
   onNewChat: () => void;
@@ -37,6 +40,8 @@ type SidebarProps = {
 };
 
 export function Sidebar({
+  mode,
+  onModeChange,
   theme,
   setTheme,
   onNewChat,
@@ -117,9 +122,25 @@ export function Sidebar({
 
       <div className="side-scroll">
         <nav className="side-nav" aria-label="Application navigation">
-          <button className="side-nav-item active" type="button">
+          <button
+            className={"side-nav-item" + (mode === "chat" ? " active" : "")}
+            type="button"
+            onClick={() => onModeChange("chat")}
+            aria-current={mode === "chat" ? "page" : undefined}
+            title="Chat"
+          >
             <Ico.Chat className="nav-ico" />
             <span className="label hideable">Chat</span>
+          </button>
+          <button
+            className={"side-nav-item" + (mode === "corpus" ? " active" : "")}
+            type="button"
+            onClick={() => onModeChange("corpus")}
+            aria-current={mode === "corpus" ? "page" : undefined}
+            title="Corpus"
+          >
+            <Ico.Grid className="nav-ico" />
+            <span className="label hideable">Corpus</span>
           </button>
         </nav>
 

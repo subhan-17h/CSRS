@@ -177,6 +177,7 @@ body {
   transition: --col .46s var(--ease-out), background .4s var(--ease);
 }
 .app.collapsed { --col: var(--rail-w); }
+.mode-panel.inactive { display: none; }
 
 /* ============================================================
    Sidebar: collapsible icon rail <-> expanded
@@ -1128,7 +1129,10 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
   color: var(--text-2); font: inherit; font-size: 11.5px; font-weight: 500;
   cursor: pointer; transition: border-color .18s, color .18s, background .18s;
 }
-.ghost-btn:hover { border-color: var(--graphite); color: var(--text); background: var(--elevated); }
+.ghost-btn:hover:not(:disabled) {
+  border-color: var(--graphite); color: var(--text); background: var(--elevated);
+}
+.ghost-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ghost-btn svg { width: 13px; height: 13px; }
 
 /* Typing indicator */
@@ -1290,16 +1294,19 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
   width: 2.5px; height: 17px; border-radius: 2px; background: var(--cyan);
 }
 .sidebar.collapsed .side-nav-item { justify-content: center; padding: 10px 0; gap: 0; }
-/* Collapsed icons read uniform grey; drop the active box, bar, and tint. */
-.sidebar.collapsed .side-nav-item.active { background: none; border-color: transparent; }
+/* The compact rail keeps a small active affordance because labels are hidden. */
+.sidebar.collapsed .side-nav-item.active {
+  background: var(--elevated); border-color: var(--border-muted);
+}
 .sidebar.collapsed .side-nav-item.active::before { display: none; }
-.sidebar.collapsed .side-nav-item.active .nav-ico { color: var(--steel); }
+.sidebar.collapsed .side-nav-item.active .nav-ico { color: var(--cyan); }
 /* Light mode: steel grey reads too faint, so match the darker suggestion-chip
    text (--text-2) so the collapsed icons keep enough contrast. */
 [data-theme="light"] .sidebar.collapsed .side-nav-item .nav-ico,
 [data-theme="light"] .sidebar.collapsed .side-nav-item.active .nav-ico,
 [data-theme="light"] .sidebar.collapsed .new-chat .plus,
 [data-theme="light"] .sidebar.collapsed .theme-toggle button { color: var(--text-2); }
+[data-theme="light"] .sidebar.collapsed .side-nav-item.active .nav-ico { color: var(--cyan); }
 /* Light mode: --elevated (#FFF) hover is invisible on the near-white sidebar;
    use --soft so the hover highlight actually reads. */
 [data-theme="light"] .side-nav-item:hover,
@@ -1328,6 +1335,7 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
   font: inherit; font-size: 12.5px; font-weight: 500;
   cursor: pointer;
   transition: border-color .16s, color .16s, background .16s;
+  min-width: 0;
 }
 .dv-tab .d { width: 6px; height: 6px; border-radius: 50%; background: var(--steel); opacity: .6; transition: background .16s; }
 .dv-tab:hover { border-color: var(--graphite); color: var(--text); background: var(--soft); }
@@ -1338,6 +1346,7 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
   background: var(--surface); border: 1px solid var(--border-muted);
   padding: 1px 6px; border-radius: 6px;
 }
+.dv-tab-name { overflow-wrap: anywhere; }
 
 .dv-area {
   flex: 1; min-height: 0;
@@ -1436,8 +1445,8 @@ table.data.dv-table { min-width: 100%; width: max-content; }
   color: var(--text-muted); font-size: 13px; text-align: center;
 }
 .dv-state svg { color: var(--steel); }
-.dv-state.error { color: #FCA5A5; }
-.dv-state.error svg { color: #FCA5A5; }
+.dv-state.error { color: var(--text-2); }
+.dv-state.error svg { color: var(--steel); }
 .dv-spinner {
   width: 26px; height: 26px; border-radius: 50%;
   border: 2.5px solid var(--border);
@@ -1453,6 +1462,38 @@ table.data.dv-table { min-width: 100%; width: max-content; }
   background: var(--surface);
   flex-shrink: 0;
 }
+.dv-chunks {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px;
+}
+.dv-chunk {
+  min-width: 0; padding: 13px 14px;
+  border: 1px solid var(--border-muted); border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.dv-chunk-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.dv-chunk-id,
+.dv-chunk-page,
+.dv-page-summary {
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+}
+.dv-chunk-id { color: var(--cyan); font-weight: 500; overflow-wrap: anywhere; }
+.dv-chunk-page { color: var(--text-muted); }
+.dv-chunk-section {
+  margin-top: 8px; color: var(--text-muted);
+  font-size: 10.5px; line-height: 1.45; overflow-wrap: anywhere;
+}
+.dv-chunk-text {
+  margin-top: 9px; color: var(--text-2);
+  font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.dv-page-summary { color: var(--text-muted); white-space: nowrap; }
+.dv-pagination {
+  display: flex; align-items: center; gap: 8px; margin-left: auto;
+}
+.dv-pagination .ghost-btn { margin-left: 0; }
 
 /* ============================================================
    Mode transition (Chat <-> Data Viewer)
@@ -1492,6 +1533,10 @@ table.data.dv-table { min-width: 100%; width: max-content; }
   .composer-hint .ro { margin-left: 0; width: 100%; }
   .dv-tabs { padding: 12px 16px 0; }
   .dv-area { padding: 12px 16px 16px; }
+  .dv-toolbar,
+  .dv-foot { flex-wrap: wrap; }
+  .dv-search { flex-basis: 100%; max-width: none; }
+  .dv-count { margin-left: 0; }
 }
 
 /* Short viewports: pull the cluster in so the wordmark never clips */

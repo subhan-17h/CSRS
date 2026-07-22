@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer";
+import { CorpusExplorer } from "./components/CorpusExplorer";
 import { EmptyState } from "./components/EmptyState";
 import { Message, Typing } from "./components/Message";
 import { ProgressSteps } from "./components/ProgressSteps";
@@ -15,6 +16,7 @@ import {
 } from "./lib/api";
 import type { IndexPath } from "./lib/api";
 import type {
+  AppMode,
   ChatResponse,
   DocumentsResponse,
   HealthResponse,
@@ -95,6 +97,7 @@ function freezeProgress(steps: ProgressStep[], totalMs: number): ProgressTrace {
 }
 
 export function App() {
+  const [mode, setMode] = useState<AppMode>("chat");
   const [theme, setTheme] = useState<Theme>("dark");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [messages, setMessages] = useState<MessageType[]>([]);
@@ -192,6 +195,7 @@ export function App() {
     setLiveSteps([]);
     setFallbackPending(false);
     setBusy(false);
+    setMode("chat");
   }, []);
 
   useEffect(() => {
@@ -421,11 +425,15 @@ export function App() {
 
   const isEmpty = messages.length === 0 && !fallbackPending;
   const appClass =
-    "app" + (sidebarCollapsed ? " collapsed" : "") + (isEmpty ? " is-empty" : "");
+    "app" +
+    (sidebarCollapsed ? " collapsed" : "") +
+    (mode === "chat" && isEmpty ? " is-empty" : "");
 
   return (
     <div className={appClass}>
       <Sidebar
+        mode={mode}
+        onModeChange={setMode}
         theme={theme}
         setTheme={setTheme}
         onNewChat={newChat}
@@ -451,7 +459,10 @@ export function App() {
         onReload={() => runIndex("/api/index/reload")}
         onRebuild={() => runIndex("/api/index/rebuild")}
       />
-      <main className="board mode-enter">
+      <main
+        className={"board mode-panel" + (mode === "chat" ? " mode-enter" : " inactive")}
+        aria-hidden={mode !== "chat"}
+      >
         <div className="stage">
           <div className="thread-scroll" ref={scrollRef}>
             <div className="thread">
@@ -466,6 +477,7 @@ export function App() {
         </div>
         <Composer onSend={send} busy={busy} disabledReason={chatBlockedReason} />
       </main>
+      <CorpusExplorer active={mode === "corpus"} />
     </div>
   );
 }
