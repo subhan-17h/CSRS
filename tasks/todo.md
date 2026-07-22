@@ -2,8 +2,8 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1, T-2.2, T-2.3,
-T-2.4, and T-2.7 (Docling as the default parser) are complete. Next: T-2.5 reload UI.
+**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1 through T-2.5,
+and T-2.7 (Docling as the default parser) are complete. Next: T-2.6 sidebar settings.
 
 ---
 
@@ -228,6 +228,66 @@ T-2.4, and T-2.7 (Docling as the default parser) are complete. Next: T-2.5 reloa
     against the **default** model rather than assuming behaviour transfers across the dropdown,
     and T-6.1's README should say plainly that the selector exposes models which will answer
     less reliably than the default.
+
+- [x] **T-2.5** Restart and reload controls plus persisted document summary
+  - [x] Replace the hash-only manifest with validated hash/page/chunk records while preserving
+    atomic replacement and corrupt/old-format self-healing.
+  - [x] Expose filename, chunk count, and honest optional page count through `Pipeline`, sorted
+    by filename, without UI access to storage internals.
+  - [x] Preserve incremental add/update/delete, forced rebuild, and manifest/store consistency
+    recovery; remove Chroma empty-document metadata only if those guards remain exact.
+  - [x] Add distinct sidebar document/model sections, incremental reload, an explicitly costly
+    full rebuild control, cache clear before rebuild, rerun, and `st.status` progress.
+  - [x] Extend offline manifest and pipeline coverage for records, TXT page counts, add/remove,
+    force, old/corrupt manifests, and all T-2.3 recovery guarantees.
+  - [x] Run every requested verification and a timed headless add-then-incremental-reindex proof.
+  - **Two card instructions were deliberately overridden.**
+    1. *The button must not clear the manifest.* The card says "clear manifest -> cache clear ->
+       rebuild", which contradicts T-2.3's own rationale in the same document ("the Restart &
+       Reload button is unusable if it re-embeds 400 pages every press"). Clearing the manifest
+       **is** re-embedding everything: 309 s per press. The primary button now runs an
+       *incremental* reindex, which already detects new, changed and deleted files, and a
+       separate explicitly-labelled control does a true `force=True` rebuild. Following the card
+       literally would have satisfied the spec on paper and been unusable in practice.
+    2. *Page count is persisted, not guessed.* `Document.page_count` was computed at parse time
+       and discarded. The tempting shortcut, `max(chunk.page)`, understates any document whose
+       trailing pages produce no chunks. The manifest therefore stores a record per document
+       (hash, page count, chunk count) and reuses T-2.3's existing invalid-manifest-rebuilds path
+       instead of migration code.
+  - **Verified independently.** Ruff clean, **94 offline tests** (86 + 8 new), Docling test
+    passes, ASCII OK, and `grep` confirms `app.py` still reaches no backend directly.
+    The spec scenario, run literally on a temp corpus containing one real PDF:
+
+    | Step | Result |
+    |---|---|
+    | Cold index | CSF PDF `chunks=209 pages=32`, TXT `chunks=2 pages=None` |
+    | Drop a new file in, reindex | `added=1 skipped=2` in **0.11 s**, listed and queryable |
+
+    Page count is the real 32, not a chunk-derived guess, and TXT reports `None` rather than a
+    dishonest 0. Cache-clear ordering was checked by reading `app.py`: `st.cache_resource.clear()`
+    runs *before* the rebuild, then `st.rerun()` — the reverse order silently reuses the stale
+    cached `Pipeline` and is invisible to unit tests because it only exists in Streamlit's rerun
+    model.
+  - **The `empty_documents` refactor was safe, and the guard got stronger.** Removing it was
+    conditional on every T-2.3 guard surviving, so each was re-tested in a *separate process*
+    (chromadb caches clients per path in-process, so same-process checks give false results —
+    my first attempt reported a bogus pass for exactly that reason):
+
+    | Guard | Result |
+    |---|---|
+    | Steady state | `skipped=2` |
+    | `chroma_db/` deleted, manifest kept | **rebuilt** (`added=2`) |
+    | Corrupt manifest | **rebuilt**, no exception |
+    | Zero-chunk document indexed | listed with `chunks=0`, **no rebuild loop** across 3 runs |
+
+    The guard now compares per-document *chunk counts* rather than name sets, so it also catches
+    partial corruption that the old name-set comparison would have missed. Zero-chunk documents
+    are excluded from that comparison, which is what makes the `empty_documents` Chroma-metadata
+    hack unnecessary.
+  - ⚠ Known limitation, not worth code: deleting `chroma_db/` *while the app is running* can
+    leave chromadb's process-global client cache holding a stale handle, which surfaces as a
+    readonly-database error. Restarting the app clears it. Deleting the index out from under a
+    live process is not a supported operation.
 
 - [x] **T-2.7** Docling as the default PDF parser *(absorbs T-5.3; supersedes the T-2.1
   furniture heuristics and the T-2.2 numeric-heading regex)*
@@ -545,6 +605,25 @@ sources. Ruff passed; 79 offline tests and the one Docling test passed; byte-lev
 passed. A two-TXT throwaway proof replaced `TextParser.parse` with a failure before the second run:
 the run still reported `skipped=2` and completed in 0.001140 seconds, directly proving the parser
 was not called.
+
+**T-2.5:** The manifest now stores a strict hash, page count, and chunk count record per relative
+source path. `Pipeline.documents()` exposes sorted summaries, including `page_count=None` for TXT,
+and the sidebar renders them separately from the existing model selector. The primary reload clears
+Streamlit resources before an ordinary incremental index; the separately labelled full rebuild uses
+`force=True` and warns about its roughly five-minute corpus cost. Both paths run inside `st.status`
+and rerun with the newly cached Pipeline. Old hash-only manifests are deliberately invalid under the
+new validator, so the next index performs a one-time full reparse; there is no migration because no
+manifest has been deployed. Corrupt JSON remains non-raising and atomic temp-file replacement remains
+intact.
+
+The Chroma `empty_documents` metadata array was removed. The consistency guard now compares exact
+positive per-document chunk counts from the manifest and store, which preserves empty-store and
+partially-missing recovery, detects wrong counts even when a document name remains present, and lets
+zero-chunk documents live honestly in the manifest. Verification: ruff clean; 94 dead-port offline
+tests pass (86 before this card); the Docling test passes; byte-level ASCII decode passes; and the UI
+boundary grep shows no Chroma or manifest access. A throwaway two-TXT proof added `second.txt` after
+the first index: the incremental result was `added=1, updated=0, skipped=1, removed=0`, the list grew
+from one document to two, a public query retrieved `second.txt`, and reindexing took 0.003005 seconds.
 
 ### Phase 1 checkpoint — what the system actually gets wrong
 

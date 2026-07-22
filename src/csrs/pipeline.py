@@ -12,7 +12,16 @@ from csrs.loaders import get_parser, iter_document_paths
 from csrs.models import Answer
 from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
 
-__all__ = ("IndexResult", "ModelAvailability", "Pipeline")
+__all__ = ("DocumentSummary", "IndexResult", "ModelAvailability", "Pipeline")
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentSummary:
+    """Persisted statistics for one indexed source document."""
+
+    filename: str
+    chunk_count: int
+    page_count: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,14 +91,18 @@ class Pipeline:
         manifest_doc_names = [Path(identity).name for identity in manifest]
         manifest_names = set(manifest_doc_names)
         manifest_has_duplicate_names = len(manifest_doc_names) != len(manifest_names)
+        expected_chunk_counts = {
+            Path(identity).name: record["chunk_count"]
+            for identity, record in manifest.items()
+            if record["chunk_count"] > 0
+        }
         if (
             force
             or manifest_has_duplicate_names
-            or manifest_names != set(self._store.document_names())
+            or expected_chunk_counts != self._store.document_chunk_counts()
         ):
             self._store.reset()
             manifest = {}
-        empty_document_names = set(self._store.empty_document_names())
         added = 0
         updated = 0
         skipped = 0
@@ -98,8 +111,8 @@ class Pipeline:
 
         for identity, path in paths_by_identity.items():
             source_hash = file_content_hash(path)
-            previous_hash = manifest.get(identity)
-            if previous_hash == source_hash:
+            previous_record = manifest.get(identity)
+            if previous_record is not None and previous_record["hash"] == source_hash:
                 skipped += 1
                 continue
 
@@ -114,12 +127,12 @@ class Pipeline:
 
             self._store.delete_document(document.name)
             self._store.add_chunks(chunks, embeddings)
-            if chunks:
-                empty_document_names.discard(document.name)
-            else:
-                empty_document_names.add(document.name)
-            manifest[identity] = source_hash
-            if previous_hash is None:
+            manifest[identity] = {
+                "hash": source_hash,
+                "page_count": document.page_count,
+                "chunk_count": len(chunks),
+            }
+            if previous_record is None:
                 added += 1
             else:
                 updated += 1
@@ -128,11 +141,9 @@ class Pipeline:
             doc_name = Path(identity).name
             if doc_name not in current_doc_names:
                 self._store.delete_document(doc_name)
-                empty_document_names.discard(doc_name)
             del manifest[identity]
             removed += 1
 
-        self._store.set_empty_document_names(empty_document_names)
         save_manifest(self._manifest_path, manifest)
 
         return IndexResult(
@@ -190,7 +201,22 @@ class Pipeline:
 
     def document_names(self) -> list[str]:
         """Return document names from the complete persistent index."""
-        return self._store.document_names()
+        return [document.filename for document in self.documents()]
+
+    def documents(self) -> list[DocumentSummary]:
+        """Return persisted document statistics sorted by filename."""
+        manifest = load_manifest(self._manifest_path)
+        return sorted(
+            (
+                DocumentSummary(
+                    filename=Path(identity).name,
+                    chunk_count=record["chunk_count"],
+                    page_count=record["page_count"],
+                )
+                for identity, record in manifest.items()
+            ),
+            key=lambda document: document.filename,
+        )
 
     def chunk_count(self) -> int:
         """Return the number of chunks currently available for retrieval."""

@@ -84,12 +84,19 @@ def test_delete_document_removes_only_matching_chunks(store: ChunkStore) -> None
     assert store.document_names() == ["other.txt"]
 
 
-def test_document_names_include_indexed_empty_documents(store: ChunkStore) -> None:
-    store.set_empty_document_names(["empty.txt"])
+def test_document_chunk_counts_report_each_stored_document(store: ChunkStore) -> None:
+    first = make_chunk(0)
+    second = make_chunk(1)
+    other = make_chunk(2).model_copy(
+        update={"id": "other.txt:0", "doc_name": "other.txt"}
+    )
+    store.add_chunks(
+        [first, second, other],
+        [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+    )
 
-    assert store.empty_document_names() == ["empty.txt"]
-    assert store.document_names() == ["empty.txt"]
-    assert store._collection.configuration_json["hnsw"]["space"] == "cosine"
+    assert store.document_chunk_counts() == {"other.txt": 1, "standard.txt": 2}
+    assert store.document_names() == ["other.txt", "standard.txt"]
 
 
 def test_file_content_hash_uses_bytes_not_metadata(tmp_path: Path) -> None:
@@ -108,8 +115,16 @@ def test_file_content_hash_uses_bytes_not_metadata(tmp_path: Path) -> None:
 def test_manifest_round_trips_relative_paths_atomically(tmp_path: Path) -> None:
     manifest_path = tmp_path / "index" / "manifest.json"
     manifest = {
-        "nested/second.txt": "second-hash",
-        "first.txt": "first-hash",
+        "nested/second.pdf": {
+            "hash": "second-hash",
+            "page_count": 12,
+            "chunk_count": 7,
+        },
+        "first.txt": {
+            "hash": "first-hash",
+            "page_count": None,
+            "chunk_count": 1,
+        },
     }
 
     save_manifest(manifest_path, manifest)
@@ -119,7 +134,20 @@ def test_manifest_round_trips_relative_paths_atomically(tmp_path: Path) -> None:
     assert list(manifest_path.parent.glob(".manifest.json.*.tmp")) == []
 
 
-@pytest.mark.parametrize("content", ["garbage", "[]", '{"file.txt": 42}'])
+@pytest.mark.parametrize(
+    "content",
+    [
+        "garbage",
+        "[]",
+        '{"file.txt": "old-format-hash"}',
+        '{"file.txt": {"hash": "hash", "page_count": null}}',
+        '{"file.txt": {"hash": "hash", "page_count": null, "chunk_count": true}}',
+        (
+            '{"file.txt": {"hash": "hash", "page_count": null, '
+            '"chunk_count": 1, "extra": 2}}'
+        ),
+    ],
+)
 def test_invalid_manifest_is_treated_as_empty(tmp_path: Path, content: str) -> None:
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(content, encoding="utf-8")

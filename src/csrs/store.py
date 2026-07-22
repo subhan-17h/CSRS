@@ -2,9 +2,11 @@
 
 import hashlib
 import json
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import TypedDict
 
 import chromadb
 
@@ -13,14 +15,22 @@ from csrs.models import Chunk, RetrievedChunk
 
 __all__ = (
     "ChunkStore",
+    "ManifestRecord",
     "file_content_hash",
     "load_manifest",
     "save_manifest",
 )
 
 _COSINE_METADATA = {"hnsw:space": "cosine"}
-_EMPTY_DOCUMENTS_METADATA = "csrs:empty_documents"
 _HASH_BLOCK_SIZE = 1024 * 1024
+
+
+class ManifestRecord(TypedDict):
+    """Persisted source identity and exact indexed-document statistics."""
+
+    hash: str
+    page_count: int | None
+    chunk_count: int
 
 
 def file_content_hash(path: Path) -> str:
@@ -32,20 +42,33 @@ def file_content_hash(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_manifest(path: Path) -> dict[str, str]:
-    """Load a path-to-hash manifest, treating unreadable or invalid data as empty."""
+def load_manifest(path: Path) -> dict[str, ManifestRecord]:
+    """Load a document manifest, treating unreadable or invalid data as empty."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
-    if not isinstance(data, dict) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in data.items()
-    ):
+    if not isinstance(data, dict):
         return {}
+    for key, record in data.items():
+        if (
+            not isinstance(key, str)
+            or not isinstance(record, dict)
+            or set(record) != {"hash", "page_count", "chunk_count"}
+            or not isinstance(record["hash"], str)
+            or not (
+                record["page_count"] is None
+                or type(record["page_count"]) is int
+                and record["page_count"] >= 0
+            )
+            or type(record["chunk_count"]) is not int
+            or record["chunk_count"] < 0
+        ):
+            return {}
     return data
 
 
-def save_manifest(path: Path, manifest: dict[str, str]) -> None:
+def save_manifest(path: Path, manifest: dict[str, ManifestRecord]) -> None:
     """Atomically replace the manifest with deterministic JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path: Path | None = None
@@ -168,32 +191,14 @@ class ChunkStore:
 
     def document_names(self) -> list[str]:
         """Return all distinct document names currently stored in the collection."""
+        return sorted(self.document_chunk_counts())
+
+    def document_chunk_counts(self) -> dict[str, int]:
+        """Return exact chunk counts for documents represented in the collection."""
         result = self._collection.get(include=["metadatas"])
         metadatas = result["metadatas"] or []
-        names = {metadata["doc_name"] for metadata in metadatas}
-        names.update(self.empty_document_names())
-        return sorted(names)
-
-    def empty_document_names(self) -> list[str]:
-        """Return indexed document names that legitimately produced no chunks."""
-        raw_names = (self._collection.metadata or {}).get(_EMPTY_DOCUMENTS_METADATA, "[]")
-        try:
-            names = json.loads(raw_names)
-        except (TypeError, json.JSONDecodeError):
-            return []
-        if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
-            return []
-        return sorted(set(names))
-
-    def set_empty_document_names(self, names: Sequence[str]) -> None:
-        """Persist names for indexed documents that have no chunk metadata to inspect."""
-        unique_names = sorted(set(names))
-        if unique_names == self.empty_document_names():
-            return
-        metadata = dict(self._collection.metadata or {})
-        metadata.pop("hnsw:space", None)
-        metadata[_EMPTY_DOCUMENTS_METADATA] = json.dumps(unique_names)
-        self._collection.modify(metadata=metadata)
+        counts = Counter(metadata["doc_name"] for metadata in metadatas)
+        return dict(sorted(counts.items()))
 
     def reset(self) -> None:
         """Delete every stored chunk by replacing the collection with a fresh one."""

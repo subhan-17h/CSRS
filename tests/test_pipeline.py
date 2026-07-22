@@ -9,7 +9,7 @@ from csrs import pipeline
 from csrs.config import settings
 from csrs.loaders.text import TextParser
 from csrs.models import Answer, Document, RetrievedChunk
-from csrs.store import load_manifest
+from csrs.store import load_manifest, save_manifest
 
 
 def fake_document_embeddings(texts: Sequence[str]) -> list[list[float]]:
@@ -43,7 +43,89 @@ def test_index_returns_counts_and_exposes_store_summary(
     )
     assert offline_pipeline.chunk_count() == result.chunks_created
     assert offline_pipeline.document_names() == ["standard.txt"]
-    assert set(load_manifest(offline_pipeline._manifest_path)) == {"nested/standard.txt"}
+    assert offline_pipeline.documents() == [
+        pipeline.DocumentSummary(
+            filename="standard.txt",
+            chunk_count=1,
+            page_count=None,
+        )
+    ]
+    assert load_manifest(offline_pipeline._manifest_path) == {
+        "nested/standard.txt": {
+            "hash": pipeline.file_content_hash(nested_dir / "standard.txt"),
+            "page_count": None,
+            "chunk_count": 1,
+        }
+    }
+
+
+def test_document_list_is_sorted_with_honest_txt_counts(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "second.txt").write_text("Access control guidance.", encoding="utf-8")
+    (docs_dir / "first.txt").write_text("", encoding="utf-8")
+
+    offline_pipeline.index(docs_dir)
+
+    assert offline_pipeline.documents() == [
+        pipeline.DocumentSummary("first.txt", chunk_count=0, page_count=None),
+        pipeline.DocumentSummary("second.txt", chunk_count=1, page_count=None),
+    ]
+
+
+def test_document_list_persists_parser_page_count(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    source_path = docs_dir / "standard.pdf"
+    source_path.write_bytes(b"stub pdf bytes")
+
+    class StubPdfParser:
+        def parse(self, path: Path) -> Document:
+            return Document(
+                name=path.name,
+                path=path,
+                text="Access control guidance.",
+                page_count=3,
+            )
+
+    monkeypatch.setattr(pipeline, "get_parser", lambda path: StubPdfParser())
+
+    offline_pipeline.index(docs_dir)
+
+    assert offline_pipeline.documents() == [
+        pipeline.DocumentSummary("standard.pdf", chunk_count=1, page_count=3)
+    ]
+
+
+def test_adding_document_appears_after_incremental_reindex(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "first.txt").write_text("First guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    (docs_dir / "second.txt").write_text("Second guidance.", encoding="utf-8")
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result == pipeline.IndexResult(
+        documents_indexed=2,
+        chunks_created=2,
+        added=1,
+        skipped=1,
+    )
+    assert offline_pipeline.documents() == [
+        pipeline.DocumentSummary("first.txt", chunk_count=1, page_count=None),
+        pipeline.DocumentSummary("second.txt", chunk_count=1, page_count=None),
+    ]
 
 
 def test_second_index_skips_unchanged_files_before_parsing(
@@ -151,8 +233,15 @@ def test_deleting_file_removes_chunks_and_manifest_entry(
         removed=1,
     )
     assert offline_pipeline.document_names() == ["kept.txt"]
+    assert offline_pipeline.documents() == [
+        pipeline.DocumentSummary("kept.txt", chunk_count=1, page_count=None)
+    ]
     assert load_manifest(offline_pipeline._manifest_path) == {
-        "kept.txt": pipeline.file_content_hash(kept_path)
+        "kept.txt": {
+            "hash": pipeline.file_content_hash(kept_path),
+            "page_count": None,
+            "chunk_count": 1,
+        }
     }
 
 
@@ -185,15 +274,17 @@ def test_force_reprocesses_every_file(
     assert parsed_paths == [docs_dir / "first.txt", docs_dir / "second.txt"]
 
 
-def test_corrupt_manifest_rebuilds_without_raising(
+@pytest.mark.parametrize("content", ["not json", '{"standard.txt": "old-hash"}'])
+def test_invalid_manifest_rebuilds_without_raising(
     offline_pipeline: pipeline.Pipeline,
     tmp_path: Path,
+    content: str,
 ) -> None:
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
     (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
     offline_pipeline.index(docs_dir)
-    offline_pipeline._manifest_path.write_text("not json", encoding="utf-8")
+    offline_pipeline._manifest_path.write_text(content, encoding="utf-8")
 
     result = offline_pipeline.index(docs_dir)
 
@@ -239,6 +330,30 @@ def test_partially_missing_store_rebuilds(
         added=2,
     )
     assert offline_pipeline.document_names() == ["first.txt", "second.txt"]
+
+
+def test_manifest_chunk_count_disagreement_rebuilds(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    manifest = load_manifest(offline_pipeline._manifest_path)
+    manifest["standard.txt"]["chunk_count"] = 2
+    save_manifest(offline_pipeline._manifest_path, manifest)
+
+    result = offline_pipeline.index(docs_dir)
+
+    assert result == pipeline.IndexResult(
+        documents_indexed=1,
+        chunks_created=1,
+        added=1,
+    )
+    assert offline_pipeline.documents() == [
+        pipeline.DocumentSummary("standard.txt", chunk_count=1, page_count=None)
+    ]
 
 
 def test_unchanged_empty_document_is_skipped(
