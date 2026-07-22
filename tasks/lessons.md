@@ -106,3 +106,23 @@ MANAGEMENT`, the Markdown pattern matched first and returned `control_id=None`, 
 coverage fell from 92.1% to **0.0%** while breadcrumbs still looked correct. Nothing threw.
 When you replace a component, re-measure the metrics the *old* component was responsible
 for — not just the ones the new component was chosen to improve.
+
+---
+
+## L-5 · Refusal context is diagnostic evidence, not answer support
+
+**Date:** 2026-07-22 · **Trigger:** T-7.7 initially hid every citation disclosure when
+`refused=true`, based on the incorrect premise that refusals never carry sources.
+
+**Rule.** Treat retrieval and generation outcomes as separate facts. A refusal means the
+retrieved context was insufficient to support an answer; it does not mean nothing was
+retrieved. Preserve non-empty retrieval results and label them as insufficient rather than
+either hiding them or presenting them as answer-supporting citations.
+
+**Why.** `Pipeline.ask()` retrieves top-k chunks before the model decides whether to answer.
+Those chunks explain why the model refused, help users rephrase, and expose confidently
+scored but irrelevant retrieval instead of making the result look mysterious.
+
+**How to apply.** Gate retrieval UI on the array length, not the refusal flag. Pass the
+generation outcome into the disclosure so its collapsed label distinguishes supporting
+sources from retrieved-but-insufficient passages. Keep the empty-array refusal path empty.

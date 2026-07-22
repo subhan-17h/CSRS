@@ -1,15 +1,9 @@
-import type { Message as MessageType, Source } from "../types";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { Message as MessageType } from "../types";
 import { Ico } from "./icons";
 import { ProgressSummary } from "./ProgressSteps";
-
-function sourceDetails(source: Source): string[] {
-  const details: string[] = [];
-  if (source.page !== null) details.push(`Page ${source.page}`);
-  if (source.section) details.push(source.section);
-  if (source.control_id) details.push(`Control ${source.control_id}`);
-  details.push(`Score ${source.score.toFixed(3)}`);
-  return details;
-}
+import { SourcesCard } from "./SourcesCard";
 
 export function Message({ msg }: { msg: MessageType }) {
   const isUser = msg.role === "user";
@@ -20,23 +14,32 @@ export function Message({ msg }: { msg: MessageType }) {
         {!isUser && !msg.streaming && msg.progress && <ProgressSummary trace={msg.progress} />}
         {(msg.text || msg.streaming) && (
           <div className={"bubble" + (msg.refused ? " refused" : "")}>
-            {msg.text}
-            {msg.streaming && <span className="caret" />}
+            {!isUser && !msg.streaming ? (
+              <div className="markdown">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    table: ({ children }) => (
+                      <div className="markdown-table-wrap">
+                        <table>{children}</table>
+                      </div>
+                    )
+                  }}
+                >
+                  {msg.text}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <>
+                {msg.text}
+                {msg.streaming && <span className="caret" />}
+              </>
+            )}
           </div>
         )}
         {msg.error && !msg.streaming && <div className="api-error">{msg.error}</div>}
         {!isUser && !msg.streaming && (msg.sources?.length ?? 0) > 0 && (
-          <div className="sources-list" aria-label="Sources">
-            <div className="sources-title">Sources</div>
-            <ol>
-              {msg.sources?.map((source, index) => (
-                <li key={`${source.rank ?? index}-${source.doc_name}-${source.page ?? "none"}`}>
-                  <span className="source-name">{source.doc_name}</span>
-                  <span className="source-details">{sourceDetails(source).join(" | ")}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
+          <SourcesCard sources={msg.sources ?? []} refused={msg.refused} />
         )}
       </div>
     </div>

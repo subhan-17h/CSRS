@@ -967,7 +967,48 @@ untouched at 4 documents / 2506 chunks throughout.
     today because the stream is only cast, not validated -- fix the type when wiring streaming.
   - Not visually verified: there is no browser in this environment, so rendering was proven
     by a passing type-check and a live contract round-trip, not by looking at the page.
-- [ ] **T-7.7** `SourcesCard` (citations with page/section/control-ID) + markdown answers
+- [x] **T-7.7** `SourcesCard` (citations with page/section/control-ID) + markdown answers
+  - [x] Add only `react-markdown` and `remark-gfm` to the frontend dependencies.
+  - [x] Render completed answers as safe GFM while preserving plain-text streaming output.
+  - [x] Replace the source list with an accessible, expandable citation card.
+  - [x] Distinguish refusals from errors and omit empty citation UI.
+  - [x] Show retrieved passages on refusals with explicitly insufficient wording.
+  - [x] Prove the build, dependency/raw-HTML audits, live proxied answers, refusal path,
+    and clean server shutdown.
+  - `npm run build` passes with zero TypeScript errors (293 modules, 315.42 kB JS /
+    43.36 kB CSS). The direct dependency diff adds only `react-markdown` and `remark-gfm`;
+    the raw-HTML escape-hatch grep is empty, changed frontend sources decode as ASCII, and
+    `git diff --check` passes.
+  - Live through the Vite proxy, the AC-2 question returned a Markdown paragraph plus an
+    unordered `*` list and five SP 800-53 sources. All sources carried pages 46-49, section
+    breadcrumbs, AC-2-family control IDs, ranks, true cosine scores, and chunk text.
+  - Correction: a model refusal can carry the retrieved-but-insufficient top-k passages.
+    Preserve that diagnostic context while making clear that it did not support an answer;
+    only an actually empty array should suppress the disclosure.
+  - Live correction proof through the Vite proxy: the cookie-recipe question returned the
+    exact refusal with five OWASP passages and renders the collapsed label `5 passages
+    retrieved, none sufficient · OWASP_Top_10_2021`. The AC-2 question returned a grounded
+    answer with five SP 800-53 citations and renders `5 sources · NIST.SP.800-53r5`.
+    Expanded citation cards are shared unchanged between both states. No rebuild path was
+    called; both servers shut down and ports 8000 and 5173 were confirmed free.
+  - Reviewed independently: build clean (293 modules), only `react-markdown` and `remark-gfm`
+    added, and `grep` for `rehype-raw|dangerouslySetInnerHTML` returns nothing -- model output
+    stays escaped, which is the right posture for untrusted text.
+  - Markdown is real, not theoretical: the live AC-2 answer contains `* ` bullet syntax that
+    would otherwise render as literal asterisks. Confirmed against the raw response string.
+  - **Review caught a wrong premise in my own brief.** I told Codex "a refusal has no
+    sources", so it gated the card behind `!msg.refused`. That is false --
+    `Pipeline.ask()` always retrieves top-k before the model decides, so a refusal returns
+    `refused: true` WITH 5 sources. Sent back via resume; now gated on array length and the
+    strip reads differently per outcome. Verified live:
+    - refusal -> "5 passages retrieved, none sufficient . OWASP_Top_10_2021"
+    - normal  -> "5 sources . NIST.SP.800-53r5"
+    Recorded as **L-5** in `tasks/lessons.md`.
+  - Score bars rescale from a 0.4-0.95 floor/ceiling because real scores cluster tightly
+    (0.7395-0.8056 on AC-2); an unscaled 0-1 bar makes every source look identical. The
+    label always shows the true value.
+  - Cost noted: the bundle grew 156 kB -> 315 kB (50 -> 98 kB gzipped) from the remark/unified
+    tree. Acceptable for a local offline app, and it is the price of not shipping raw `**`.
 - [ ] **T-7.8** Wire streaming and live progress stages into `App.tsx`
 - [ ] **T-7.9** Sidebar settings — full spec-§5 parity (model, top_k, temperature, reload)
 - [ ] **T-7.10** Corpus Explorer replacing the SQL Data Viewer
