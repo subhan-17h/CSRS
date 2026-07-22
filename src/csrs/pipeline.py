@@ -160,6 +160,7 @@ class Pipeline:
         question: str,
         k: int | None = None,
         model: str | None = None,
+        temperature: float | None = None,
     ) -> Answer:
         """Retrieve grounded context and return the generated answer unchanged."""
         selected_model = model if model is not None else settings.default_llm
@@ -173,9 +174,17 @@ class Pipeline:
             )
 
         selected_k = k if k is not None else settings.top_k_dense
+        selected_temperature = (
+            temperature if temperature is not None else settings.temperature
+        )
         query_embedding = embed_query(question)
         chunks = self._store.search(query_embedding, selected_k)
-        return generate_answer(question, chunks, selected_model)
+        return generate_answer(
+            question,
+            chunks,
+            selected_model,
+            selected_temperature,
+        )
 
     def model_availability(self) -> ModelAvailability:
         """Return ordered model choices, missing models, and Ollama reachability.

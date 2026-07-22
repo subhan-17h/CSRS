@@ -51,9 +51,13 @@ def generate_answer(
     question: str,
     chunks: Sequence[RetrievedChunk],
     model: str | None = None,
+    temperature: float | None = None,
 ) -> Answer:
     """Answer a question from retrieved chunks, or return the literal refusal."""
     selected_model = model if model is not None else settings.default_llm
+    selected_temperature = (
+        temperature if temperature is not None else settings.temperature
+    )
     sources = list(chunks)
     if not sources:
         return Answer(
@@ -67,7 +71,7 @@ def generate_answer(
     response = _client.chat(
         model=selected_model,
         messages=[{"role": "user", "content": build_prompt(question, sources)}],
-        options={"num_ctx": settings.num_ctx, "temperature": settings.temperature},
+        options={"num_ctx": settings.num_ctx, "temperature": selected_temperature},
         keep_alive=settings.keep_alive,
     )
     text = response["message"]["content"]

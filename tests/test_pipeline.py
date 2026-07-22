@@ -429,6 +429,7 @@ def test_ask_on_empty_store_refuses_without_embedding_or_generation(
         question: str,
         chunks: Sequence[RetrievedChunk],
         model: str | None = None,
+        temperature: float | None = None,
     ) -> Answer:
         calls["generation"] += 1
         raise AssertionError("generation must not run for an empty store")
@@ -475,21 +476,75 @@ def test_ask_passes_caller_k_to_search_and_returns_answer_unchanged(
         question: str,
         chunks: Sequence[RetrievedChunk],
         model: str | None = None,
+        temperature: float | None = None,
     ) -> Answer:
-        observed["generation"] = (question, list(chunks), model)
+        observed["generation"] = (question, list(chunks), model, temperature)
         return expected
 
     monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
     monkeypatch.setattr(offline_pipeline._store, "search", fake_search)
     monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
 
-    answer = offline_pipeline.ask("What is access control?", k=7, model="gemma2:2b")
+    answer = offline_pipeline.ask(
+        "What is access control?",
+        k=7,
+        model="gemma2:2b",
+        temperature=0.8,
+    )
 
     assert answer is expected
     assert observed == {
         "query_embedding": [0.0, 1.0, 0.0],
         "k": 7,
-        "generation": ("What is access control?", [], "gemma2:2b"),
+        "generation": ("What is access control?", [], "gemma2:2b", 0.8),
+    }
+
+
+def test_ask_uses_configured_defaults_for_k_model_and_temperature(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    observed: dict[str, object] = {}
+    expected = Answer(
+        text="A grounded answer.",
+        sources=[],
+        model=settings.default_llm,
+        question="What is access control?",
+    )
+
+    def fake_search(query_embedding: Sequence[float], k: int) -> list[RetrievedChunk]:
+        observed["k"] = k
+        return []
+
+    def fake_generation(
+        question: str,
+        chunks: Sequence[RetrievedChunk],
+        model: str | None = None,
+        temperature: float | None = None,
+    ) -> Answer:
+        observed["generation"] = (question, list(chunks), model, temperature)
+        return expected
+
+    monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
+    monkeypatch.setattr(offline_pipeline._store, "search", fake_search)
+    monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
+
+    answer = offline_pipeline.ask("What is access control?")
+
+    assert answer is expected
+    assert observed == {
+        "k": settings.top_k_dense,
+        "generation": (
+            "What is access control?",
+            [],
+            settings.default_llm,
+            settings.temperature,
+        ),
     }
 
 

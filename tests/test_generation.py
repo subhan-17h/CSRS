@@ -211,3 +211,19 @@ def test_chat_uses_selected_model_and_configured_options(
             "keep_alive": settings.keep_alive,
         }
     ]
+
+
+def test_chat_uses_explicit_temperature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient("A grounded answer.")
+    monkeypatch.setattr(generation, "_client", client)
+    chunks = [make_retrieved_chunk(0, "The standard provides grounded facts.")]
+
+    generation.generate_answer(
+        "What does the standard provide?",
+        chunks,
+        temperature=0.8,
+    )
+
+    assert client.calls[0]["options"]["temperature"] == 0.8

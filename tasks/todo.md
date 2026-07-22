@@ -2,8 +2,7 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1 through T-2.5,
-and T-2.7 (Docling as the default parser) are complete. Next: T-2.6 sidebar settings.
+**Status:** Phases 0, 1, and 2 complete and verified. Next: Phase 3 retrieval quality.
 
 ---
 
@@ -288,6 +287,23 @@ and T-2.7 (Docling as the default parser) are complete. Next: T-2.6 sidebar sett
     leave chromadb's process-global client cache holding a stale handle, which surfaces as a
     readonly-database error. Restarting the app clears it. Deleting the index out from under a
     live process is not a supported operation.
+
+- [x] **T-2.6** Sidebar application settings
+  - [x] Thread an optional temperature from `Pipeline.ask()` to `generate_answer()`, preserving
+    the configured default when callers omit it.
+  - [x] Group model, `top_k`, temperature, and Ollama connection state as application settings.
+  - [x] Cap the `top_k` control at 20 so Phase 2 cannot silently overflow Ollama's context.
+  - [x] Add concise document/chunk totals while preserving the per-document list and both reload
+    controls in a distinct indexed-documents section.
+  - [x] Cover explicit/default temperature forwarding and unchanged model/`k` behavior offline.
+  - [x] Prove lint, offline and Docling tests, ASCII, UI/backend isolation, captured Ollama
+    options, headless HTTP serving, and repository status.
+  - **Verified:** ruff clean; 96 offline tests and the Docling test pass; Python source, tests,
+    and scripts decode as ASCII. The UI boundary grep contains only Ollama-facing copy and
+    facade result fields, with no backend import, Chroma access, or manifest access. A live
+    temporary index reported Ollama reachable and captured generation client temperatures
+    `[0.0, 1.0]` from two `Pipeline.ask()` calls. The headless Streamlit app returned HTTP 200
+    and was stopped cleanly.
 
 - [x] **T-2.7** Docling as the default PDF parser *(absorbs T-5.3; supersedes the T-2.1
   furniture heuristics and the T-2.2 numeric-heading regex)*
@@ -624,6 +640,16 @@ tests pass (86 before this card); the Docling test passes; byte-level ASCII deco
 boundary grep shows no Chroma or manifest access. A throwaway two-TXT proof added `second.txt` after
 the first index: the incremental result was `added=1, updated=0, skipped=1, removed=0`, the list grew
 from one document to two, a public query retrieved `second.txt`, and reindexing took 0.003005 seconds.
+
+**T-2.6:** The sidebar now separates application settings, indexed-document details, and document
+controls. Settings include the installed-model selector, a `top_k` slider capped at the measured
+Phase 2 context limit of 20, a temperature input, and explicit Ollama connected/disconnected state.
+The document section adds total document and chunk counts without removing its persisted per-file
+details, and both reload paths remain unchanged. Temperature is an optional facade and generation
+argument with the configured default preserved at both layers; no UI state enters backend modules.
+Verification: ruff clean; 96 dead-port offline tests and the Docling test pass; ASCII decode and the
+UI boundary check pass. A live temporary index captured client temperatures `[0.0, 1.0]` from two
+facade calls, and the headless app returned HTTP 200 before being stopped.
 
 ### Phase 1 checkpoint — what the system actually gets wrong
 
