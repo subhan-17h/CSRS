@@ -168,7 +168,8 @@ def test_fixed_slot_unchanging_literal_is_not_removed_as_page_stamp() -> None:
     assert all("CONTROL" in page.splitlines() for page in stripped[:4])
 
 
-def test_pdf_parser_is_registered() -> None:
+def test_pdf_parser_is_registered(monkeypatch) -> None:
+    monkeypatch.setattr("csrs.loaders.settings.pdf_parser", "pypdf")
     assert isinstance(get_parser(Path("a.pdf")), PdfParser)
 
 

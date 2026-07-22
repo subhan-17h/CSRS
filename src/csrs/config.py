@@ -9,6 +9,7 @@ prefix, e.g. `CSRS_CHUNK_SIZE=512`. See `.env.example`.
 """
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -66,6 +67,10 @@ class Settings(BaseSettings):
     bm25_dir: Path = PROJECT_ROOT / "bm25_index"
     manifest_path: Path = PROJECT_ROOT / "chroma_db" / "manifest.json"
     collection_name: str = "csrs"
+
+    # --- PDF parsing ------------------------------------------------------
+    pdf_parser: Literal["docling", "pypdf"] = "docling"
+    docling_artifacts_path: Path = Path.home() / ".cache" / "docling" / "models"
 
     # --- Chunking ---------------------------------------------------------
     chunk_size: int = 400  # approximate tokens

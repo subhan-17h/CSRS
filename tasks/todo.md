@@ -145,6 +145,109 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     and are already on the roadmap. This commit is the working fallback if the migration
     does not hold up.
 
+- [ ] **T-2.7** Docling as the default PDF parser *(absorbs T-5.3; supersedes the T-2.1
+  furniture heuristics and the T-2.2 numeric-heading regex)*
+  - [x] **S1** `DoclingParser` behind config, with `PdfParser` kept as a selectable fallback.
+    - [x] Add lazy, cached Docling conversion with pinned offline artifacts and guarded
+      one-pass page splitting.
+    - [x] Resolve the configured PDF parser at call time while leaving TXT ingestion intact.
+    - [x] Cover registry switching, split guards, actionable setup failures, and the CSF corpus.
+    - [x] Prove lint, offline tests, Docling corpus behavior, pypdf fallback, and ASCII source.
+      Verified independently, not taken from the handoff's self-report: ruff clean (the UP033
+      `lru_cache(maxsize=None)` it left behind was resolved with ruff's own autofix to
+      `@cache`), **59 offline tests pass** on a dead Ollama port (54 pre-existing + 5 new),
+      byte-level ASCII decode OK, `CSRS_PDF_PARSER=pypdf` selects `PdfParser` while the
+      default selects `DoclingParser`, and the `docling`-marked CSF test passes in 15.8 s.
+      Two extra proofs beyond the brief: importing `csrs.loaders` leaves **`docling` absent
+      from `sys.modules`**, so the lazy import is real rather than assumed; and pointing
+      `CSRS_DOCLING_ARTIFACTS_PATH` at a missing directory raises `DoclingSetupError` with
+      the `docling-tools models download` remedy instead of a stack trace.
+    - Cached converter (model load is one-time), `artifacts_path` pinned to
+      `~/.cache/docling/models` so the runtime never fetches, `do_ocr=False` (the corpus is
+      digital-native; this also avoids needing the EasyOCR weights at all).
+    - One `export_to_markdown(page_break_placeholder=...)` pass, split into `Document.pages`;
+      `escape_html=False` and an empty image placeholder so `&amp;` and `<!-- image -->` stay
+      out of retrieval text.
+    - Missing package or missing weights must fail with the remedy (`docling-tools models
+      download`, or `CSRS_PDF_PARSER=pypdf`), not a stack trace.
+    - **Done when** the CSF sample yields 32 pages with the running header gone, the GV.OC
+      table renders as a Markdown table, `CSRS_PDF_PARSER=pypdf` still reproduces T-2.1
+      behaviour, and the existing suite passes.
+  - [ ] **S2** Collapse the chunker's heading layer onto real Markdown headings.
+    - Delete `_numeric_heading` (the CSF defect's cause) and the raw-text-only patterns; keep
+      Markdown ATX for depth and the control/enhancement/CSF patterns for `control_id`.
+    - **Done when** SP 800-53 `control_id` coverage is restored to ~92% *and* CSF false-ancestor
+      breadcrumbs stay at 0.
+  - [ ] **S3** `scripts/warm_models.py` so the weights are a deliberate, documented step.
+    - Pulled forward from T-5.3; T-3.5 needs the same script for FlashRank, and T-6.3's
+      offline proof depends on it existing.
+  - [ ] **S4** Move `docling` to core dependencies and correct the documents that say otherwise.
+    - `pyproject.toml` (out of `[project.optional-dependencies]`), `OS_REPOS.md` §3
+      (currently records pypdf-primary/Docling-optional — this reverses it), `ROADMAP.md`
+      T-5.3 marked absorbed by T-2.7.
+    - Note for **T-6.2**: `uv export` must now include Docling, and the T-5.3 gotcha "the
+      grader shouldn't be made to install Docling" no longer holds — it is the default path.
+    - `tasks/lessons.md` gains **L-4** for the correction that started this: four rounds of
+      corpus-tuned heuristics, each fixing a real defect found only by testing against a
+      document the previous round had not seen, is the signal to reach for a structural tool
+      rather than write a fifth rule.
+
+  **Spike evidence (measured 2026-07-22, before any code was written).** docling 2.114.0,
+  docling-core 2.87.1, weights 1.2 GB in `~/.cache/docling/models`.
+
+  | Question | Answer |
+  |---|---|
+  | Does it suppress furniture structurally? | Yes. `page_header`/`page_footer` items land in `ContentLayer.FURNITURE`, and `export_to_markdown` emits `BODY` only. |
+  | Does every item carry a page number? | Yes — `items lacking page provenance: 0` on both PDFs tested. |
+  | Can we still build `Document.pages`? | Yes. `export_to_markdown(page_break_placeholder=...)` in **one** pass splits into exactly `len(doc.pages)` segments, byte-identical to per-page `export_to_markdown(page_no=n)` calls on all 8 SP 1299 pages. |
+  | Does the known CSF defect go away? | **Yes, structurally.** `1.1 Subcategories that were relocated in CSF 2.0.` was never a caption — it is a *wrapped sentence* (`...gaps in numbering indicate CSF 1.1 Subcategories that were relocated in CSF 2.0.`). Docling reflows the paragraph, so the line the regex tripped on no longer exists. |
+  | Are tables better? | Yes. Table 1 renders as a real Markdown table with a `Category Identifier` column, versus T-2.1's flat pipe rows. |
+  | Speed | **1.99 pages/s** — SP 800-53's 492 pages in 246.8 s (4.1 min). |
+
+  **The full SP 800-53 run settles the cost question in Docling's favour.** 1.99 pages/s is
+  ~1.5x faster than Docling's own 1.27-1.34 M3 Max benchmark, so the estimate in the T-2.2
+  note above (~6 min) was pessimistic. It classified **1937 furniture items** (982
+  `page_header`, 955 `page_footer`) into `ContentLayer.FURNITURE`, alongside 1075
+  `section_header`, 101 `table` and 0 items lacking page provenance. Both strings that took
+  T-2.1 four rounds of heuristics to kill — `NIST SP 800-53, REV. 5 ... SECURITY AND PRIVACY
+  CONTROLS` and the per-page `CHAPTER THREE PAGE <n>` stamp — are absent from the body
+  Markdown with no rule written for either. The residual `CHAPTER THREE` (4) and
+  `doi.org/10.6028` (120) hits were inspected and are all legitimate content: a dot-leader
+  TOC row, the real `## CHAPTER THREE` heading, the title-page availability line, and the
+  errata table that literally lists DOI corrections.
+
+  **The chunker already works on Docling output, unmodified.** Feeding the real CSF
+  Markdown through the current `chunk_document` gives 207 chunks, `control_id` on 128, and
+  **0 breadcrumbs carrying the false ancestor** — down from 133/133. That makes S2 a
+  deletion, not a rewrite, which is why this migration is worth doing now rather than at T-5.3.
+
+  ⚠ **S2 has a silent regression waiting in it — measured, not theorised.** Docling emits
+  control headings as real Markdown (`## AC-2 ACCOUNT MANAGEMENT`), so the ATX pattern matches
+  *first* and returns `control_id=None`:
+
+  ```
+  _match_heading("## AC-2 ACCOUNT MANAGEMENT") -> (2, 'AC-2 ACCOUNT MANAGEMENT', None)
+  _match_heading("AC-2 ACCOUNT MANAGEMENT")    -> (4, 'AC-2 ACCOUNT MANAGEMENT', 'AC-2')
+  ```
+
+  Run over the real Docling SP 800-53 Markdown, the current chunker yields 2068 chunks with
+  `control_id` on **0.0%**, against T-2.2's 92.1% baseline. Nothing fails loudly — breadcrumbs
+  still look right — but exact-ID retrieval loses its metadata entirely. So S2 must **take
+  depth from the Markdown marker and then re-match the stripped label against the domain
+  control patterns** for `control_id`, rather than returning on first pattern hit.
+  `control_id` coverage on SP 800-53 is the acceptance number for S2, not chunk count.
+
+  **Fallback policy (decided).** `PdfParser` stays selectable, and the raw-text heading
+  heuristics are deleted with it degrading honestly — the fallback still parses, chunks and
+  answers, with thinner breadcrumbs. It is an emergency path, not a supported quality tier,
+  and the failure message must say so.
+
+  ⚠ **Consequence for T-2.3 — this is the load-bearing one.** Docling is roughly an order of
+  magnitude slower than pypdf, so the manifest must hash **the source file's bytes and
+  short-circuit before `parse()` is called**. Hashing chunks, or hashing after parsing, still
+  pays the full Docling cost on every run and leaves "Restart & Reload" unusable. T-2.3 was
+  a convenience before; it is now what makes the default path affordable.
+
 ---
 
 ## Review

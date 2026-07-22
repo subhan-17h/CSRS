@@ -52,4 +52,5 @@ select = ["E", "F", "I", "UP", "B"]
 testpaths = ["tests"]
 markers = [
     "ollama: integration test requiring a running Ollama server (deselect with -m 'not ollama')",
+    "docling: integration test requiring the Docling model weights (deselect with -m 'not docling')",
 ]
