@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Conversation } from "../lib/history";
 import type {
   AppMode,
   DocumentsResponse,
@@ -16,6 +17,10 @@ type SidebarProps = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   onNewChat: () => void;
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  onSelectConversation: (conversationId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
   health: HealthResponse | null;
@@ -45,6 +50,10 @@ export function Sidebar({
   theme,
   setTheme,
   onNewChat,
+  conversations,
+  activeConversationId,
+  onSelectConversation,
+  onDeleteConversation,
   collapsed,
   onToggleCollapse,
   health,
@@ -143,6 +152,48 @@ export function Sidebar({
             <span className="label hideable">Corpus</span>
           </button>
         </nav>
+
+        {conversations.length > 0 && (
+          <section
+            className="conversation-history hideable"
+            aria-labelledby="conversation-history-title"
+          >
+            <h2 id="conversation-history-title" className="side-label">Conversations</h2>
+            <ul className="conversation-list">
+              {conversations.map((conversation) => {
+                const active = conversation.id === activeConversationId;
+                return (
+                  <li
+                    className={"conversation-item" + (active ? " active" : "")}
+                    key={conversation.id}
+                  >
+                    <button
+                      className="conversation-select"
+                      type="button"
+                      onClick={() => onSelectConversation(conversation.id)}
+                      aria-current={active ? "page" : undefined}
+                      title={conversation.title}
+                    >
+                      <span>{conversation.title}</span>
+                    </button>
+                    <button
+                      className="conversation-delete"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDeleteConversation(conversation.id);
+                      }}
+                      aria-label={`Delete ${conversation.title}`}
+                      title="Delete conversation"
+                    >
+                      <Ico.Trash />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
         <div className="settings-panel hideable">
           <section className="settings-section" aria-labelledby="application-settings-title">

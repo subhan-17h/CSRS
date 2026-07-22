@@ -314,6 +314,49 @@ body {
 }
 .sidebar.collapsed .side-scroll { overflow: visible; }
 
+.conversation-history {
+  display: flex; flex-direction: column; gap: 4px;
+  width: 100%; max-width: 100%; min-width: 0; flex-shrink: 0;
+}
+.sidebar.collapsed .conversation-history { display: none; }
+.conversation-list {
+  display: flex; flex-direction: column; gap: 2px;
+  list-style: none;
+}
+.conversation-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: center; position: relative;
+  border: 1px solid transparent; border-radius: var(--r-xs);
+  transition: background .16s, border-color .16s;
+}
+.conversation-item:hover { background: var(--elevated); }
+.conversation-item.active {
+  background: var(--elevated); border-color: var(--border);
+}
+.conversation-item.active::before {
+  content: ""; position: absolute; left: -1px; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 15px; border-radius: 2px; background: var(--cyan);
+}
+.conversation-select {
+  min-width: 0; padding: 8px 4px 8px 10px; overflow: hidden;
+  border: 0; background: none; color: var(--text-2); cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 500; text-align: left;
+}
+.conversation-select span {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.conversation-item.active .conversation-select { color: var(--text); }
+.conversation-delete {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 0; border-radius: 7px; background: none;
+  color: var(--text-muted); cursor: pointer;
+  transition: background .16s, color .16s;
+}
+.conversation-delete:hover { background: var(--soft); color: var(--text); }
+.conversation-delete svg { width: 14px; height: 14px; }
+.conversation-select:focus-visible,
+.conversation-delete:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
 /* The settings live in the scrollable middle so long inventories never push the
    status and theme controls off-screen. The whole panel leaves the collapsed rail. */
 .settings-panel {
@@ -1310,10 +1353,13 @@ table.data td.key { color: var(--text); font-weight: 500; font-family: 'Geist Mo
 /* Light mode: --elevated (#FFF) hover is invisible on the near-white sidebar;
    use --soft so the hover highlight actually reads. */
 [data-theme="light"] .side-nav-item:hover,
+[data-theme="light"] .conversation-item:hover,
 [data-theme="light"] .rail-toggle:hover,
 [data-theme="light"] .sidebar.collapsed .brand-mark:hover,
 [data-theme="light"] .sidebar.collapsed .new-chat:hover,
 [data-theme="light"] .sidebar.collapsed .theme-toggle button:hover { background: var(--soft); }
+[data-theme="light"] .conversation-item.active,
+[data-theme="light"] .conversation-item.active:hover { background: var(--elevated); }
 
 /* ============================================================
    Data Viewer

@@ -15,6 +15,13 @@ import {
   StreamUnavailableError
 } from "./lib/api";
 import type { IndexPath } from "./lib/api";
+import {
+  load as loadHistory,
+  MAX_CONVERSATIONS,
+  save as saveHistory,
+  titleFromQuestion
+} from "./lib/history";
+import type { Conversation } from "./lib/history";
 import type {
   AppMode,
   ChatResponse,
@@ -30,8 +37,15 @@ import type {
   Theme
 } from "./types";
 
-let uid = 0;
-const nextId = () => `m${++uid}`;
+let fallbackUid = 0;
+
+function nextId(prefix: "c" | "m"): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  fallbackUid += 1;
+  return `${prefix}-${Date.now().toString(36)}-${fallbackUid.toString(36)}`;
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -97,10 +111,24 @@ function freezeProgress(steps: ProgressStep[], totalMs: number): ProgressTrace {
 }
 
 export function App() {
+  const [initialChat] = useState(() => {
+    const stored = loadHistory();
+    return {
+      conversations: stored,
+      activeConversationId: stored[0]?.id ?? null,
+      messages: stored[0]?.messages ?? []
+    };
+  });
   const [mode, setMode] = useState<AppMode>("chat");
   const [theme, setTheme] = useState<Theme>("dark");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [messages, setMessages] = useState<MessageType[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>(
+    initialChat.conversations
+  );
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    initialChat.activeConversationId
+  );
+  const [messages, setMessages] = useState<MessageType[]>(initialChat.messages);
   const [busy, setBusy] = useState(false);
   const [liveSteps, setLiveSteps] = useState<ProgressStep[]>([]);
   const [fallbackPending, setFallbackPending] = useState(false);
@@ -121,6 +149,8 @@ export function App() {
   const requestAbort = useRef<AbortController | null>(null);
   const indexAbort = useRef<AbortController | null>(null);
   const runtimeRequestId = useRef(0);
+  const conversationsRef = useRef(conversations);
+  const activeConversationIdRef = useRef(activeConversationId);
 
   const refreshRuntime = useCallback(async () => {
     const requestId = ++runtimeRequestId.current;
@@ -188,15 +218,63 @@ export function App() {
     stickBottom();
   }, [fallbackPending, liveSteps, messages, stickBottom]);
 
-  const newChat = useCallback(() => {
+  const abortChatRequest = useCallback(() => {
     requestAbort.current?.abort();
     requestAbort.current = null;
-    setMessages([]);
     setLiveSteps([]);
     setFallbackPending(false);
     setBusy(false);
-    setMode("chat");
   }, []);
+
+  const newChat = useCallback(() => {
+    abortChatRequest();
+    activeConversationIdRef.current = null;
+    setActiveConversationId(null);
+    setMessages([]);
+    setMode("chat");
+  }, [abortChatRequest]);
+
+  const selectConversation = useCallback((conversationId: string) => {
+    const conversation = conversationsRef.current.find(
+      (candidate) => candidate.id === conversationId
+    );
+    if (!conversation) return;
+
+    abortChatRequest();
+    activeConversationIdRef.current = conversation.id;
+    setActiveConversationId(conversation.id);
+    setMessages(conversation.messages);
+    setMode("chat");
+  }, [abortChatRequest]);
+
+  const deleteConversation = useCallback((conversationId: string) => {
+    abortChatRequest();
+    const remaining = conversationsRef.current.filter(
+      (conversation) => conversation.id !== conversationId
+    );
+    conversationsRef.current = remaining;
+    setConversations(remaining);
+    saveHistory(remaining);
+
+    if (activeConversationIdRef.current === conversationId) {
+      activeConversationIdRef.current = null;
+      setActiveConversationId(null);
+      setMessages([]);
+      setMode("chat");
+      return;
+    }
+
+    const active = remaining.find(
+      (conversation) => conversation.id === activeConversationIdRef.current
+    );
+    if (!active) {
+      activeConversationIdRef.current = null;
+      setActiveConversationId(null);
+      setMessages([]);
+      return;
+    }
+    setMessages(active.messages);
+  }, [abortChatRequest]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -209,34 +287,11 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [newChat]);
 
-  const completeAssistant = (
-    assistantId: string,
-    result: ChatResponse,
-    progress?: ProgressTrace
-  ) => {
-    const answer = result.answer.trim() || "No answer was produced.";
-    setMessages((current) => {
-      const completed: MessageType = {
-        id: assistantId,
-        role: "assistant",
-        text: answer,
-        streaming: false,
-        sources: result.sources,
-        refused: result.refused,
-        progress
-      };
-      const exists = current.some((message) => message.id === assistantId);
-      return exists
-        ? current.map((message) => (message.id === assistantId ? completed : message))
-        : [...current, completed];
-    });
-  };
-
   const revealError = (error: unknown, assistantId: string) => {
     const detail = error instanceof Error ? error.message : String(error);
     setMessages((current) => {
       const failed: MessageType = {
-        id: nextId(),
+        id: nextId("m"),
         role: "assistant",
         text: "The request could not be completed.",
         streaming: false,
@@ -270,13 +325,22 @@ export function App() {
 
   const send = (text: string) => {
     if (busy || requestAbort.current || chatBlockedReason) return;
-    setMessages((current) => [...current, { id: nextId(), role: "user", text }]);
+    const existingConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === activeConversationIdRef.current
+    );
+    const conversationId = existingConversation?.id ?? nextId("c");
+    const conversationCreatedAt = existingConversation?.createdAt ?? Date.now();
+    const userMessage: MessageType = { id: nextId("m"), role: "user", text };
+    const answeredMessages = [...messages, userMessage];
+    activeConversationIdRef.current = conversationId;
+    setActiveConversationId(conversationId);
+    setMessages(answeredMessages);
     setBusy(true);
     setLiveSteps([]);
     setFallbackPending(false);
 
     const controller = new AbortController();
-    const assistantId = nextId();
+    const assistantId = nextId("m");
     let steps: ProgressStep[] = [];
     let assistantStarted = false;
     let streamedText = "";
@@ -289,7 +353,44 @@ export function App() {
     };
     requestAbort.current = controller;
 
-    const isCurrent = () => requestAbort.current === controller && !controller.signal.aborted;
+    const isCurrent = () => (
+      requestAbort.current === controller &&
+      !controller.signal.aborted &&
+      activeConversationIdRef.current === conversationId
+    );
+    const completeAssistant = (result: ChatResponse, progress?: ProgressTrace) => {
+      const completedMessages: MessageType[] = [
+        ...answeredMessages,
+        {
+          id: assistantId,
+          role: "assistant",
+          text: result.answer.trim() || "No answer was produced.",
+          streaming: false,
+          sources: result.sources,
+          refused: result.refused,
+          progress
+        }
+      ];
+      const now = Date.now();
+      const current = conversationsRef.current;
+      const previous = current.find((conversation) => conversation.id === conversationId);
+      const completedConversation: Conversation = {
+        id: conversationId,
+        title: previous?.title ?? titleFromQuestion(text),
+        createdAt: previous?.createdAt ?? conversationCreatedAt,
+        updatedAt: now,
+        messages: completedMessages
+      };
+      const nextConversations = [
+        completedConversation,
+        ...current.filter((conversation) => conversation.id !== conversationId)
+      ].slice(0, MAX_CONVERSATIONS);
+
+      setMessages(completedMessages);
+      conversationsRef.current = nextConversations;
+      setConversations(nextConversations);
+      saveHistory(nextConversations);
+    };
     const onEvent = (event: ProgressEvent) => {
       if (!isCurrent()) return;
 
@@ -330,7 +431,7 @@ export function App() {
       if (event.event === "final") {
         completed = true;
         setLiveSteps([]);
-        completeAssistant(assistantId, event.response, freezeProgress(steps, event.total_ms));
+        completeAssistant(event.response, freezeProgress(steps, event.total_ms));
       }
     };
 
@@ -340,7 +441,7 @@ export function App() {
           const result = await streamChat(text, chatOptions, onEvent);
           if (!isCurrent()) return;
           if (!completed) {
-            completeAssistant(assistantId, result, freezeProgress(steps, result.elapsed_ms));
+            completeAssistant(result, freezeProgress(steps, result.elapsed_ms));
           }
         } catch (error) {
           if (!isCurrent()) return;
@@ -355,7 +456,7 @@ export function App() {
           const result = await sendChat(text, chatOptions);
           if (!isCurrent()) return;
           setFallbackPending(false);
-          completeAssistant(assistantId, result);
+          completeAssistant(result);
         }
 
         if (!isCurrent()) return;
@@ -437,6 +538,10 @@ export function App() {
         theme={theme}
         setTheme={setTheme}
         onNewChat={newChat}
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        onSelectConversation={selectConversation}
+        onDeleteConversation={deleteConversation}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
         health={health}

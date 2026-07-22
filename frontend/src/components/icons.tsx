@@ -115,6 +115,19 @@ export const Ico = {
       <path d="M15.5 9.5L13 12l2.5 2.5" />
     </svg>
   ),
+  Trash: (p: IconProps) => (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...p}
+    >
+      <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+    </svg>
+  ),
   Info: (p: IconProps) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}>
       <circle cx="12" cy="12" r="9" />
@@ -123,4 +136,3 @@ export const Ico = {
     </svg>
   )
 };
-

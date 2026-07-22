@@ -1113,7 +1113,41 @@ untouched at 4 documents / 2506 chunks throughout.
   - Chat state survives tab switching: both panels stay mounted and the inactive one is
     hidden with `display: none` plus `aria-hidden`, so it leaves the tab order entirely
     while React keeps conversation state and any in-flight stream alive.
-- [ ] **T-7.11** localStorage conversation history
+- [x] **T-7.11** localStorage conversation history
+  - [x] Add versioned, shape-validated history storage with bounded oldest-first eviction.
+  - [x] Persist stable completed-answer snapshots without writing streamed token updates.
+  - [x] Abort and invalidate active requests before new, select, or active-delete transitions.
+  - [x] List, select, mark, and delete newest-first conversations in the expanded sidebar.
+  - [x] Prove the build, corrupt-storage recovery, live proxied chat, and clean shutdown.
+  - **Verified:** `npm run build` passes with zero TypeScript errors (295 modules,
+    338.67 kB JS / 50.79 kB CSS), Ruff and byte-level ASCII checks pass, and the
+    throwaway Node probe was removed after malformed JSON plus two wrong shapes each
+    loaded zero conversations while the valid versioned payload loaded one. A simulated
+    quota failure retried with 3 -> 2 -> 1 conversations and retained only the newest.
+  - Live through Vite, `/` returned 200, health reported Ollama reachable with the untouched
+    4-document / 2506-chunk index, and `/api/chat` returned the correct six CSF 2.0
+    Functions with three citations in 4685 ms. No rebuild path was called; both servers
+    stopped and ports 8000 and 5173 were confirmed free.
+
+  - Reviewed independently by transpiling `history.ts` with esbuild and exercising `load()`
+    and `save()` directly, rather than trusting the report. All six hostile inputs returned
+    empty **without throwing** -- malformed JSON, wrong-shape object, wrong-shape array,
+    right shape with a wrong version, a corrupt inner message, and absent storage -- while a
+    well-formed history loaded. That matters because a throw during render would white-screen
+    the app on nothing worse than stale storage.
+  - Quota eviction verified with a storage stub that rejects above 2 entries: 5 `setItem`
+    attempts, ending with the **newest** two kept (conv 5, conv 4). Oldest is sacrificed
+    first, and persistence failure never propagates into the UI.
+  - Validation is structural per field, not a cast, and `MAX_CONVERSATIONS = 20` bounds the
+    payload -- necessary because one answer can carry 20 sources of full chunk text against
+    a ~5 MB budget.
+  - Write cadence confirmed: `saveHistory` fires only on answer completion and on delete,
+    never per streamed token. `newChat`, `selectConversation` and `deleteConversation` all
+    abort an in-flight request first, so a late token cannot write into a different
+    conversation.
+  - Note: `load()` fails closed -- one invalid conversation discards the whole history rather
+    than salvaging the rest. Acceptable because the blob is written atomically by this app
+    alone, but it is a deliberate trade, not an oversight.
 
 ### Close-out
 
