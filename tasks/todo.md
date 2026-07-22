@@ -9,6 +9,11 @@ adding documents, limitations) and [ENGINEERING.md](../ENGINEERING.md) (the deci
 narrative and the measurements behind it). Phases 3-5 are deferred as extended optimization;
 every limitation that leaves behind is stated plainly in both documents.
 
+**Phase 7 is also complete:** a FastAPI layer and React frontend now run alongside the
+Streamlit app, which is unchanged. The pipeline was not modified, so the Phase 2 checkpoint
+evidence below still holds. The web UI renders the page-level citations the Streamlit
+interface never displayed.
+
 ---
 
 ## Phase 0 — Ground truth
@@ -1179,6 +1184,63 @@ untouched at 4 documents / 2506 chunks throughout.
   - Final gate: ruff clean, **133 offline tests pass** on a dead Ollama port, frontend builds
     with zero TypeScript errors, all Python and TS/TSX sources decode as ASCII, and the real
     index is still 4 documents / 2506 chunks.
+
+---
+
+## Phase 7 review
+
+**Shipped.** A FastAPI layer and a React frontend, added alongside the Streamlit app rather
+than replacing it. Twelve tasks, twelve commits, `5d0c2ad` through `a57c0e6`.
+
+**The pipeline is untouched, and that was the point.** No change to retrieval, chunking,
+embedding, storage, or the `config.py` defaults. `src/csrs/app.py` is byte-for-byte
+identical, so the Phase 2 checkpoint evidence above remains valid. The only backend
+additions were additive: `generate_answer_stream()` beside `generate_answer()`, `ask_stream()`
+beside `ask()`, an optional `on_progress` callback on `index()`, and one read-only
+`chunks_for_document()` accessor. The offline suite grew 96 -> 133 with no existing test
+modified.
+
+**What the new interface actually adds.** `Answer.sources` has existed since Phase 1 and
+`app.py` discarded it. Page numbers, section breadcrumbs and control IDs -- built by three
+separate Phase 2 decisions -- were invisible to every user. Rendering them is the reason this
+phase exists; streaming and the corpus browser are conveniences on top.
+
+**Two reviews caught things the reports did not:**
+1. **T-7.7 -- a wrong premise in my own brief.** I asserted "a refusal has no sources", so
+   citations were hidden on refusals. `Pipeline.ask()` always retrieves *before* the model
+   decides, so a refusal carries a full sources array. Hiding it discarded the evidence that
+   explains the refusal and would have concealed the confidently-scored-but-irrelevant
+   retrieval failure documented in Phase 2. Fixed via resume; recorded as **L-5**.
+2. **T-7.6 -- a lie in the types.** `ProgressEvent` declared a required `detail` field the
+   backend never sends, surviving only because the stream is cast rather than validated.
+   Logged against T-7.8 and fixed there rather than left to surface later.
+
+**Risks that were proven rather than argued:**
+- *Streaming divergence* -- a second generation path could silently change answers with every
+  test still green. At `temperature: 0.0` both endpoints return a **byte-identical**
+  576-character answer citing the same five chunks in order.
+- *Proxy buffering* -- would look identical to working code in tests. Timestamped tokens
+  through vite (38 tokens, 0.88 s spread) and again in production mode (233 tokens, 6.26 s).
+- *Offline* -- the imported frontend fetched fonts from a CDN, breaking CSRS.md line 6 on
+  arrival. Fonts vendored; the entire served asset graph now resolves locally.
+- *Storage quota* -- one answer can hold 20 sources of full chunk text against ~5 MB. Verified
+  by transpiling `history.ts` and driving it directly: six hostile inputs return empty without
+  throwing, and quota eviction keeps the newest.
+
+**Judgement calls worth re-examining if this continues:**
+- `conversation_context` was **deleted**, not kept inert. Correct while multi-turn is
+  unimplemented; reinstate honestly if the §4 bonus is ever built.
+- `load()` fails closed -- one corrupt conversation discards all history.
+- The bundle grew 156 kB -> 339 kB for `react-markdown`. Fine locally; it is the cost of not
+  rendering raw `**` to the user.
+
+**Not verified: appearance.** There is no browser in this environment. Every claim above rests
+on type-checking, contract round-trips and asset resolution -- not on looking at the page.
+**A human should open both UIs once before submission.**
+
+**Suite state at phase close:** ruff clean, 133 offline tests pass on a dead Ollama port,
+frontend builds with zero TypeScript errors, all sources ASCII, index intact at 4 documents /
+2506 chunks, working tree clean.
 
 ---
 
