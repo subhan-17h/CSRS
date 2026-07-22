@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable, Generator, Iterator
+from pathlib import Path
 from threading import Event, Thread, Timer
 
 import pytest
@@ -48,6 +49,19 @@ class FakePipeline:
             question="What guidance applies?",
         )
         self.ask_calls: list[tuple[str, int | None, str | None, float | None]] = []
+        self.document_chunk_calls: list[tuple[str, int, int]] = []
+        self.standard_chunks = [
+            Chunk(
+                id=f"standard.pdf:{index}",
+                text=f"Standard guidance chunk {index}",
+                doc_name="standard.pdf",
+                section="Access Control > Account Management",
+                page=index + 1,
+                control_id=f"AC-{index + 1}",
+                content_hash=content_hash(f"Standard guidance chunk {index}"),
+            )
+            for index in range(3)
+        ]
         self.ask_stream_calls: list[
             tuple[str, int | None, str | None, float | None]
         ] = []
@@ -93,6 +107,16 @@ class FakePipeline:
 
     def model_availability(self) -> ModelAvailability:
         return self.availability
+
+    def document_chunks(
+        self,
+        doc_name: str,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[Chunk], int]:
+        self.document_chunk_calls.append((doc_name, limit, offset))
+        chunks = self.standard_chunks if doc_name == "standard.pdf" else []
+        return chunks[offset : offset + limit], len(chunks)
 
     def chunk_count(self) -> int:
         return 4
@@ -173,6 +197,101 @@ def test_documents_returns_persisted_summaries(client: TestClient) -> None:
         ],
         "total_chunks": 4,
     }
+
+
+def test_document_chunks_returns_ordered_page_shape(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    response = client.get("/api/documents/standard.pdf/chunks?limit=1&offset=1")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "doc_name": "standard.pdf",
+        "chunks": [
+            {
+                "id": "standard.pdf:1",
+                "text": "Standard guidance chunk 1",
+                "section": "Access Control > Account Management",
+                "page": 2,
+                "control_id": "AC-2",
+            }
+        ],
+        "total": 3,
+        "limit": 1,
+        "offset": 1,
+    }
+    assert fake_pipeline.document_chunk_calls == [("standard.pdf", 1, 1)]
+
+
+def test_document_chunks_returns_404_for_unknown_document(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    response = client.get("/api/documents/unknown.pdf/chunks")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Document 'unknown.pdf' is not in the index."
+    }
+    assert fake_pipeline.document_chunk_calls == []
+
+
+@pytest.mark.parametrize("query", ["limit=0", "limit=201", "offset=-1"])
+def test_document_chunks_rejects_invalid_pagination(
+    client: TestClient,
+    query: str,
+) -> None:
+    response = client.get(f"/api/documents/standard.pdf/chunks?{query}")
+
+    assert response.status_code == 422
+
+
+def test_api_starts_when_frontend_dist_is_absent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_pipeline: FakePipeline,
+) -> None:
+    monkeypatch.setattr(api_app_module, "PROJECT_ROOT", tmp_path)
+    application = create_app()
+    application.dependency_overrides[get_pipeline] = lambda: fake_pipeline
+
+    with TestClient(application) as test_client:
+        response = test_client.get("/api/health")
+        root_response = test_client.get("/")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+    assert root_response.status_code == 404
+
+
+def test_static_frontend_spa_fallback_does_not_shadow_api(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_pipeline: FakePipeline,
+) -> None:
+    dist_path = tmp_path / "frontend" / "dist"
+    dist_path.mkdir(parents=True)
+    dist_path.joinpath("index.html").write_text(
+        "<html><body>CSRS frontend</body></html>", encoding="ascii"
+    )
+    monkeypatch.setattr(api_app_module, "PROJECT_ROOT", tmp_path)
+    application = create_app()
+    application.dependency_overrides[get_pipeline] = lambda: fake_pipeline
+
+    with TestClient(application) as test_client:
+        root_response = test_client.get("/")
+        fallback_response = test_client.get("/corpus/standard.pdf")
+        health_response = test_client.get("/api/health")
+        unknown_api_response = test_client.get("/api/unknown")
+
+    assert root_response.status_code == 200
+    assert root_response.text == "<html><body>CSRS frontend</body></html>"
+    assert fallback_response.status_code == 200
+    assert fallback_response.text == root_response.text
+    assert health_response.status_code == 200
+    assert health_response.json()["status"] == "ok"
+    assert unknown_api_response.status_code == 404
 
 
 def test_models_returns_available_missing_and_default_models(client: TestClient) -> None:

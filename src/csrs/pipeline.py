@@ -15,7 +15,7 @@ from csrs.generation import (
     list_installed_models,
 )
 from csrs.loaders import get_parser, iter_document_paths
-from csrs.models import Answer
+from csrs.models import Answer, Chunk
 from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
 
 __all__ = ("DocumentSummary", "IndexResult", "ModelAvailability", "Pipeline")
@@ -285,6 +285,15 @@ class Pipeline:
             ),
             key=lambda document: document.filename,
         )
+
+    def document_chunks(
+        self,
+        doc_name: str,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[Chunk], int]:
+        """Return one ordered page of chunks for an indexed document."""
+        return self._store.chunks_for_document(doc_name, limit, offset)
 
     def chunk_count(self) -> int:
         """Return the number of chunks currently available for retrieval."""

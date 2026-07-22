@@ -99,6 +99,77 @@ def test_document_chunk_counts_report_each_stored_document(store: ChunkStore) ->
     assert store.document_names() == ["other.txt", "standard.txt"]
 
 
+def test_chunks_for_document_returns_chunks_in_numeric_id_order(
+    store: ChunkStore,
+) -> None:
+    insertion_order = [10, 2, 11, 1, 0, 9, 3, 8, 4, 7, 5, 6]
+    chunks = [
+        Chunk(
+            id=f"standard.txt:{index}",
+            text=f"Chunk text {index}",
+            doc_name="standard.txt",
+            section=f"Section {index}",
+            page=index + 1,
+            control_id=f"AC-{index}",
+            content_hash=f"hash-{index}",
+        )
+        for index in insertion_order
+    ]
+    store.add_chunks(
+        chunks,
+        [[float(index + 1), 1.0] for index in insertion_order],
+    )
+
+    page, total = store.chunks_for_document("standard.txt", limit=20, offset=0)
+
+    assert total == 12
+    assert page == sorted(chunks, key=lambda chunk: int(chunk.id.rsplit(":", 1)[1]))
+    assert [chunk.id for chunk in page][2:11:8] == ["standard.txt:2", "standard.txt:10"]
+
+
+def test_chunks_for_document_paginates_without_changing_total(
+    store: ChunkStore,
+) -> None:
+    chunks = [
+        Chunk(
+            id=f"standard.txt:{index}",
+            text=f"Chunk text {index}",
+            doc_name="standard.txt",
+            content_hash=f"hash-{index}",
+        )
+        for index in range(12)
+    ]
+    store.add_chunks(chunks, [[float(index + 1), 1.0] for index in range(12)])
+
+    page, total = store.chunks_for_document("standard.txt", limit=2, offset=9)
+    empty_page, empty_page_total = store.chunks_for_document(
+        "standard.txt", limit=2, offset=20
+    )
+    unknown_page, unknown_total = store.chunks_for_document(
+        "unknown.txt", limit=2, offset=0
+    )
+
+    assert [chunk.id for chunk in page] == ["standard.txt:9", "standard.txt:10"]
+    assert total == 12
+    assert empty_page == []
+    assert empty_page_total == 12
+    assert unknown_page == []
+    assert unknown_total == 0
+
+
+def test_chunks_for_document_keeps_malformed_ids_browseable(
+    store: ChunkStore,
+) -> None:
+    valid = make_chunk(0).model_copy(update={"id": "standard.txt:0"})
+    malformed = make_chunk(1).model_copy(update={"id": "standard.txt:not-a-number"})
+    store.add_chunks([malformed, valid], [[0.0, 1.0], [1.0, 0.0]])
+
+    page, total = store.chunks_for_document("standard.txt", limit=10, offset=0)
+
+    assert [chunk.id for chunk in page] == [valid.id, malformed.id]
+    assert total == 2
+
+
 def test_file_content_hash_uses_bytes_not_metadata(tmp_path: Path) -> None:
     source_path = tmp_path / "standard.txt"
     source_path.write_bytes(b"same bytes")

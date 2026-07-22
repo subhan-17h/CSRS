@@ -8,12 +8,15 @@ from time import perf_counter, time
 from typing import Annotated, Literal
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
-from starlette.responses import StreamingResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response, StreamingResponse
+from starlette.staticfiles import StaticFiles
+from starlette.types import Scope
 
-from csrs.config import settings
+from csrs.config import PROJECT_ROOT, settings
 from csrs.pipeline import IndexResult, Pipeline
 
 __all__ = ("app", "create_app", "get_pipeline", "main")
@@ -58,6 +61,26 @@ class DocumentsResponse(BaseModel):
 
     documents: list[DocumentResponse]
     total_chunks: int
+
+
+class DocumentChunkResponse(BaseModel):
+    """Display fields for one persisted document chunk."""
+
+    id: str
+    text: str
+    section: str | None
+    page: int | None
+    control_id: str | None
+
+
+class DocumentChunksResponse(BaseModel):
+    """One ordered page of chunks for an indexed document."""
+
+    doc_name: str
+    chunks: list[DocumentChunkResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class ModelsResponse(BaseModel):
@@ -107,6 +130,23 @@ class ChatResponse(BaseModel):
     question: str
     elapsed_ms: int
     sources: list[SourceResponse]
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve built assets while falling back to the SPA entry point."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as error:
+            normalized_path = path.lstrip("/")
+            if (
+                error.status_code != 404
+                or normalized_path == "api"
+                or normalized_path.startswith("api/")
+            ):
+                raise
+            return await super().get_response("index.html", scope)
 
 
 def get_pipeline() -> Pipeline:
@@ -263,6 +303,39 @@ def create_app() -> FastAPI:
                 for document in summaries
             ],
             total_chunks=pipeline.chunk_count(),
+        )
+
+    @application.get(
+        "/api/documents/{doc_name}/chunks",
+        response_model=DocumentChunksResponse,
+    )
+    def document_chunks(
+        doc_name: str,
+        pipeline: Annotated[Pipeline, Depends(get_pipeline)],
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> DocumentChunksResponse:
+        if doc_name not in {document.filename for document in pipeline.documents()}:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Document '{doc_name}' is not in the index.",
+            )
+        chunks, total = pipeline.document_chunks(doc_name, limit, offset)
+        return DocumentChunksResponse(
+            doc_name=doc_name,
+            chunks=[
+                DocumentChunkResponse(
+                    id=chunk.id,
+                    text=chunk.text,
+                    section=chunk.section,
+                    page=chunk.page,
+                    control_id=chunk.control_id,
+                )
+                for chunk in chunks
+            ],
+            total=total,
+            limit=limit,
+            offset=offset,
         )
 
     @application.get("/api/models", response_model=ModelsResponse)
@@ -443,6 +516,15 @@ def create_app() -> FastAPI:
         pipeline: Annotated[Pipeline, Depends(get_pipeline)],
     ) -> StreamingResponse:
         return _index_response(pipeline, force=True)
+
+    frontend_dist = PROJECT_ROOT / "frontend" / "dist"
+    if frontend_dist.is_dir():
+        # The root mount belongs last because Starlette resolves routes in registration order.
+        application.mount(
+            "/",
+            SPAStaticFiles(directory=frontend_dist, html=True),
+            name="frontend",
+        )
 
     return application
 

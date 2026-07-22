@@ -908,7 +908,39 @@ Plan: `/Users/rowdy/.claude/plans/ok-for-the-open-radiant-owl.md`
     ~316 s to rebuild. Keep it that way.
   - The `ping` keepalive only fires when the queue is idle >10 s, so it is exercised by a
     real full rebuild, not by the sub-second incremental path.
-- [ ] **T-7.5** `ChunkStore.chunks_for_document()` + chunk endpoint + static `dist/` serving
+- [x] **T-7.5** `ChunkStore.chunks_for_document()` + chunk endpoint + static `dist/` serving
+  - [x] Add numeric chunk-ID ordering, pagination, totals, and malformed-ID safety.
+  - [x] Delegate document chunk browsing through `Pipeline` and expose the validated API route.
+  - [x] Mount `frontend/dist` with SPA fallback after API routes when the directory exists.
+  - [x] Cover store order/pagination/unknown documents and API shape/errors/static behavior.
+  - [x] Prove Ruff, the full offline suite, warm-index responses, static root, and port cleanup.
+  - **Verified:** Ruff clean; **133 offline tests pass** on a dead Ollama port (123 existing
+    plus 10 new), with one Docling test deselected. The store tests use temporary Chroma
+    collections and prove integer ordering through IDs `:2` and `:10`, pagination totals,
+    unknown documents, metadata row alignment, and deterministic malformed-ID handling.
+  - The API tests prove the exact chunk response shape, 404/422 behavior, startup without a
+    frontend build, SPA fallback with a build, and that the root mount does not shadow API
+    routes. Changed Python sources decode as ASCII.
+  - Live against the untouched warm index: OWASP returned IDs `:0`, `:1`, `:2` and total 147;
+    SP 800-53 returned IDs `:100`, `:101`, total 2119, page 23, and the stored null control IDs
+    for those Errata chunks; an unknown document returned 404. `/api/health` remained JSON with
+    4 documents and 2506 chunks. `/` returned 200 and matched `frontend/dist/index.html`
+    byte-for-byte. Uvicorn shut down cleanly and port 8000 was confirmed free.
+
+  - Reviewed independently: ordering is genuinely numeric, not lexical -- OWASP ids returned
+    `0..11` with `:10` after `:9` (total 147). SP 800-53 at `offset=700` returned real
+    metadata (p.164-165, `IA-4(1)`, `IA-4(9)`, full section breadcrumbs) with total 2119.
+    Unknown document 404s with a clear detail; `limit=0`, `limit=201` and `offset=-1` all 422.
+  - Static mount verified **not** to shadow the API: `/api/health`, `/api/documents` and
+    `/api/models` all still return JSON, `/` and `/some/spa/route` return the SPA at 200,
+    and `/api/bogus` correctly 404s instead of falling back to `index.html` -- so a mistyped
+    API path can never silently return HTML.
+  - `frontend/dist` currently holds the stale pre-rebrand build; serving it is expected and
+    is replaced in T-7.6.
+
+**Backend complete.** All five endpoints ship: health/documents/models, chat, chat/stream,
+index reload/rebuild, and document chunks. 133 offline tests, ruff clean, the real index
+untouched at 4 documents / 2506 chunks throughout.
 
 ### Frontend
 

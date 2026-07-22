@@ -181,6 +181,64 @@ class ChunkStore:
             )
         return retrieved
 
+    def chunks_for_document(
+        self,
+        doc_name: str,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[Chunk], int]:
+        """Return one numerically ordered page of chunks and the document total."""
+        id_result = self._collection.get(
+            where={"doc_name": doc_name},
+            include=[],
+        )
+        ids = id_result["ids"]
+
+        def chunk_order(chunk_id: str) -> tuple[int, int, str]:
+            _, separator, suffix = chunk_id.rpartition(":")
+            if separator:
+                try:
+                    return (0, int(suffix), chunk_id)
+                except ValueError:
+                    pass
+            # Legacy or corrupt IDs stay browseable after every well-formed chunk.
+            return (1, 0, chunk_id)
+
+        ordered_ids = sorted(ids, key=chunk_order)
+        page_ids = ordered_ids[offset : offset + limit]
+        if not page_ids:
+            return [], len(ordered_ids)
+
+        page_result = self._collection.get(
+            ids=page_ids,
+            include=["documents", "metadatas"],
+        )
+        documents = page_result["documents"] or []
+        metadatas = page_result["metadatas"] or []
+        rows_by_id = {
+            chunk_id: (text, metadata)
+            for chunk_id, text, metadata in zip(
+                page_result["ids"], documents, metadatas, strict=True
+            )
+        }
+
+        chunks = []
+        for chunk_id in page_ids:
+            text, metadata = rows_by_id[chunk_id]
+            chunks.append(
+                Chunk(
+                    id=chunk_id,
+                    text=text,
+                    doc_name=metadata["doc_name"],
+                    section=metadata.get("section"),
+                    page=metadata.get("page"),
+                    control_id=metadata.get("control_id"),
+                    parent_id=metadata.get("parent_id"),
+                    content_hash=metadata["content_hash"],
+                )
+            )
+        return chunks, len(ordered_ids)
+
     def count(self) -> int:
         """Return the number of chunks in the collection."""
         return self._collection.count()
