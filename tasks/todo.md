@@ -1151,7 +1151,34 @@ untouched at 4 documents / 2506 chunks throughout.
 
 ### Close-out
 
-- [ ] **T-7.12** README + ENGINEERING updates, offline verification, phase commit
+- [x] **T-7.12** README + ENGINEERING updates, offline verification, phase commit
+  - [x] Document both interfaces in `README.md` with a comparison table, real run commands,
+        dev vs production modes, and new troubleshooting rows.
+  - [x] Record the Phase 7 reasoning in `ENGINEERING.md` as Decision 6, plus the payoff note
+        on Decision 5 (the facade is what made a second interface cost no pipeline changes).
+  - [x] Correct the stale limitations: citations now render, and the honest remaining gap is
+        that they are not *inline* per claim.
+  - [x] Prove the offline claim rather than assert it.
+  - **Written against real runs, not from memory** (`tasks/lessons.md` L-2; a previous README
+    draft fabricated an output block). Every command and number below was executed:
+    - `uv run csrs-api` -> serves `/` at 200 and `/api/health` JSON; `lsof` confirms it binds
+      `127.0.0.1:8000` only, not all interfaces.
+    - The four spec example questions (CSRS.md 63-67) measured live: CSF functions 1654 ms
+      (CSF 2.0 p.2 @ 0.8049), Incident Response 4129 ms (SP 1299 p.7 @ 0.8164), Asset
+      Management 3358 ms (CSF 2.0 p.23 @ 0.7744). **ISO 27001 correctly refuses** -- it is
+      not in the shipped corpus, and the README now says plainly that this is right, not a
+      bug, because it would otherwise read as a failure to a grader.
+    - The documented "Identify" failure still reproduces exactly as recorded: bare form
+      answers wrongly from SP 800-53 p.385 at 0.7127; naming the framework moves the correct
+      chunks to rank 1 at 0.8082.
+  - **Offline proof (CSRS.md line 6), by walking the whole asset graph:** served the
+    production build and resolved every reference -- `index.html` -> 3 assets, stylesheet ->
+    7 `url()` font references -- all HTTP 200 from localhost, zero external. All 7 frontend
+    `fetch()` targets are relative paths. The only absolute URLs anywhere in the bundle are
+    an SVG namespace and React's error-docs string, neither ever requested.
+  - Final gate: ruff clean, **133 offline tests pass** on a dead Ollama port, frontend builds
+    with zero TypeScript errors, all Python and TS/TSX sources decode as ASCII, and the real
+    index is still 4 documents / 2506 chunks.
 
 ---
 

@@ -246,6 +246,92 @@ while the specification names them untagged. A naive set intersection would have
 Normalisation is shared between the facade and `scripts/warm_models.py` so the two cannot
 drift.
 
+**The bill came due later, and the boundary paid it.** A second interface — FastAPI plus a
+React frontend — was added after the pipeline was finished. It required *zero* changes to
+retrieval, chunking, embedding or storage. The only backend additions were a streaming
+sibling to `generate_answer()`, an optional progress callback on `index()`, and one read-only
+store accessor. `ask()` and `generate_answer()` were not touched, which is why the existing
+tests still cover their behaviour unchanged. This is the clearest evidence the facade was
+worth the discipline: the claim "the Streamlit layer is swappable" stopped being an assertion
+and became a thing that happened.
+
+---
+
+## Decision 6 — Add the second interface, don't replace the first
+
+The specification says, in as many words, *"Develop the application using Streamlit."* The
+Streamlit app also satisfies its section 5 checklist and had already passed a checkpoint
+against the full specification.
+
+So the React frontend was added **alongside** it, not in place of it. `src/csrs/app.py` is
+byte-for-byte unchanged. The tempting move — one polished interface, delete the old one —
+would have traded a graded requirement for aesthetics.
+
+That decision has a cost worth naming: two interfaces to keep working, and one of them
+(Streamlit) is visibly plainer. It is the right trade anyway, because the two are not
+competing for the same job. Streamlit answers *"does this meet the specification?"*; the web
+UI answers *"is this pleasant to use, and can I see the evidence?"*
+
+**What the new interface adds that the old one structurally could not.** The pipeline has
+always returned `Answer.sources` — every retrieved chunk with its document, page, section
+breadcrumb, control ID and cosine score. `app.py` renders `answer.text` and discards all of
+it. That data was built by three separate decisions above (layout-aware parsing for page
+numbers, heading-depth breadcrumbs, control-ID extraction) and was invisible to every user of
+the system. Rendering citations is the reason the second interface exists; streaming and the
+corpus browser are conveniences on top.
+
+### The transplant was a deletion exercise
+
+The frontend was carried over from an unrelated project — a SQL/registry assistant. Roughly
+half its data contract had no meaning here: result rows, bar charts, view templates,
+clarification routing, cache tiers. All of it was deleted rather than adapted, because dead
+scaffolding in a UI implies capabilities the system does not have.
+
+`conversation_context` was deleted for the same reason, and it is the most instructive case.
+The plumbing was already wired end to end and would have cost nothing to keep. But multi-turn
+context is **not implemented** — it is the known failure documented above — so shipping a
+field the backend ignores would have misrepresented the system to anyone reading the code.
+Absent and honest beat present and inert.
+
+### Streaming had exactly one real risk
+
+A second generation path can silently diverge from the first: different prompt, different
+options, subtly different answers, with every existing test still green. Three guards:
+`generate_answer_stream()` reuses `build_prompt()` and `_is_refusal()` verbatim,
+`ask_stream()` mirrors `ask()`'s `k` resolution and retrieval exactly, and a test asserts the
+streaming Ollama payload equals the non-streaming one plus `stream: True` by comparing the
+recorded call dictionaries.
+
+The proof that mattered was empirical, not structural. At `temperature: 0.0`, the AC-2
+question returns a **byte-identical 576-character answer** from `/api/chat` and
+`/api/chat/stream`, citing the same five chunks in the same order.
+
+### Offline was broken on arrival
+
+The imported frontend loaded three font families from Google's CDN. On a machine following
+this project's own rules — offline after setup — the UI would have rendered in fallback
+faces, and it violated the specification's offline requirement outright. Seven latin-subset
+`woff2` files (~92 kB) are now vendored into the repo.
+
+This was verified rather than assumed: serving the production build and walking the entire
+asset graph — `index.html` to its three assets, the stylesheet to its seven `url()`
+references — every request resolves locally with HTTP 200, and no absolute URL appears
+anywhere in the built bundle except an SVG namespace and React's error-documentation string,
+neither of which is ever fetched.
+
+### A wrong assumption caught in review
+
+The first implementation of the citation card hid it whenever the model refused, on the
+premise that a refusal has no sources. **That premise is false.** `Pipeline.ask()` always
+retrieves top-k *before* the model decides whether to answer, so a refusal returns
+`refused: true` alongside a full sources array.
+
+Hiding it discarded the evidence that explains *why* the system refused — and, worse, would
+have concealed exactly the failure mode documented above, where confidently-scored but
+irrelevant chunks are retrieved. The card now renders on refusals with different wording
+("*5 passages retrieved, none sufficient*") so retrieved context is never mistaken for
+answer support.
+
 ---
 
 ## What measurement changed
@@ -345,8 +431,17 @@ Phases 3-5 were deferred. Stating what that costs, rather than what it saves:
   failure is partly a lexical-collision problem, which is the kind BM25 fusion helps with.
 - **No reranker.** `rerank_top_n` currently means "chunks retrieved" rather than "chunks
   surviving a rerank". The name is aspirational.
-- **No conversational memory** (bonus in the specification) — cost quantified above.
-- **No inline citations.** Sources are structured but not interleaved into the answer text.
+- **No conversational memory** (bonus in the specification) — cost quantified above. The web
+  UI keeps a conversation *thread* and persists it locally, but each question is still
+  answered independently; the history is a record, not context.
+- **No inline citations.** Sources are now rendered in full — document, page, section,
+  control ID, score — but they are not interleaved into the answer text. The model emits no
+  citation markers, so per-claim attribution would mean guessing which sentence came from
+  which chunk. The sources are honestly "what was retrieved and given to the model", not a
+  per-claim provenance trail.
+- **No chunk search.** The corpus browser paginates but cannot search: there is no
+  server-side chunk query, so its filter box only filters the loaded page and is labelled to
+  say so.
 - **Refusal detection is exact-match**, and a model refusing in its own words reads as having
   answered. Deliberately *not* made fuzzy: a fuzzy matcher would misclassify legitimate
   answers that happen to hedge, which is a worse failure than under-counting refusals.

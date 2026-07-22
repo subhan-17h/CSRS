@@ -8,8 +8,27 @@ embeddings, and the vector store. **No cloud API is used or permitted.**
 Question → nomic-embed-text → Chroma (cosine) → top-k chunks → llama3.2 → grounded answer
 ```
 
-Built on [Streamlit](https://streamlit.io) and [Ollama](https://ollama.com), with
+Built on [Ollama](https://ollama.com), with
 [Docling](https://github.com/docling-project/docling) for layout-aware PDF parsing.
+
+### Two interfaces, one pipeline
+
+Both talk to the same `Pipeline` facade and give the same grounded answers.
+
+| | **Web UI** (React + FastAPI) | **Streamlit** |
+|---|---|---|
+| Run | `uv run csrs-api` | `uv run streamlit run src/csrs/app.py` |
+| URL | http://127.0.0.1:8000 | http://localhost:8501 |
+| Answers stream token by token | yes | no |
+| Live retrieval progress | yes | indexing only |
+| **Citations shown** | **yes — page, section, control ID, score** | no |
+| Corpus browser | yes | document list only |
+| Conversation history | yes (local, in-browser) | no |
+| Extra requirement | Node 18+ to build once | none |
+
+The Streamlit app is the interface the task specification asks for and is kept intact. The
+web UI was added on top of the finished pipeline; it renders the citations the Streamlit
+interface never displayed, which is the main reason it exists.
 
 The reasoning behind each choice — and the measurements that drove it — is in
 [ENGINEERING.md](ENGINEERING.md).
@@ -26,10 +45,18 @@ uv sync                                              # 1. Python dependencies
 ollama serve &                                       # 2. start Ollama (skip if already running)
 uv run python scripts/warm_models.py --pull-ollama   # 3. models: ~14 GB Ollama + ~1.3 GB Docling
 python scripts/fetch_docs.py                         # 4. corpus (stdlib only, no venv needed)
-uv run streamlit run src/csrs/app.py                 # 5. run
 ```
 
-Then open **http://localhost:8501**.
+Then start **either** interface:
+
+```bash
+# Web UI — build the frontend once, then serve everything on one port
+(cd frontend && npm install && npm run build)
+uv run csrs-api                                      # http://127.0.0.1:8000
+
+# or Streamlit
+uv run streamlit run src/csrs/app.py                 # http://localhost:8501
+```
 
 > **The first launch takes about five minutes** and the page will look idle while it works.
 > That is the one-time document index being built — 492 pages of SP 800-53 through a layout
@@ -126,36 +153,71 @@ Most standards are **not** committed to the repository for licensing reasons —
 
 ## Running the application
 
+### Web UI
+
+Build the frontend once, then FastAPI serves the built assets and the API together on a
+single port:
+
+```bash
+(cd frontend && npm install && npm run build)
+uv run csrs-api
+```
+
+Open **http://127.0.0.1:8000**. It binds to loopback only — there is no authentication
+because nothing off your machine can reach it.
+
+While working on the frontend, run it in dev mode instead. Two processes, with Vite
+proxying `/api` to the backend:
+
+```bash
+uv run uvicorn csrs.api.app:app --host 127.0.0.1 --port 8000   # terminal 1
+cd frontend && npm run dev                                     # terminal 2 -> :5173
+```
+
+The interface gives you:
+
+- a **question box**, with answers **streaming in token by token** and live retrieval stages;
+- **citations** under every answer — document, page, section breadcrumb, control ID and
+  cosine score, expandable to the retrieved text;
+- a sidebar of **application settings** — model selector, `top_k`, temperature, and a live
+  Ollama indicator;
+- the **list of indexed documents** with page and chunk counts;
+- **Restart & Reload Documents**, plus a full rebuild behind a confirmation;
+- a **Corpus** tab for browsing the indexed chunks;
+- **conversation history**, stored in your browser only.
+
+### Streamlit
+
 ```bash
 uv run streamlit run src/csrs/app.py
 ```
 
-Open **http://localhost:8501**. The interface gives you:
+Open **http://localhost:8501**. It offers the question box, the generated answer with the
+model named underneath, the sidebar settings, the indexed-document list, and the reload
+buttons. Another port: `--server.port 8502`.
 
-- a **question box** over the indexed corpus;
-- the **generated answer**, with the model that produced it named underneath;
-- a sidebar of **application settings** — model selector, retrieved-chunk count (`top_k`),
-  temperature, and a live Ollama connection indicator;
-- the **list of indexed documents** with per-file page and chunk counts;
-- **Restart & Reload Documents**, plus a separate full rebuild.
-
-To run on another port, or expose it on your network:
-
-```bash
-uv run streamlit run src/csrs/app.py --server.port 8502
-```
+Both interfaces read the same index, so you can run them at once. Only trigger a **rebuild**
+from one of them at a time.
 
 ### Try these
 
-The corpus answers questions like:
+Measured against the shipped corpus on a warm index:
 
-- *What are the functions of the NIST Cybersecurity Framework?*
-- *How is Incident Response handled?*
-- *What are the requirements for Asset Management?*
-- *What does AC-2 require?*
+| Question | Result |
+|---|---|
+| *What are the functions of the NIST Cybersecurity Framework?* | answered in 1.7 s — CSF 2.0 p.2 @ 0.8049 |
+| *How is Incident Response handled?* | answered in 4.1 s — SP 1299 p.7 @ 0.8164 |
+| *What are the requirements for Asset Management?* | answered in 3.4 s — CSF 2.0 p.23 @ 0.7744 |
+| *What does AC-2 require for account management?* | answered — SP 800-53 p.46 @ 0.8056, control `AC-2` |
+| *What does ISO 27001 require for access control?* | **refuses — and that is correct** |
 
-Ask something outside the documents — *What is the capital of France?* — and it will tell you
-it cannot find the answer rather than inventing one.
+**On that last one:** ISO 27001 is not freely redistributable, so it is not in the shipped
+corpus. Refusing is the system working — it declines rather than answering from the NIST
+documents it *does* have. Add your own copy to `docs/`, reload, and the question answers.
+
+Ask something plainly outside the documents — *What is the best recipe for chocolate chip
+cookies?* — and it refuses too, while still showing which passages it retrieved and judged
+insufficient.
 
 ---
 
@@ -259,10 +321,22 @@ proven by metric.
 **Smaller models are less reliable.** All five required LLMs are selectable, but they are not
 equally good at staying grounded. `qwen2.5:1.5b` has been observed refusing a question that
 is squarely *in* the corpus and that `llama3.2` and `gemma2:2b` both answered from identical
-retrieved chunks. `llama3.2` is the default for this reason.
+retrieved chunks. Re-measured through the API: *"What does control AC-2 require for account
+management?"* is refused by `qwen2.5:1.5b` at both `top_k=3` and `top_k=5`, and answered by
+`llama3.2` at both — so it is the model, not the amount of context. `llama3.2` is the default
+for this reason. **If you switch models and start seeing refusals, switch back before
+concluding retrieval is broken.**
 
-**Citations are structural, not inline.** Every retrieved chunk carries its document, page
-number and control ID, but the answer text does not yet interleave `[S1]`-style markers.
+**Citations are structural, not inline.** The web UI shows every retrieved chunk with its
+document, page, section breadcrumb, control ID and score. What it cannot do is mark *which
+sentence* came from *which* source: the model does not emit citation markers, so attributing
+individual claims would mean guessing. The sources are what was retrieved and given to the
+model, not a per-claim provenance trail. The Streamlit interface does not display them at
+all.
+
+**The web UI needs Node once.** Building `frontend/dist` requires Node 18+. After that the
+build is static and the app is fully offline. The Streamlit interface needs no Node at all,
+so the project remains runnable on a machine without it.
 
 **Deleting `chroma_db/` while the app is running** leaves a stale database handle and
 produces a readonly error. Restart the app. Don't delete the index out from under a live
@@ -315,14 +389,22 @@ src/csrs/
   chunking.py     structure-aware splitter, emits hierarchy breadcrumbs
   embeddings.py   the only module that owns the nomic task prefixes
   store.py        Chroma + the content-hash manifest
-  generation.py   prompt assembly, grounding instruction, refusal
-  pipeline.py     the single facade the UI talks to
+  generation.py   prompt assembly, grounding instruction, refusal, token streaming
+  pipeline.py     the single facade both UIs talk to
   app.py          Streamlit
+  api/app.py      FastAPI — chat, streaming, index control, corpus, static hosting
+
+frontend/
+  src/App.tsx           chat orchestration and the streaming send flow
+  src/lib/api.ts        the only module that knows the HTTP contract
+  src/lib/history.ts    localStorage persistence
+  src/components/       SourcesCard (citations), CorpusExplorer, Sidebar, Composer
+  public/fonts/         woff2 vendored locally so the UI never calls a CDN
 ```
 
-**`pipeline.py` is the load-bearing boundary.** The UI never imports Chroma, Ollama or the
-manifest — it only calls the facade. That rule is enforced by review and is what keeps the
-Streamlit layer swappable.
+**`pipeline.py` is the load-bearing boundary.** Neither UI imports Chroma, Ollama or the
+manifest — both only call the facade. That rule is enforced by review and is exactly what
+made the second interface possible without touching the retrieval or generation code.
 
 ---
 
@@ -337,3 +419,7 @@ Streamlit layer swappable.
 | No documents listed | `docs/` is empty. `python scripts/fetch_docs.py` |
 | `Document filenames must be unique` | Two files share a basename across `docs/`. Rename one |
 | Readonly database error | `chroma_db/` was deleted while running. Restart the app |
+| Web UI shows a blank page | `frontend/dist` was never built. `cd frontend && npm install && npm run build` |
+| Web UI loads but cannot answer | The API is not running, or is on another port. `uv run csrs-api` |
+| `An index operation is already in progress` | A reload or rebuild is running. Wait for it — they are deliberately not concurrent |
+| Composer is disabled | The sidebar states why: Ollama down, no model installed, or an index run in progress |
