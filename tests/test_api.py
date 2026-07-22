@@ -1,15 +1,17 @@
 """Offline tests for the FastAPI endpoints."""
 
 import json
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterator
+from threading import Event, Thread, Timer
 
 import pytest
 from fastapi.testclient import TestClient
 
+import csrs.api.app as api_app_module
 from csrs.api.app import create_app, get_pipeline
 from csrs.config import settings
 from csrs.models import Answer, Chunk, RetrievedChunk, content_hash
-from csrs.pipeline import DocumentSummary, ModelAvailability
+from csrs.pipeline import DocumentSummary, IndexResult, ModelAvailability
 
 
 class FakePipeline:
@@ -52,9 +54,39 @@ class FakePipeline:
         self.stream_tokens = ["Use the documented ", "cybersecurity guidance."]
         self.stream_error_after: int | None = None
         self.raise_connection_error = False
+        self.index_result = IndexResult(
+            documents_indexed=4,
+            chunks_created=2506,
+            added=1,
+            updated=2,
+            skipped=3,
+            removed=4,
+        )
+        self.index_calls: list[bool] = []
+        self.index_progress = [
+            "Parsing document: standard.pdf",
+            "Embedding 3 chunks from standard.pdf",
+        ]
+        self.index_error: Exception | None = None
+        self.index_started = Event()
+        self.index_release: Event | None = None
 
-    def index(self) -> None:
-        raise AssertionError("overridden API dependencies must never index")
+    def index(
+        self,
+        *,
+        force: bool = False,
+        on_progress: Callable[[str], None] | None = None,
+    ) -> IndexResult:
+        self.index_calls.append(force)
+        self.index_started.set()
+        if self.index_release is not None and not self.index_release.wait(timeout=5):
+            raise TimeoutError("test did not release the fake index")
+        if self.index_error is not None:
+            raise self.index_error
+        if on_progress is not None:
+            for message in self.index_progress:
+                on_progress(message)
+        return self.index_result
 
     def documents(self) -> list[DocumentSummary]:
         return self.document_summaries
@@ -395,3 +427,142 @@ def test_chat_stream_emits_error_event_on_midstream_connection_failure(
         "event": "error",
         "message": "Could not connect to Ollama. Start Ollama with `ollama serve`.",
     }
+
+
+def test_index_reload_streams_progress_and_all_result_counts(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    response = client.post("/api/index/reload")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    lines = response.text.splitlines()
+    events = [json.loads(line) for line in lines]
+    assert all(
+        json.dumps(event, separators=(",", ":")) == line
+        for event, line in zip(events, lines, strict=True)
+    )
+    assert [event["event"] for event in events] == [
+        "stage_start",
+        "stage_update",
+        "stage_update",
+        "stage_end",
+        "final",
+    ]
+    assert [event.get("stage") for event in events if "stage" in event] == [
+        "index",
+        "index",
+        "index",
+        "index",
+    ]
+    assert all(event["key"] == "index" for event in events if "key" in event)
+    assert [event["message"] for event in events[1:3]] == fake_pipeline.index_progress
+    assert all(isinstance(event["ts"], float) for event in events[:4])
+    assert isinstance(events[3]["elapsed_ms"], int)
+    assert isinstance(events[4]["total_ms"], int)
+    assert events[4]["result"] == {
+        "documents_indexed": 4,
+        "chunks_created": 2506,
+        "added": 1,
+        "updated": 2,
+        "skipped": 3,
+        "removed": 4,
+    }
+    assert fake_pipeline.index_calls == [False]
+
+
+def test_index_rebuild_passes_force_true(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    response = client.post("/api/index/rebuild")
+
+    assert response.status_code == 200
+    assert fake_pipeline.index_calls == [True]
+    assert json.loads(response.text.splitlines()[-1])["event"] == "final"
+
+
+def test_concurrent_index_request_returns_409(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    fake_pipeline.index_release = Event()
+    first_responses = []
+
+    def request_reload() -> None:
+        first_responses.append(client.post("/api/index/reload"))
+
+    first_request = Thread(target=request_reload)
+    first_request.start()
+    assert fake_pipeline.index_started.wait(timeout=2)
+
+    try:
+        response = client.post("/api/index/rebuild")
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "An index operation is already in progress."
+        }
+    finally:
+        fake_pipeline.index_release.set()
+        first_request.join(timeout=2)
+
+    assert not first_request.is_alive()
+    assert first_responses[0].status_code == 200
+    assert fake_pipeline.index_calls == [False]
+
+
+def test_index_connection_error_streams_message_and_releases_lock(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    fake_pipeline.index_error = ConnectionError("Ollama is unavailable")
+
+    failed = client.post("/api/index/reload")
+
+    failed_events = [json.loads(line) for line in failed.text.splitlines()]
+    assert [event["event"] for event in failed_events] == ["stage_start", "error"]
+    assert failed_events[-1] == {
+        "event": "error",
+        "message": "Could not connect to Ollama. Start Ollama with `ollama serve`.",
+    }
+
+    fake_pipeline.index_error = None
+    retried = client.post("/api/index/reload")
+
+    assert retried.status_code == 200
+    assert json.loads(retried.text.splitlines()[-1])["event"] == "final"
+    assert fake_pipeline.index_calls == [False, False]
+
+
+def test_index_runtime_error_streams_its_message(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    fake_pipeline.index_error = RuntimeError("manifest write failed")
+
+    response = client.post("/api/index/reload")
+
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert events[-1] == {"event": "error", "message": "manifest write failed"}
+
+
+def test_index_stream_sends_keepalive_while_worker_is_quiet(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    monkeypatch.setattr(api_app_module, "_INDEX_KEEPALIVE_SECONDS", 0.01)
+    fake_pipeline.index_release = Event()
+    release_worker = Timer(0.04, fake_pipeline.index_release.set)
+    release_worker.start()
+
+    try:
+        response = client.post("/api/index/reload")
+    finally:
+        fake_pipeline.index_release.set()
+        release_worker.cancel()
+        release_worker.join(timeout=1)
+
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert "ping" in [event["event"] for event in events]

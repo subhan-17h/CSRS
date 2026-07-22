@@ -878,7 +878,36 @@ Plan: `/Users/rowdy/.claude/plans/ok-for-the-open-radiant-owl.md`
   - `ask_stream()` deliberately contains no `yield`, so retrieval runs eagerly when it is
     called and only generation stays lazy. That is what lets the endpoint close the retrieve
     stage before advancing generation. Do not "tidy" it into a generator function.
-- [ ] **T-7.4** Index reload/rebuild endpoints with streaming progress and a concurrency lock
+- [x] **T-7.4** Index reload/rebuild endpoints with streaming progress and a concurrency lock
+  - [x] Instrument `Pipeline.index()` with optional parse, embed, skip, and removal progress.
+  - [x] Stream reload/rebuild stage events, progress updates, keepalives, errors, and counts.
+  - [x] Serialize index runs behind a non-blocking lock that survives disconnects and failures.
+  - [x] Cover progress, force forwarding, stream shape, concurrency, and retry after failure offline.
+  - [x] Prove lint, full offline tests, live warm-index reload, document totals, and shutdown.
+  - **Verified:** Ruff clean; **123 offline tests pass** on a dead Ollama port (116 existing
+    plus 7 new), with one Docling test deselected. The API tests prove compact ordered NDJSON,
+    all six result counts, rebuild `force=True`, a concurrent 409, keepalives, generic errors,
+    and an Ollama failure followed by a successful retry. All 25 Python files decode as ASCII.
+  - Live warm-index reload completed in **45 ms**, emitted a skip update for each of the four
+    documents, and returned 4 documents, 2506 chunks, added=0, updated=0, skipped=4, removed=0.
+    `/api/documents` still returned those 4 documents and 2506 chunks afterward. The real
+    rebuild endpoint was not called. Uvicorn shut down cleanly and port 8000 was confirmed free.
+  - Reviewed independently on the real corpus, exercising the whole document lifecycle
+    through the API rather than only the happy path:
+    - Baseline reload: `skipped=4`, 2506 chunks, 39 ms, index untouched.
+    - Added `docs/ZZ_TEST_POLICY.txt` -> `added=1`, 5 documents / 2507 chunks in 709 ms,
+      and the new file was immediately answerable (`ZZ_TEST_POLICY.txt` at 0.9066, correct
+      "every 47 days"), which is CSRS.md §1 extensibility demonstrated through the new API.
+    - Concurrency: two overlapping reloads returned 200 and **409** with
+      "An index operation is already in progress."
+    - The lock genuinely releases -- the next reload succeeded (`skipped=5`).
+    - Removing the file reported `removed=1` and restored the exact baseline
+      (209 / 31 / 2119 / 147 = 2506).
+  - `/api/index/rebuild` was proven only against the fake pipeline asserting `force=True`.
+    It was deliberately never run on the real corpus: it destroys a warm index that costs
+    ~316 s to rebuild. Keep it that way.
+  - The `ping` keepalive only fires when the queue is idle >10 s, so it is exercised by a
+    real full rebuild, not by the sub-second incremental path.
 - [ ] **T-7.5** `ChunkStore.chunks_for_document()` + chunk endpoint + static `dist/` serving
 
 ### Frontend

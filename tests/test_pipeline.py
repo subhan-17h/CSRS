@@ -154,6 +154,33 @@ def test_second_index_skips_unchanged_files_before_parsing(
     assert offline_pipeline.document_names() == ["standard.txt"]
 
 
+def test_index_reports_document_progress_for_parse_embed_skip_and_removal(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    source_path = docs_dir / "standard.txt"
+    source_path.write_text("Access control guidance.", encoding="utf-8")
+    progress: list[str] = []
+
+    offline_pipeline.index(docs_dir, on_progress=progress.append)
+
+    assert progress == [
+        "Parsing document: standard.txt",
+        "Embedding 1 chunk from standard.txt",
+    ]
+
+    progress.clear()
+    offline_pipeline.index(docs_dir, on_progress=progress.append)
+    assert progress == ["Skipped unchanged document: standard.txt"]
+
+    progress.clear()
+    source_path.unlink()
+    offline_pipeline.index(docs_dir, on_progress=progress.append)
+    assert progress == ["Removed document: standard.txt"]
+
+
 def test_changing_one_files_content_reprocesses_only_that_file(
     monkeypatch: pytest.MonkeyPatch,
     offline_pipeline: pipeline.Pipeline,

@@ -1,8 +1,9 @@
-"""FastAPI interface for CSRS pipeline queries and read-only state."""
+"""FastAPI interface for CSRS queries, index state, and index management."""
 
 import json
 from collections.abc import Iterator
-from threading import Lock
+from queue import Empty, Queue
+from threading import Lock, Thread
 from time import perf_counter, time
 from typing import Annotated, Literal
 
@@ -13,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from starlette.responses import StreamingResponse
 
 from csrs.config import settings
-from csrs.pipeline import Pipeline
+from csrs.pipeline import IndexResult, Pipeline
 
 __all__ = ("app", "create_app", "get_pipeline", "main")
 
@@ -23,6 +24,11 @@ _ALLOWED_ORIGINS = (
 )
 _pipeline: Pipeline | None = None
 _pipeline_lock = Lock()
+_index_lock = Lock()
+_INDEX_KEEPALIVE_SECONDS = 10.0
+_OLLAMA_CONNECTION_ERROR = (
+    "Could not connect to Ollama. Start Ollama with `ollama serve`."
+)
 
 
 def _ndjson(payload: dict[str, object]) -> str:
@@ -117,6 +123,111 @@ def get_pipeline() -> Pipeline:
     return _pipeline
 
 
+def _index_response(pipeline: Pipeline, *, force: bool) -> StreamingResponse:
+    """Run one index operation while streaming progress from its worker thread."""
+    if not _index_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="An index operation is already in progress.",
+        )
+
+    started_at = perf_counter()
+    updates: Queue[str | IndexResult | Exception] = Queue()
+
+    def run_index() -> None:
+        outcome: IndexResult | Exception = RuntimeError("Indexing stopped unexpectedly.")
+        try:
+            outcome = pipeline.index(force=force, on_progress=updates.put)
+        except Exception as error:
+            outcome = error
+        finally:
+            # A disconnected client stops consumption, but the index worker keeps running.
+            # Releasing here prevents another request from overlapping that live worker.
+            _index_lock.release()
+            updates.put(outcome)
+
+    worker = Thread(target=run_index, name="csrs-index", daemon=True)
+    try:
+        worker.start()
+    except BaseException:
+        _index_lock.release()
+        raise
+
+    action = "Rebuilding" if force else "Reloading"
+    completed_action = "Rebuilt" if force else "Reloaded"
+
+    def events() -> Iterator[str]:
+        yield _ndjson(
+            {
+                "event": "stage_start",
+                "key": "index",
+                "stage": "index",
+                "message": f"{action} document index",
+                "ts": time(),
+            }
+        )
+
+        while True:
+            try:
+                update = updates.get(timeout=_INDEX_KEEPALIVE_SECONDS)
+            except Empty:
+                yield _ndjson({"event": "ping", "ts": time()})
+                continue
+
+            if isinstance(update, str):
+                yield _ndjson(
+                    {
+                        "event": "stage_update",
+                        "key": "index",
+                        "stage": "index",
+                        "message": update,
+                        "ts": time(),
+                    }
+                )
+                continue
+
+            if isinstance(update, ConnectionError):
+                yield _ndjson(
+                    {
+                        "event": "error",
+                        "message": _OLLAMA_CONNECTION_ERROR,
+                    }
+                )
+                return
+            if isinstance(update, Exception):
+                yield _ndjson({"event": "error", "message": str(update)})
+                return
+
+            total_ms = int((perf_counter() - started_at) * 1000)
+            yield _ndjson(
+                {
+                    "event": "stage_end",
+                    "key": "index",
+                    "stage": "index",
+                    "message": f"{completed_action} document index",
+                    "elapsed_ms": total_ms,
+                    "ts": time(),
+                }
+            )
+            yield _ndjson(
+                {
+                    "event": "final",
+                    "result": {
+                        "documents_indexed": update.documents_indexed,
+                        "chunks_created": update.chunks_created,
+                        "added": update.added,
+                        "updated": update.updated,
+                        "skipped": update.skipped,
+                        "removed": update.removed,
+                    },
+                    "total_ms": total_ms,
+                }
+            )
+            return
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
+
+
 def create_app() -> FastAPI:
     """Create the CSRS API without constructing backend resources."""
     application = FastAPI(title="CSRS API")
@@ -180,7 +291,7 @@ def create_app() -> FastAPI:
         except ConnectionError as error:
             raise HTTPException(
                 status_code=503,
-                detail="Could not connect to Ollama. Start Ollama with `ollama serve`.",
+                detail=_OLLAMA_CONNECTION_ERROR,
             ) from error
         elapsed_ms = int((perf_counter() - started_at) * 1000)
 
@@ -239,9 +350,7 @@ def create_app() -> FastAPI:
                 yield _ndjson(
                     {
                         "event": "error",
-                        "message": (
-                            "Could not connect to Ollama. Start Ollama with `ollama serve`."
-                        ),
+                        "message": _OLLAMA_CONNECTION_ERROR,
                     }
                 )
                 return
@@ -277,10 +386,7 @@ def create_app() -> FastAPI:
                     yield _ndjson(
                         {
                             "event": "error",
-                            "message": (
-                                "Could not connect to Ollama. Start Ollama with "
-                                "`ollama serve`."
-                            ),
+                            "message": _OLLAMA_CONNECTION_ERROR,
                         }
                     )
                     return
@@ -325,6 +431,18 @@ def create_app() -> FastAPI:
             )
 
         return StreamingResponse(events(), media_type="application/x-ndjson")
+
+    @application.post("/api/index/reload")
+    def index_reload(
+        pipeline: Annotated[Pipeline, Depends(get_pipeline)],
+    ) -> StreamingResponse:
+        return _index_response(pipeline, force=False)
+
+    @application.post("/api/index/rebuild")
+    def index_rebuild(
+        pipeline: Annotated[Pipeline, Depends(get_pipeline)],
+    ) -> StreamingResponse:
+        return _index_response(pipeline, force=True)
 
     return application
 

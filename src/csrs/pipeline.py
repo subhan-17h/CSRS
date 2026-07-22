@@ -1,7 +1,7 @@
 """Public facade composing the CSRS indexing and question-answering pipeline."""
 
 from collections import Counter
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -76,7 +76,13 @@ class Pipeline:
         else:
             self._manifest_path = settings.manifest_path
 
-    def index(self, docs_dir: Path | None = None, *, force: bool = False) -> IndexResult:
+    def index(
+        self,
+        docs_dir: Path | None = None,
+        *,
+        force: bool = False,
+        on_progress: Callable[[str], None] | None = None,
+    ) -> IndexResult:
         """Incrementally index files whose source bytes changed."""
         source_dir = docs_dir if docs_dir is not None else settings.docs_dir
         paths_by_identity = {
@@ -120,13 +126,20 @@ class Pipeline:
             previous_record = manifest.get(identity)
             if previous_record is not None and previous_record["hash"] == source_hash:
                 skipped += 1
+                if on_progress is not None:
+                    on_progress(f"Skipped unchanged document: {path.name}")
                 continue
 
             parser = get_parser(path)
             if parser is None:
                 continue
+            if on_progress is not None:
+                on_progress(f"Parsing document: {path.name}")
             document = parser.parse(path)
             chunks = chunk_document(document)
+            if on_progress is not None:
+                chunk_label = "chunk" if len(chunks) == 1 else "chunks"
+                on_progress(f"Embedding {len(chunks)} {chunk_label} from {path.name}")
             embeddings = (
                 embed_documents([chunk.embed_text for chunk in chunks]) if chunks else []
             )
@@ -149,6 +162,8 @@ class Pipeline:
                 self._store.delete_document(doc_name)
             del manifest[identity]
             removed += 1
+            if on_progress is not None:
+                on_progress(f"Removed document: {doc_name}")
 
         save_manifest(self._manifest_path, manifest)
 
