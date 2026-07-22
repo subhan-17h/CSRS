@@ -537,8 +537,10 @@ def test_ask_uses_configured_defaults_for_k_model_and_temperature(
     answer = offline_pipeline.ask("What is access control?")
 
     assert answer is expected
+    # Defaults to rerank_top_n, not top_k_dense: with no reranker every retrieved chunk
+    # reaches the model, and k=20 fills 92.4% of num_ctx (measured at T-1.7).
     assert observed == {
-        "k": settings.top_k_dense,
+        "k": settings.rerank_top_n,
         "generation": (
             "What is access control?",
             [],
@@ -546,6 +548,7 @@ def test_ask_uses_configured_defaults_for_k_model_and_temperature(
             settings.temperature,
         ),
     }
+    assert settings.rerank_top_n < settings.top_k_dense
 
 
 def test_model_availability_normalizes_latest_and_preserves_supported_order(

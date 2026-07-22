@@ -92,7 +92,7 @@ def main() -> None:
             "Retrieved chunks (top_k)",
             min_value=1,
             max_value=20,
-            value=max(1, min(settings.top_k_dense, 20)),
+            value=max(1, min(settings.rerank_top_n, 20)),
         )
         temperature = st.number_input(
             "Temperature",

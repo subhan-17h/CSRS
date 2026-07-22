@@ -173,7 +173,13 @@ class Pipeline:
                 question=question,
             )
 
-        selected_k = k if k is not None else settings.top_k_dense
+        # Everything retrieved goes straight to the model, because there is no reranker.
+        # `top_k_dense` (20) is the retrieval *candidate pool*, not the generation context:
+        # measured at T-1.7, k=20 fills 92.4% of `num_ctx` and Ollama truncates silently
+        # rather than erroring. `rerank_top_n` already means "chunks that reach generation",
+        # so default to it. When a reranker lands it narrows top_k_dense -> rerank_top_n
+        # here, and this default stops being a stand-in.
+        selected_k = k if k is not None else settings.rerank_top_n
         selected_temperature = (
             temperature if temperature is not None else settings.temperature
         )
