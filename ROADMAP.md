@@ -46,8 +46,8 @@ CSRS/
 │  ├─ loaders/
 │  │   ├─ base.py               DocumentParser protocol
 │  │   ├─ text.py               TXT
-│  │   ├─ pdf.py                pypdf + pdfplumber          (default)
-│  │   └─ docling_parser.py     optional extra
+│  │   ├─ pdf.py                pypdf + pdfplumber          (fallback)
+│  │   └─ docling_parser.py     Docling + TableFormer       (default)
 │  ├─ chunking.py               control-aware recursive splitter + breadcrumbs
 │  ├─ embeddings.py             Ollama embed — OWNS the search_document:/search_query: prefixes
 │  ├─ store.py                  Chroma + bm25s, content-hash incremental indexing
@@ -77,7 +77,7 @@ CSRS/
 **Steps**
 1. `git init` (not currently a repo).
 2. `uv init --python 3.12`; src-layout package `csrs`.
-3. Dependency groups: core / `dev` / `docling` / `eval`.
+3. Dependency groups: core (including Docling) / `dev` / `eval`.
 4. Add `ruff`; configure line-length 100, `select = ["E","F","I","UP","B"]`.
 5. `.gitignore`: `.venv`, `__pycache__`, `chroma_db/`, `docs/*.pdf`, `!docs/samples/`.
 **Done when** `uv sync` succeeds and `uv run ruff check .` is clean.
@@ -411,11 +411,11 @@ CSRS/
 **Done when** You have a measured comparison — and a decision either way, recorded.
 **Gotchas** Without the hash cache this makes "Reload" unusable. If it doesn't beat the breadcrumb, **leave it off and write down that you tested it.** A negative result you measured is worth more than a feature you assumed.
 
-### T-5.3 · Docling optional parser
-**Goal** Higher-fidelity table extraction, safely gated.
-**Steps** `docling_parser.py` implementing `DocumentParser`; `[docling]` extra; `docling-tools models download` in `warm_models.py`; set `artifacts_path` so runtime never fetches; select via config.
-**Done when** With the extra installed and models warmed, Docling parses SP 800-53 with better tables — **and with the extra absent, the app still works unchanged.**
-**Gotchas** The default path must never require Docling. Verify by testing in a clean venv without the extra.
+### T-5.3 · Docling optional parser (superseded by T-2.7)
+**Status** Absorbed by T-2.7, which was pulled forward into Phase 2 and made Docling the default PDF parser.
+**Goal** Delivered by T-2.7 with `docling_parser.py`, offline model warm-up, pinned `artifacts_path`, and a selectable pypdf fallback.
+**Done when** Superseded: T-2.7 deliberately reversed this card's requirement that the default path must never require Docling. Docling is now a core dependency and the default parser.
+**Gotchas** Keep the pypdf/pdfplumber path as a supported fallback; do not describe it as removed.
 **Reading** → [OS_REPOS.md §3](OS_REPOS.md#docling-done-safely)
 
 ---
@@ -431,7 +431,7 @@ CSRS/
 ### T-6.2 · Packaging
 **Steps** `uv lock`; export a pinned `requirements.txt` (`uv export --no-hashes --format requirements-txt`); verify a plain `pip install -r requirements.txt` works in a fresh venv.
 **Done when** Both `uv sync` and `pip install -r requirements.txt` produce a working install.
-**Gotchas** Export **without** dev/optional groups — the grader shouldn't be made to install Docling.
+**Gotchas** Export without dev groups. `requirements.txt` now includes the core Docling dependency; document `scripts/warm_models.py` as the required weights setup step.
 
 ### T-6.3 · Offline verification
 **Goal** Prove the central claim.
@@ -496,9 +496,9 @@ CSRS/
 | **Chroma's default embedder downloads a model** | Medium | High — breaks offline *and* bypasses mandated model | Always pass our own vectors (T-1.5); verified in T-6.3 |
 | **Ollama not running on grader's machine** | High | High — app appears broken | Friendly connection check + README troubleshooting (T-2.4, T-6.1) |
 | **FlashRank weights not warmed → offline failure** | Medium | High | `warm_models.py` + README step (T-3.5); verified T-6.3 |
-| **First index is slow on SP 800-53** | High | Medium — looks hung | `st.status` progress; content-hash caching (T-2.3, T-2.5) |
+| **First index is slow on SP 800-53** | High | **High** — looks hung for minutes | Measured after T-2.7: a full-corpus index is **336 s** with Docling (was ~52 s with pypdf). `st.status` progress and content-hash caching are now load-bearing, not cosmetic — and T-2.3 must hash **file bytes and skip before `parse()`**, or the cost is paid on every run anyway (T-2.3, T-2.5) |
 | **Small models ignore grounding instructions** | High | High | Layered: prompt + confidence gate + citations (T-1.6, T-4.1, T-4.2) |
-| **PDF table extraction mangles control tables** | High | Medium | pdfplumber for tables; Docling escape hatch (T-2.1, T-5.3) |
+| **PDF table extraction mangles control tables** | High | Medium | Docling TableFormer by default; pypdf/pdfplumber fallback (T-2.7) |
 | **`gemma4:e2b` may not exist in the registry** | Medium | Low | Verify at T-0.2; substitute and **document** |
 | **Chroma HNSW corruption on hard exit** | Low | Medium | Reload button rebuilds; document `rm -rf chroma_db/` recovery |
 | **Context overflow from parent expansion** | Medium | Medium | Cap expansion, dedupe parents, enforce token budget (T-3.6) |

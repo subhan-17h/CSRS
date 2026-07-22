@@ -14,16 +14,16 @@ Our hardest constraint is *"runs entirely offline after the required dependencie
 
 | Component | Downloads at runtime? | How we handle it |
 |---|---|---|
-| `pypdf`, `pdfplumber` | **No** — pure Python | Default parser. Safe. |
+| `pypdf`, `pdfplumber` | **No** — pure Python | Selectable fallback via `CSRS_PDF_PARSER=pypdf`. |
 | `bm25s` | **No** — numpy only | Safe. |
 | `chromadb` | **No** (with our own embeddings) | Safe. **Must not** use Chroma's default embedding function, which would fetch ONNX MiniLM. |
 | `ollama` (client) | No | Models pulled explicitly via `ollama pull` — a download the spec already sanctions. |
 | **`flashrank`** | **Yes** — ONNX weights on first use | ~34 MB, one-time. `scripts/warm_models.py` + documented setup step. |
-| **`docling`** | **Yes** — layout/table models, GB-scale | Optional extra only. `docling-tools models download` + `artifacts_path`. Never on the default path. |
+| **`docling`** | **Yes** — layout/table models, ~1.3 GB | Default parser. `scripts/warm_models.py` + pinned `artifacts_path`; no runtime fetches after setup. |
 | `sentence-transformers` | Yes — HF models + torch | **Not used.** |
 | `tiktoken` | Yes — BPE vocab on first use | **Not used** — avoided by counting tokens heuristically. |
 
-**The rule this produces:** anything that downloads goes behind an optional extra with an explicit warm-up script, or does not ship. Only FlashRank earns an exception, and it is warmed alongside `ollama pull`.
+**The rule this produces:** anything that downloads weights needs an explicit warm-up script and documented setup step, or does not ship. Docling and FlashRank are both warmed before offline use; Docling also pins its local `artifacts_path`.
 
 ---
 
@@ -65,9 +65,9 @@ The hardest technical problem in this project. NIST SP 800-53 Rev 5 is 400+ page
 
 | Repo | License | Runtime downloads | Verdict |
 |---|---|---|---|
-| [py-pdf/pypdf](https://github.com/py-pdf/pypdf) · v6.14.2 | BSD-3 | **None** | **PRIMARY** — pure Python, fast, fine on digital-native PDFs (all our sources are) |
-| [jsvine/pdfplumber](https://github.com/jsvine/pdfplumber) · v0.11.10 | MIT | **None** | **PRIMARY (tables)** — visual line-based table extraction, plus word-level coordinates that give us **page numbers for citations** |
-| [docling-project/docling](https://github.com/docling-project/docling) · v2.114.0 | MIT | **Yes, GB-scale** | **OPTIONAL EXTRA** — best-in-class layout/table understanding; gated behind a flag + warm-up |
+| [py-pdf/pypdf](https://github.com/py-pdf/pypdf) · v6.14.2 | BSD-3 | **None** | **FALLBACK** — pure Python text extraction, selectable with `CSRS_PDF_PARSER=pypdf` |
+| [jsvine/pdfplumber](https://github.com/jsvine/pdfplumber) · v0.11.10 | MIT | **None** | **FALLBACK (tables)** — visual line-based table extraction with page provenance, used by the selectable pypdf path |
+| [docling-project/docling](https://github.com/docling-project/docling) · v2.114.0 | MIT | **None after warm-up** | **DEFAULT** — layout-aware parsing and TableFormer table extraction |
 | [pymupdf/pymupdf4llm](https://github.com/pymupdf/pymupdf4llm) | **AGPL-3.0** | None | **REJECTED** — technically excellent, but AGPL on a submitted deliverable is a real licensing hazard |
 | [datalab-to/marker](https://github.com/datalab-to/marker) | GPL-3.0 | Yes (~2–4 GB) | **REJECTED** — licence + weight |
 | [opendatalab/MinerU](https://github.com/opendatalab/MinerU) | Apache-2.0 | Yes | **REJECTED** — heavy; multi-format support we don't need |
@@ -76,12 +76,13 @@ The hardest technical problem in this project. NIST SP 800-53 Rev 5 is 400+ page
 **The AGPL point is worth internalising.** PyMuPDF is the fastest and arguably best of these. It is dual-licensed AGPL-3.0 / commercial, and AGPL's network-use clause makes it a poor default in a web app you might distribute. Being able to explain *why you didn't use the fastest library* is a better signal than having used it.
 
 ### Docling, done safely
-Verified 2026-07-21 — Docling supports proper air-gapped operation:
-- `docling-tools models download` pre-fetches into `$HOME/.cache/docling/models`
-- `artifacts_path` (or `DOCLING_ARTIFACTS_PATH`) pins the runtime to that cache, disabling fetches
+The current default is configured for air-gapped operation:
+- `settings.docling_artifacts_path` pins `artifacts_path` to the local model cache, disabling runtime fetches
+- `scripts/warm_models.py` fetches the Docling layout and TableFormer weights during setup
+- OCR models are deliberately excluded because the parser uses `do_ocr=False` on this digital-native corpus
 - [Offline discussion #2724](https://github.com/docling-project/docling/discussions/2724) · [Advanced options](https://docling-project.github.io/docling/usage/advanced_options/)
 
-So Docling is usable offline — it just requires a deliberate setup step, which is exactly why it belongs behind an extra rather than on the default path.
+On SP 800-53 (492 pages), Docling ran at 1.99 pages/s (246.8 s) and classified 1937 page-header/page-footer items as furniture, with 0 items lacking page provenance. The previous pypdf path needed four rounds of hand-tuned heuristics to strip the same running headers and footers.
 
 ---
 
@@ -201,6 +202,6 @@ Confirmed on PyPI, 2026-07-21. `uv` will resolve current versions at install tim
 | `pypdf` | 6.14.2 | BSD-3 | PDF text |
 | `pdfplumber` | 0.11.10 | MIT | PDF tables + coordinates |
 | `pydantic-settings` | 2.14.x | MIT | Config |
-| `docling` | 2.114.0 | MIT | *Optional extra* |
+| `docling` | 2.114.0 | MIT | Default PDF parser |
 
 Python target: **3.12** — every dependency above ships wheels, and it avoids the 3.13/3.14 wheel gaps that still affect parts of the ML ecosystem.

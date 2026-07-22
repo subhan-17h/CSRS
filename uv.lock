@@ -414,6 +414,7 @@ source = { editable = "." }
 dependencies = [
     { name = "bm25s" },
     { name = "chromadb" },
+    { name = "docling" },
     { name = "flashrank" },
     { name = "ollama" },
     { name = "pdfplumber" },
@@ -422,11 +423,6 @@ dependencies = [
     { name = "pypdf" },
     { name = "pystemmer" },
     { name = "streamlit" },
-]
-
-[package.optional-dependencies]
-docling = [
-    { name = "docling" },
 ]
 
 [package.dev-dependencies]
@@ -443,7 +439,7 @@ eval = [
 requires-dist = [
     { name = "bm25s", specifier = ">=0.2.6" },
     { name = "chromadb", specifier = ">=0.5.20" },
-    { name = "docling", marker = "extra == 'docling'", specifier = ">=2.15.0" },
+    { name = "docling", specifier = ">=2.15.0" },
     { name = "flashrank", specifier = ">=0.2.9" },
     { name = "ollama", specifier = ">=0.4.7" },
     { name = "pdfplumber", specifier = ">=0.11.4" },
@@ -453,7 +449,6 @@ requires-dist = [
     { name = "pystemmer", specifier = ">=2.2.0.1" },
     { name = "streamlit", specifier = ">=1.40.0" },
 ]
-provides-extras = ["docling"]
 
 [package.metadata.requires-dev]
 dev = [

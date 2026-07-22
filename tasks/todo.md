@@ -2,7 +2,8 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phases 0 and 1 complete and verified. T-2.1 is complete.
+**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1, T-2.2 and
+T-2.7 (Docling as the default parser) are complete. Next: T-2.3 incremental indexing.
 
 ---
 
@@ -145,7 +146,7 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
     and are already on the roadmap. This commit is the working fallback if the migration
     does not hold up.
 
-- [ ] **T-2.7** Docling as the default PDF parser *(absorbs T-5.3; supersedes the T-2.1
+- [x] **T-2.7** Docling as the default PDF parser *(absorbs T-5.3; supersedes the T-2.1
   furniture heuristics and the T-2.2 numeric-heading regex)*
   - [x] **S1** `DoclingParser` behind config, with `PdfParser` kept as a selectable fallback.
     - [x] Add lazy, cached Docling conversion with pinned offline artifacts and guarded
@@ -229,10 +230,10 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
       `INTRODUCTION`. The two percentages are also over different chunk populations (1853
       Docling chunks vs 1820 pypdf chunks), so they were never directly comparable. 90.1% is
       the correct ceiling for this corpus rather than a regression to chase.
-  - [ ] **S3** `scripts/warm_models.py` so the weights are a deliberate, documented step.
+  - [x] **S3** `scripts/warm_models.py` so the weights are a deliberate, documented step.
     - Pulled forward from T-5.3; T-3.5 needs the same script for FlashRank, and T-6.3's
       offline proof depends on it existing.
-  - [ ] **S4** Move `docling` to core dependencies and correct the documents that say otherwise.
+  - [x] **S4** Move `docling` to core dependencies and correct the documents that say otherwise.
     - `pyproject.toml` (out of `[project.optional-dependencies]`), `OS_REPOS.md` §3
       (currently records pypdf-primary/Docling-optional — this reverses it), `ROADMAP.md`
       T-5.3 marked absorbed by T-2.7.
@@ -242,6 +243,44 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
       corpus-tuned heuristics, each fixing a real defect found only by testing against a
       document the previous round had not seen, is the signal to reach for a structural tool
       rather than write a fifth rule.
+    - Verified: `uv lock --check` in sync, `uv sync` clean, `import docling` works with no
+      extra, no `[project.optional-dependencies]` group remains, ruff clean, 62 offline +
+      1 Docling test pass. Reviewer correction on top of the handoff: the risk register's
+      "first index is slow" row was still rated Medium against the old ~52 s figure, and is
+      now **High** with the measured 336 s.
+
+  ### Live end-to-end proof (real Ollama, real corpus)
+
+  Everything above is unit tests and offline measurement against cached Markdown. This is the
+  whole chain — Docling parse -> structure-aware chunking -> `nomic-embed-text` -> Chroma ->
+  `llama3.2` — run for real: **4 documents, 2506 chunks, 336.3 s** to index.
+
+  **The Phase 1 checkpoint hallucination is fixed.** `What does AC-2 require?` previously
+  returned an invented sentence with `refused=False`, because the corpus was OWASP-only and
+  the top score was 0.5685. It now returns AC-2's actual lettered requirements a. through j.,
+  including NIST's own `[Assignment: organization-defined ...]` notation, citing
+  `page=47 control_id=AC-2` and `page=46 control_id=AC-2` at scores 0.6726 / 0.6707.
+
+  **S2's enhancement hierarchy earns its keep.** `What must an organization do for automated
+  system account management?` retrieves at **0.8420** with
+  `control_id=AC-2(1)` and breadcrumb
+  `NIST.SP.800-53r5.pdf > AC-2 ACCOUNT MANAGEMENT > (1) ACCOUNT MANAGEMENT | AUTOMATED SYSTEM ACCOUNT MANAGEMENT`.
+  That id exists only because bare `(1)` headings resolve against the nearest stacked control.
+
+  Cross-document retrieval works (the six CSF Functions answered correctly from SP 1299 p.2
+  *and* CSWP 29 p.2), and the negative control held: `What is the capital of France?` returned
+  `refused=True` with the exact configured refusal string.
+
+  **Page citations verified with a different library.** Trusting Docling to check Docling
+  proves nothing, so the cited pages were re-read with `pypdf`: PDF pages 46 and 47 both
+  contain `AC-2` and `ACCOUNT MANAGEMENT`, page 47 contains the automated-mechanisms
+  enhancement text, and SP 1299 page 2 contains all six Function names. **The placeholder
+  page-split carries no off-by-one**, which would otherwise have silently corrupted every
+  citation in the system. That check also re-confirmed the T-2.1 decision to cite 1-based PDF
+  position rather than the printed number: PDF page 46 prints "PAGE 19".
+
+  ⚠ **The 336 s is paid on every app start until T-2.3 lands.** `Pipeline.index()` still does
+  a full rebuild, so the Streamlit app currently looks frozen for over five minutes on launch.
 
   **Spike evidence (measured 2026-07-22, before any code was written).** docling 2.114.0,
   docling-core 2.87.1, weights 1.2 GB in `~/.cache/docling/models`.

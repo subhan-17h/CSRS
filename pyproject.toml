@@ -12,16 +12,11 @@ dependencies = [
     "flashrank>=0.2.9",
     "pypdf>=5.1.0",
     "pdfplumber>=0.11.4",
+    # Default PDF parser; scripts/warm_models.py fetches its ~1.3 GB weights before runtime.
+    "docling>=2.15.0",
     "streamlit>=1.40.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
-]
-
-[project.optional-dependencies]
-# Optional high-fidelity PDF parser. Never required by the default code path.
-# Runtime models must be pre-downloaded (scripts/warm_models.py) to stay offline.
-docling = [
-    "docling>=2.15.0",
 ]
 
 [dependency-groups]

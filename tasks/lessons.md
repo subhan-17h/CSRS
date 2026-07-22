@@ -74,3 +74,35 @@ reported "terminal" within seconds while the real task ran on unobserved — a f
 *success* signal, which is more dangerous than the silence the watcher was built to fix.
 Match the job's `summary` against the brief just sent and require `write: true`. The
 disk check is what caught it: the watcher said done, and `embeddings.py` did not exist.
+
+---
+
+## L-4 · Repeated heuristic patching is a signal to change tools, not to add a rule
+
+**Date:** 2026-07-22 · **Trigger:** the user stopped work mid-T-2.1 to ask whether hand-tuned
+header stripping was the right approach at all, rather than accepting a fourth round of it.
+
+**Rule.** When the same class of bug needs a *third* corpus-specific rule, stop and ask
+whether a tool exists that solves the class structurally. Do not write the fourth rule
+first and evaluate alternatives later.
+
+**Why.** T-2.1/T-2.2 produced four rounds of furniture and heading heuristics. Every round
+fixed a real, measured defect — and every round was found only by testing against a
+document the previous round had not seen. That pattern is the diagnostic: it means the
+rules encode *this corpus*, not the problem, so the next unseen document breaks them again.
+It also worked directly against the spec's "extensible to new standards" requirement.
+Docling's layout model replaced all of it by classifying `Page-header`/`Page-footer`
+structurally: 1937 furniture items on SP 800-53 with no rule written for any of them.
+
+**How to apply.** Count the rounds. One fix is a bug; two is bad luck; **three is a design
+signal**. When it fires, spike the alternative against the real corpus before committing —
+and measure the cost honestly, because the alternative usually is not free. Here it was
+~10x slower (52 s -> 336 s for a full index), which was worth it, but only because the
+measurement was made *before* the decision rather than discovered afterwards.
+
+**Corollary — a structural fix relocates the problem, it does not always erase it.**
+Swapping the parser silently broke `control_id` extraction: Docling emits `## AC-2 ACCOUNT
+MANAGEMENT`, the Markdown pattern matched first and returned `control_id=None`, and
+coverage fell from 92.1% to **0.0%** while breadcrumbs still looked correct. Nothing threw.
+When you replace a component, re-measure the metrics the *old* component was responsible
+for — not just the ones the new component was chosen to improve.
