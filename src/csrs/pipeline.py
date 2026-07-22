@@ -7,12 +7,12 @@ from pathlib import Path
 from csrs.chunking import chunk_document
 from csrs.config import settings
 from csrs.embeddings import embed_documents, embed_query
-from csrs.generation import generate_answer
+from csrs.generation import canonical_model_name, generate_answer, list_installed_models
 from csrs.loaders import get_parser, iter_document_paths
 from csrs.models import Answer
 from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
 
-__all__ = ("IndexResult", "Pipeline")
+__all__ = ("IndexResult", "ModelAvailability", "Pipeline")
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +25,15 @@ class IndexResult:
     updated: int = 0
     skipped: int = 0
     removed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ModelAvailability:
+    """Supported model choices and the state of the Ollama connection."""
+
+    selectable_models: tuple[str, ...]
+    missing_models: tuple[str, ...]
+    ollama_reachable: bool
 
 
 class Pipeline:
@@ -156,6 +165,28 @@ class Pipeline:
         query_embedding = embed_query(question)
         chunks = self._store.search(query_embedding, selected_k)
         return generate_answer(question, chunks, selected_model)
+
+    def model_availability(self) -> ModelAvailability:
+        """Return ordered model choices, missing models, and Ollama reachability.
+
+        When Ollama is unreachable, both model tuples are empty because installed and
+        missing state cannot be known. A reachable server with no installed supported
+        models returns every supported model as missing instead.
+        """
+        try:
+            installed = {
+                canonical_model_name(name) for name in list_installed_models()
+            }
+        except ConnectionError:
+            return ModelAvailability((), (), False)
+
+        selectable = tuple(
+            name
+            for name in settings.supported_llms
+            if canonical_model_name(name) in installed
+        )
+        missing = tuple(name for name in settings.supported_llms if name not in selectable)
+        return ModelAvailability(selectable, missing, True)
 
     def document_names(self) -> list[str]:
         """Return document names from the complete persistent index."""

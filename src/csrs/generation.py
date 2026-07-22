@@ -5,11 +5,26 @@ from collections.abc import Sequence
 import ollama
 
 from csrs.config import settings
+from csrs.model_names import canonical_model_name
 from csrs.models import Answer, RetrievedChunk
 
-__all__ = ("build_prompt", "generate_answer")
+__all__ = (
+    "build_prompt",
+    "canonical_model_name",
+    "generate_answer",
+    "list_installed_models",
+)
 
 _client = ollama.Client(host=settings.ollama_host)
+
+
+def list_installed_models() -> list[str]:
+    """Return model names reported by the configured Ollama server."""
+    try:
+        response = _client.list()
+    except (OSError, ollama.RequestError, ollama.ResponseError) as exc:
+        raise ConnectionError("Could not list installed Ollama models") from exc
+    return [model.model for model in response.models if model.model is not None]
 
 
 def build_prompt(question: str, chunks: Sequence[RetrievedChunk]) -> str:

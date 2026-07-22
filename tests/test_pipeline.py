@@ -376,3 +376,60 @@ def test_ask_passes_caller_k_to_search_and_returns_answer_unchanged(
         "k": 7,
         "generation": ("What is access control?", [], "gemma2:2b"),
     }
+
+
+def test_model_availability_normalizes_latest_and_preserves_supported_order(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+) -> None:
+    monkeypatch.setattr(
+        pipeline,
+        "list_installed_models",
+        lambda: [
+            "phi4-mini:latest",
+            "unsupported:latest",
+            "nomic-embed-text:latest",
+            "llama3.2:latest",
+        ],
+    )
+
+    availability = offline_pipeline.model_availability()
+
+    assert availability == pipeline.ModelAvailability(
+        selectable_models=("llama3.2", "phi4-mini"),
+        missing_models=("qwen2.5:1.5b", "gemma2:2b", "gemma4:e2b"),
+        ollama_reachable=True,
+    )
+
+
+def test_model_availability_reports_all_supported_models_missing_when_none_installed(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+) -> None:
+    monkeypatch.setattr(pipeline, "list_installed_models", lambda: [])
+
+    availability = offline_pipeline.model_availability()
+
+    assert availability == pipeline.ModelAvailability(
+        selectable_models=(),
+        missing_models=settings.supported_llms,
+        ollama_reachable=True,
+    )
+
+
+def test_model_availability_reports_unreachable_without_raising(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+) -> None:
+    def fail_list() -> list[str]:
+        raise ConnectionError("Ollama is down")
+
+    monkeypatch.setattr(pipeline, "list_installed_models", fail_list)
+
+    availability = offline_pipeline.model_availability()
+
+    assert availability == pipeline.ModelAvailability(
+        selectable_models=(),
+        missing_models=(),
+        ollama_reachable=False,
+    )

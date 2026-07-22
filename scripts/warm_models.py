@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from csrs.config import settings
+from csrs.model_names import canonical_model_name
 
 DOCLING_REQUIRED_FILES = (
     Path("docling-project--docling-layout-heron/model.safetensors"),
@@ -74,12 +75,6 @@ def warm_docling() -> bool:
     return True
 
 
-def _canonical_model_name(name: str) -> str:
-    """Add Ollama's implicit latest tag for reliable comparisons."""
-    final_component = name.rsplit("/", 1)[-1]
-    return name if ":" in final_component else f"{name}:latest"
-
-
 def _required_ollama_models() -> tuple[str, ...]:
     """Return configured model names once each, in application order."""
     return tuple(dict.fromkeys((settings.embed_model, *settings.supported_llms)))
@@ -108,12 +103,12 @@ def warm_ollama(pull: bool) -> tuple[bool, int, int]:
         return False, 0, len(_required_ollama_models())
 
     installed = {
-        _canonical_model_name(model.model)
+        canonical_model_name(model.model)
         for model in response.models
         if model.model is not None
     }
     required = _required_ollama_models()
-    missing = [name for name in required if _canonical_model_name(name) not in installed]
+    missing = [name for name in required if canonical_model_name(name) not in installed]
 
     for name in required:
         status = "missing" if name in missing else "present"

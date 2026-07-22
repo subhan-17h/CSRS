@@ -1,6 +1,10 @@
 """Offline tests for grounded prompt assembly and answer generation."""
 
+import runpy
+import sys
 from collections.abc import Sequence
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -21,13 +25,83 @@ def make_retrieved_chunk(index: int, text: str) -> RetrievedChunk:
 
 
 class FakeClient:
-    def __init__(self, reply: str) -> None:
+    def __init__(self, reply: str, models: Sequence[str | None] = ()) -> None:
         self.reply = reply
+        self.models = models
         self.calls: list[dict[str, Any]] = []
 
     def chat(self, **kwargs: Any) -> dict[str, dict[str, str]]:
         self.calls.append(kwargs)
         return {"message": {"content": self.reply}}
+
+    def list(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            models=[SimpleNamespace(model=name) for name in self.models]
+        )
+
+
+def test_list_installed_models_uses_existing_client_and_omits_unnamed_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient("unused", ["llama3.2:latest", None, "gemma2:2b"])
+    monkeypatch.setattr(generation, "_client", client)
+
+    assert generation.list_installed_models() == ["llama3.2:latest", "gemma2:2b"]
+
+
+def test_list_installed_models_translates_connection_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class UnreachableClient(FakeClient):
+        def list(self) -> Any:
+            raise ConnectionError("Ollama is down")
+
+    monkeypatch.setattr(generation, "_client", UnreachableClient("unused"))
+
+    with pytest.raises(ConnectionError, match="Could not list installed Ollama models"):
+        generation.list_installed_models()
+
+
+def test_canonical_model_name_only_adds_implicit_latest_tag() -> None:
+    assert generation.canonical_model_name("llama3.2") == "llama3.2:latest"
+    assert generation.canonical_model_name("llama3.2:latest") == "llama3.2:latest"
+    assert generation.canonical_model_name("registry/team/model") == (
+        "registry/team/model:latest"
+    )
+    assert generation.canonical_model_name("registry:5000/team/model") == (
+        "registry:5000/team/model:latest"
+    )
+
+
+def test_warm_models_keeps_existing_present_behavior_with_shared_helper(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = FakeClient(
+        "unused",
+        [
+            "phi4-mini:latest",
+            "gemma2:2b",
+            "nomic-embed-text:latest",
+            "gemma4:e2b",
+            "llama3.2:latest",
+            "qwen2.5:1.5b",
+        ],
+    )
+    fake_ollama = ModuleType("ollama")
+    fake_ollama.Client = lambda host: client
+    monkeypatch.setitem(sys.modules, "ollama", fake_ollama)
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "warm_models.py"
+    warm_ollama = runpy.run_path(str(script_path))["warm_ollama"]
+
+    result = warm_ollama(pull=False)
+    output = capsys.readouterr().out
+
+    assert result == (True, 6, 6)
+    for name in (settings.embed_model, *settings.supported_llms):
+        assert f"  {name}  [present]" in output
+    assert "[missing]" not in output
+    assert "ollama pull" not in output
 
 
 def test_prompt_labels_all_chunks_in_order_and_places_instruction_last() -> None:

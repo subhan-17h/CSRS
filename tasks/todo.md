@@ -2,8 +2,8 @@
 
 Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
-**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1, T-2.2, T-2.3
-and T-2.7 (Docling as the default parser) are complete. Next: T-2.4 model selection.
+**Status:** Phases 0 and 1 complete and verified. Phase 2 in progress: T-2.1, T-2.2, T-2.3,
+T-2.4, and T-2.7 (Docling as the default parser) are complete. Next: T-2.5 reload UI.
 
 ---
 
@@ -184,6 +184,50 @@ and T-2.7 (Docling as the default parser) are complete. Next: T-2.4 model select
     document, so deriving names from it is simpler and needs no store API. Note the coupling
     before changing it: the consistency guard compares manifest names against
     `store.document_names()`, which is *why* zero-chunk documents had to be tracked at all.
+
+- [x] **T-2.4** Model dropdown from installed Ollama models
+  - [x] Share implicit `:latest` model-name normalization with `scripts/warm_models.py`.
+  - [x] Expose ordered selectable, missing, and unreachable states through `Pipeline`.
+  - [x] Populate the sidebar selector, pass its choice to `ask`, and show `Answer.model`.
+  - [x] Cover model inventory behavior fully offline and run all required verification.
+  - **Verified:** ruff clean; 86 offline tests and the Docling test pass; byte-level ASCII
+    decode passes. The warm script still reports 6 of 6 required models present. The live
+    facade returns all five supported LLMs in configured order with none missing. A Streamlit
+    probe against port 9 renders the `ollama serve` remedy with no application exception.
+  - **Architecture note — the card's literal steps were deliberately not followed.** T-2.4 says
+    `ollama.list() -> filter -> st.selectbox`, which reads as calling Ollama from `app.py`.
+    ROADMAP.md's own architecture section says the UI never touches Ollama directly, and
+    "modular and maintainable" is a checkable spec requirement. So listing lives in
+    `generation.py` (which already owns the client), `Pipeline.model_availability()` exposes it,
+    and `app.py` consumes only the facade. Proven, not asserted:
+    `grep -n "ollama" src/csrs/app.py` returns only the error string and the `ollama pull` hint —
+    no import, no call.
+  - **The T-0.2 trap was real and is now closed.** `ollama.list()` reports `llama3.2:latest` and
+    `phi4-mini:latest` while `settings.supported_llms` names them untagged, so a naive
+    intersection would have reported **two mandated models as missing** — the exact "list that
+    lies" this card exists to prevent. Verified live: selectable comes back as
+    `('llama3.2', 'qwen2.5:1.5b', 'gemma2:2b', 'phi4-mini', 'gemma4:e2b')`, missing `()`, in
+    configured order. With Ollama down: `reachable=False` and both tuples empty, distinct from
+    "reachable but nothing installed", and no exception escapes.
+  - **"Done when: switching models changes which model answers" — demonstrated live** on a
+    147-chunk OWASP index, same question to three models:
+
+    | Requested | `Answer.model` | Result |
+    |---|---|---|
+    | `llama3.2` | `llama3.2` | answered (6.0 s) |
+    | `qwen2.5:1.5b` | `qwen2.5:1.5b` | **refused (4.1 s)** |
+    | `gemma2:2b` | `gemma2:2b` | answered (5.2 s) |
+
+  - ⚠ **Finding for T-4.2 and T-6.1 — a false refusal, not a bug in this card.**
+    `qwen2.5:1.5b` refused "What is Broken Access Control?", which is squarely *in* the OWASP
+    corpus and which both other models answered from the same retrieved chunks. Retrieval was
+    identical; only the generator changed. This is empirical confirmation of the comment in
+    `config.py` that llama3.2 follows grounding instructions more reliably than the smaller
+    models, and it is the failure mode the roadmap calls worse than the alternative — refusing
+    a valid question looks broken. Two consequences: T-4.2 must calibrate its confidence gate
+    against the **default** model rather than assuming behaviour transfers across the dropdown,
+    and T-6.1's README should say plainly that the selector exposes models which will answer
+    less reliably than the default.
 
 - [x] **T-2.7** Docling as the default PDF parser *(absorbs T-5.3; supersedes the T-2.1
   furniture heuristics and the T-2.2 numeric-heading regex)*
