@@ -795,6 +795,59 @@ working tree clean.
 
 ---
 
+## Phase 7 — React frontend + FastAPI layer
+
+Phases 3-5 stay deferred. This phase adds a second interface without changing what the
+RAG pipeline does. `src/csrs/app.py` (Streamlit) is **untouched** and remains the
+spec-§5 graded interface, so the Phase 2 checkpoint evidence above stays valid.
+
+Backend changes are strictly additive: a streaming generation path alongside
+`generate_answer()`, and one read-only store accessor. `Pipeline.ask()`, `chunking.py`,
+`embeddings.py`, `store.search()` and the `config.py` retrieval defaults do not change.
+
+Plan: `/Users/rowdy/.claude/plans/ok-for-the-open-radiant-owl.md`
+
+### Backend
+
+- [x] **T-7.1** FastAPI skeleton + read endpoints (`/api/health`, `/api/documents`, `/api/models`)
+  - [x] Add and lock FastAPI/Uvicorn dependencies without disturbing retained retrieval packages.
+  - [x] Add a lazy, guarded, dependency-overridable Pipeline with one-time incremental indexing.
+  - [x] Expose typed health, document, and model responses with localhost-only CORS.
+  - [x] Add the localhost-bound `csrs-api` entry point and fully isolated API tests.
+  - [x] Prove lint, offline tests, ASCII source, and real warm-index endpoint responses.
+  - **Verified:** Ruff clean; 101 offline tests pass on a dead Ollama port (96 existing plus
+    5 API tests); 25 Python files decode as ASCII. Importing the ASGI module leaves the lazy
+    singleton as `None`. The real warm index reports 4 documents and 2506 chunks, Ollama is
+    reachable, and all five supported LLMs are selectable. The server shut down cleanly and a
+    follow-up curl confirmed port 8000 was closed.
+  - Reviewed independently: CORS returns `access-control-allow-origin` for `:5173` and
+    withholds it from other origins; with `CSRS_OLLAMA_HOST` on a dead port the live server
+    still answers `/api/health` 200 with `ollama_reachable: false` and `/api/models` with an
+    empty inventory rather than a fabricated fallback.
+  - ⚠ Finding for **T-7.4**: `get_pipeline()` indexes on first use, so if Ollama is down
+    *and* documents changed, initialization raises and `/api/health` 500s instead of
+    reporting the outage. Invisible while the index is warm, because content hashes skip
+    before any embedding call. The reload endpoints must not widen that window.
+- [ ] **T-7.2** `POST /api/chat` — serialize `Answer` with `sources[]`, 503 on Ollama down
+- [ ] **T-7.3** `POST /api/chat/stream` — NDJSON stage events + Ollama token streaming
+- [ ] **T-7.4** Index reload/rebuild endpoints with streaming progress and a concurrency lock
+- [ ] **T-7.5** `ChunkStore.chunks_for_document()` + chunk endpoint + static `dist/` serving
+
+### Frontend
+
+- [ ] **T-7.6** Strip the Unibot domain, rebrand to CSRS, vendor fonts locally (offline)
+- [ ] **T-7.7** `SourcesCard` (citations with page/section/control-ID) + markdown answers
+- [ ] **T-7.8** Wire streaming and live progress stages into `App.tsx`
+- [ ] **T-7.9** Sidebar settings — full spec-§5 parity (model, top_k, temperature, reload)
+- [ ] **T-7.10** Corpus Explorer replacing the SQL Data Viewer
+- [ ] **T-7.11** localStorage conversation history
+
+### Close-out
+
+- [ ] **T-7.12** README + ENGINEERING updates, offline verification, phase commit
+
+---
+
 ## Notes
 
 - Phase 2 tasks get pulled in here once Phase 1's checkpoint passes.

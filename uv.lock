@@ -223,7 +223,7 @@ name = "build"
 version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "os_name == 'nt'" },
+    { name = "colorama", marker = "os_name == 'nt' and sys_platform != 'darwin'" },
     { name = "packaging" },
     { name = "pyproject-hooks" },
 ]
@@ -415,6 +415,7 @@ dependencies = [
     { name = "bm25s" },
     { name = "chromadb" },
     { name = "docling" },
+    { name = "fastapi" },
     { name = "flashrank" },
     { name = "ollama" },
     { name = "pdfplumber" },
@@ -423,6 +424,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "pystemmer" },
     { name = "streamlit" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
@@ -440,6 +442,7 @@ requires-dist = [
     { name = "bm25s", specifier = ">=0.2.6" },
     { name = "chromadb", specifier = ">=0.5.20" },
     { name = "docling", specifier = ">=2.15.0" },
+    { name = "fastapi", specifier = ">=0.115.0" },
     { name = "flashrank", specifier = ">=0.2.9" },
     { name = "ollama", specifier = ">=0.4.7" },
     { name = "pdfplumber", specifier = ">=0.11.4" },
@@ -448,6 +451,7 @@ requires-dist = [
     { name = "pypdf", specifier = ">=5.1.0" },
     { name = "pystemmer", specifier = ">=2.2.0.1" },
     { name = "streamlit", specifier = ">=1.40.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -730,6 +734,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/cd/bfa4f0a397c4d34f5b6c8e7ac02832f9be5679a1f0c9a7642f2338e85a4e/faker-40.32.0.tar.gz", hash = "sha256:78271bfa3a0e982f1b90e1345b2b8f4a04a132864e0372262074e60c2cddd4ef", size = 2024472, upload-time = "2026-07-20T21:40:12.278Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/d1/2df16a41d5e3521442ac8713d0488235d54bb81a09d4fd1159e6dd7f3a41/faker-40.32.0-py3-none-any.whl", hash = "sha256:2fd913ad02dabbea84d729937db68f9ca9773dce93cec45f1fd6fe0fd1b41840", size = 2062161, upload-time = "2026-07-20T21:40:10.436Z" },
+]
+
+[[package]]
+name = "fastapi"
+version = "0.139.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "annotated-doc" },
+    { name = "pydantic" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cd/95/d3f0ae10836324a2eab98a52b61210ac609f08200bf4bb0dc8132d32f78a/fastapi-0.139.2.tar.gz", hash = "sha256:333145a6891e9b5b3cfceb69baf817e8240cde4d4588ae5a10bf56ffacb6255e", size = 423428, upload-time = "2026-07-16T15:06:17.912Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5f/c7/cb03251d9dfb177246a9809a76f189d21df32dbd4a845951881d11323b7f/fastapi-0.139.2-py3-none-any.whl", hash = "sha256:b9ad015a835173d59865e2f5d8296fbc2b317bf56a2ba1a5bfbdd03de2fd4b1c", size = 130234, upload-time = "2026-07-16T15:06:19.557Z" },
 ]
 
 [[package]]
