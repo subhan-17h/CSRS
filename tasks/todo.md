@@ -4,9 +4,10 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 
 **Status:** Phases 0, 1, and 2 complete and verified, and the Phase 2 checkpoint passes --
 `CSRS.md` §1-6 is demonstrable against the running app. **This is the submittable state.**
-Next: submission documentation (README.md + ENGINEERING.md). Phases 3-5 are deferred as
-extended optimization; the limitations that leaves behind are listed in the checkpoint below
-and must be stated honestly in the README.
+Submission documentation is written: [README.md](../README.md) (install, setup, running,
+adding documents, limitations) and [ENGINEERING.md](../ENGINEERING.md) (the decision
+narrative and the measurements behind it). Phases 3-5 are deferred as extended optimization;
+every limitation that leaves behind is stated plainly in both documents.
 
 ---
 
