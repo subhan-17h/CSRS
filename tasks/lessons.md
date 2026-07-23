@@ -126,3 +126,34 @@ scored but irrelevant retrieval instead of making the result look mysterious.
 **How to apply.** Gate retrieval UI on the array length, not the refusal flag. Pass the
 generation outcome into the disclosure so its collapsed label distinguishes supporting
 sources from retrieved-but-insufficient passages. Keep the empty-array refusal path empty.
+
+---
+
+## L-6 · Quote the repo's rule, don't paraphrase it from memory
+
+**Date:** 2026-07-23 · **Trigger:** an F-1/F-2 brief told Codex "ASCII only in all source
+and documentation." `AGENTS.md:69-70` says the opposite for Markdown.
+
+**Rule.** Before putting a repo convention into a Codex brief, open the file that states
+it and quote it. Do not reconstruct it from CLAUDE.md's summary list, from another
+project's habits, or from memory of an earlier task.
+
+**Why.** CLAUDE.md's delegation section lists applicable constraints in shorthand --
+"surgical changes only, no unrequested abstractions, ASCII, no invented data". That
+shorthand is a *pointer*, not the rule. The actual rule is narrower: "ASCII only in Python
+source. ... **Markdown files may use non-ASCII.**" Over-applying it produced ~110 lines of
+em-dash churn across a graded README, making it the only document inconsistent with
+ROADMAP (726 non-ASCII bytes), RESEARCH (540) and ENGINEERING (213). Codex did exactly
+what it was told; the defect entered at brief-authoring time and cost a full extra
+handoff round-trip.
+
+**How to apply.** A brief that constrains style must cite file and line for each
+constraint, as `AGENTS.md:69-70` rather than "ASCII". If it cannot be cited, it is not yet
+a repo rule and does not belong in the brief. When a constraint has a carve-out, state the
+carve-out too -- a half-quoted rule is what makes an agent over-apply it.
+
+**The pattern this is the second instance of.** [[L-5]] was also a brief asserting a repo
+fact that the source contradicted (that refusals carry no sources, when `Pipeline.ask()`
+always retrieves first). Both were caught in review rather than by the agent, and both
+were cheap to catch and expensive to have shipped. **Review the brief against the code
+before sending it, not just the diff after.**
