@@ -1,0 +1,712 @@
+version: 1
+pairs:
+  - id: exact_id-001
+    category: exact_id
+    question: "What account management activities does AC-2 require?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AC-2
+    provenance: ["NIST.SP.800-53r5.pdf:204"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:204, p.46."
+
+  - id: exact_id-002
+    category: exact_id
+    question: "How does IA-5 say system authenticators must be managed?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: IA-5
+    provenance: ["NIST.SP.800-53r5.pdf:703"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:703, p.165."
+
+  - id: exact_id-003
+    category: exact_id
+    question: "Which network boundary protections are required by SC-7?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: SC-7
+    provenance: ["NIST.SP.800-53r5.pdf:1357"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:1357, p.324."
+
+  - id: exact_id-004
+    category: exact_id
+    question: "What does AU-6 require organizations to do with audit records?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AU-6
+    provenance: ["NIST.SP.800-53r5.pdf:428"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:428, p.97."
+
+  - id: exact_id-005
+    category: exact_id
+    question: "What qualities must a system component inventory have under CM-8?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: CM-8
+    provenance: ["NIST.SP.800-53r5.pdf:578", "NIST.SP.800-53r5.pdf:579"]
+    notes: "Authored from chunks NIST.SP.800-53r5.pdf:578 and :579, pp.134-135."
+
+  - id: exact_id-006
+    category: exact_id
+    question: "Which incident handling capabilities and activities are called for by IR-4?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: IR-4
+    provenance: ["NIST.SP.800-53r5.pdf:765"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:765, p.179."
+
+  - id: exact_id-007
+    category: exact_id
+    question: "What vulnerability monitoring and scanning work is specified by RA-5?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: RA-5
+    provenance: ["NIST.SP.800-53r5.pdf:1128"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:1128, p.269."
+
+  - id: exact_id-008
+    category: exact_id
+    question: "What must be done before disposing of or reusing media under MP-6?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: MP-6
+    provenance: ["NIST.SP.800-53r5.pdf:862"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:862, p.201."
+
+  - id: exact_id-009
+    category: exact_id
+    question: "What inventory outcome is stated by ID.AM-01?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.AM-01
+    provenance: ["NIST.CSWP.29_CSF-2.0.pdf:87"]
+    notes: "Authored from chunk NIST.CSWP.29_CSF-2.0.pdf:87, p.23."
+
+  - id: exact_id-010
+    category: exact_id
+    question: "How does PR.AA-05 address permissions, entitlements, and authorizations?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: PR.AA-05
+    provenance: ["NIST.CSWP.29_CSF-2.0.pdf:116"]
+    notes: "Authored from chunk NIST.CSWP.29_CSF-2.0.pdf:116, p.25."
+
+  - id: exact_id-011
+    category: exact_id
+    question: "What monitoring outcome does DE.CM-01 define?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: DE.CM-01
+    provenance: ["NIST.CSWP.29_CSF-2.0.pdf:140"]
+    notes: "Authored from chunk NIST.CSWP.29_CSF-2.0.pdf:140, p.26."
+
+  - id: exact_id-012
+    category: exact_id
+    question: "When and with whom does RS.MA-01 say to execute the incident response plan?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: RS.MA-01
+    provenance: ["NIST.CSWP.29_CSF-2.0.pdf:154"]
+    notes: "Authored from chunk NIST.CSWP.29_CSF-2.0.pdf:154, p.27."
+
+  - id: paraphrase-001
+    category: paraphrase
+    question: "How should an organization manage user accounts from approval and creation through review, disabling, and removal?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AC-2
+    provenance: ["NIST.SP.800-53r5.pdf:204", "NIST.SP.800-53r5.pdf:205"]
+    notes: "Authored from chunks NIST.SP.800-53r5.pdf:204 and :205, p.46."
+
+  - id: paraphrase-002
+    category: paraphrase
+    question: "How should passwords and other authenticators be issued, protected, refreshed, and revoked?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: IA-5
+    provenance: ["NIST.SP.800-53r5.pdf:703", "NIST.SP.800-53r5.pdf:704"]
+    notes: "Authored from chunks NIST.SP.800-53r5.pdf:703 and :704, p.165."
+
+  - id: paraphrase-003
+    category: paraphrase
+    question: "How should public-facing components and external network connections be separated and controlled?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: SC-7
+    provenance: ["NIST.SP.800-53r5.pdf:1357"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:1357, p.324."
+
+  - id: paraphrase-004
+    category: paraphrase
+    question: "How should audit logs be reviewed and reported when credible information indicates that risk has changed?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AU-6
+    provenance: ["NIST.SP.800-53r5.pdf:428"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:428, p.97."
+
+  - id: paraphrase-005
+    category: paraphrase
+    question: "How should hardware, software, and firmware be inventoried so every component is accountable without duplicate records?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: CM-8
+    provenance: ["NIST.SP.800-53r5.pdf:578", "NIST.SP.800-53r5.pdf:579"]
+    notes: "Authored from chunks NIST.SP.800-53r5.pdf:578 and :579, pp.134-135."
+
+  - id: paraphrase-006
+    category: paraphrase
+    question: "How should an organization discover, analyze, remediate, and share information about system vulnerabilities?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: RA-5
+    provenance: ["NIST.SP.800-53r5.pdf:1128"]
+    notes: "Authored from chunk NIST.SP.800-53r5.pdf:1128, p.269."
+
+  - id: paraphrase-007
+    category: paraphrase
+    question: "Which factors should be used to decide which assets matter most to the mission?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.AM-05
+    provenance: ["NIST.CSWP.29_CSF-2.0.pdf:91"]
+    notes: "Authored from chunk NIST.CSWP.29_CSF-2.0.pdf:91, p.23."
+
+  - id: paraphrase-008
+    category: paraphrase
+    question: "What coding practices keep untrusted input from becoming part of commands or queries?"
+    expected:
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "keeping data separate from commands and queries"
+    provenance: ["OWASP_Top_10_2021.txt:66"]
+    notes: "Authored from answer-bearing chunk OWASP_Top_10_2021.txt:66 (TXT; no page)."
+
+  - id: paraphrase-009
+    category: paraphrase
+    question: "How should a web application defend against credential stuffing, brute-force logins, and stolen credential reuse?"
+    expected:
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "automated credential stuffing, brute force, and stolen credential"
+    provenance: ["OWASP_Top_10_2021.txt:108"]
+    notes: "Authored from answer-bearing chunk OWASP_Top_10_2021.txt:108 (TXT; no page)."
+
+  - id: paraphrase-010
+    category: paraphrase
+    question: "How should an organization establish its cybersecurity risk strategy, policies, roles, and oversight?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 8
+        text_contains: "GOVERN (GV) -The organization's cybersecurity risk management strategy"
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 21
+        text_contains: "GOVERN (GV): The organization's cybersecurity risk management strategy"
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: GV.RM
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: GV.RR
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: GV.PO
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: GV.OV
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "GOVERN"
+        page: 5
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Understand and assess specific cybersecurity needs."
+        page: 5
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Develop and communicate organizational"
+        page: 5
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Implement continuous oversight and checkpoints."
+        page: 5
+    provenance:
+      - NIST.CSWP.29_CSF-2.0.pdf:18
+      - NIST.CSWP.29_CSF-2.0.pdf:47
+      - NIST.CSWP.29_CSF-2.0.pdf:54
+      - NIST.CSWP.29_CSF-2.0.pdf:62
+      - NIST.CSWP.29_CSF-2.0.pdf:67
+      - NIST.CSWP.29_CSF-2.0.pdf:70
+      - NIST.SP.1299.pdf:12
+      - NIST.SP.1299.pdf:13
+      - NIST.SP.1299.pdf:14
+      - NIST.SP.1299.pdf:15
+    notes: "Authored from NIST.CSWP.29_CSF-2.0.pdf:18, p.8, and :47, :54, :62, :67, and :70, p.21; and NIST.SP.1299.pdf:12-15, p.5."
+
+  - id: paraphrase-011
+    category: paraphrase
+    question: "Which safeguards are recommended for access, staff training, device protection, sensitive data, software, and backups?"
+    expected:
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "PROTECT"
+        page: 6
+    provenance: ["NIST.SP.1299.pdf:21", "NIST.SP.1299.pdf:22"]
+    notes: "Authored from chunks NIST.SP.1299.pdf:21 and :22, p.6."
+
+  - id: paraphrase-012
+    category: paraphrase
+    question: "How should networks, systems, facilities, and logs be monitored so adverse events can be analyzed and reported?"
+    expected:
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "DETECT"
+        page: 6
+    provenance: ["NIST.SP.1299.pdf:23"]
+    notes: "Authored from chunk NIST.SP.1299.pdf:23, p.6."
+
+  - id: cross_document-001
+    category: cross_document
+    question: "How should an organization maintain inventories of hardware, software, services, and system components?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: CM-8
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.AM-01
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.AM-02
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.AM-04
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Identify critical business processes and assets."
+        page: 5
+    provenance:
+      - NIST.SP.800-53r5.pdf:578
+      - NIST.SP.800-53r5.pdf:579
+      - NIST.CSWP.29_CSF-2.0.pdf:87
+      - NIST.CSWP.29_CSF-2.0.pdf:88
+      - NIST.CSWP.29_CSF-2.0.pdf:90
+      - NIST.SP.1299.pdf:17
+    notes: "Authored from NIST.SP.800-53r5.pdf:578-579, pp.134-135; NIST.CSWP.29_CSF-2.0.pdf:87-88 and :90, p.23; and NIST.SP.1299.pdf:17, p.5."
+
+  - id: cross_document-002
+    category: cross_document
+    question: "How should an organization execute and continually improve its response to a declared cybersecurity incident?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: IR-4
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: RS.MA-01
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.IM-04
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Execute an incident response plan once an incident is declared"
+        page: 7
+      - doc_name: NIST.SP.1299.pdf
+        text_contains: "inform updated and future response plans"
+    provenance:
+      - NIST.SP.800-53r5.pdf:765
+      - NIST.CSWP.29_CSF-2.0.pdf:109
+      - NIST.CSWP.29_CSF-2.0.pdf:154
+      - NIST.SP.1299.pdf:26
+      - NIST.SP.1299.pdf:27
+    notes: "Authored from NIST.SP.800-53r5.pdf:765, p.179; NIST.CSWP.29_CSF-2.0.pdf:109, p.24, and :154, p.27; and NIST.SP.1299.pdf:26-27, p.7."
+
+  - id: cross_document-003
+    category: cross_document
+    question: "How should systems keep users and processes from acting outside approved permissions?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AC-3
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AC-6
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: PR.AA-05
+      - doc_name: NIST.SP.1299.pdf
+        text_contains: "ensure users only have access to necessary resources"
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Access control enforces policy such that users cannot act outside of"
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Access control is only effective in trusted server-side code"
+    provenance:
+      - NIST.SP.800-53r5.pdf:219
+      - NIST.SP.800-53r5.pdf:277
+      - NIST.CSWP.29_CSF-2.0.pdf:116
+      - NIST.SP.1299.pdf:21
+      - OWASP_Top_10_2021.txt:43
+      - OWASP_Top_10_2021.txt:44
+    notes: "Authored from NIST.SP.800-53r5.pdf:219, p.50, and :277, p.63; NIST.CSWP.29_CSF-2.0.pdf:116, p.25; NIST.SP.1299.pdf:21, p.6; and answer-bearing OWASP_Top_10_2021.txt:43-44 (TXT; no page)."
+
+  - id: cross_document-004
+    category: cross_document
+    question: "How do the standards strengthen authentication against stolen credentials and automated login attacks?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: IA-2
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AC-7
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "automated credential stuffing, brute force, and stolen credential"
+    provenance:
+      - NIST.SP.800-53r5.pdf:677
+      - NIST.SP.800-53r5.pdf:680
+      - NIST.SP.800-53r5.pdf:682
+      - NIST.SP.800-53r5.pdf:289
+      - NIST.SP.800-53r5.pdf:290
+      - OWASP_Top_10_2021.txt:108
+    notes: "Authored from NIST.SP.800-53r5.pdf:677 and :680, p.159, :682, p.160, and :289-290, p.66; and answer-bearing OWASP_Top_10_2021.txt:108 (TXT; no page)."
+
+  - id: cross_document-005
+    category: cross_document
+    question: "What should organizations log, and how should those records be monitored and reviewed for suspicious activity?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AU-2
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: AU-6
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: SI-4
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: PR.PS-04
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Auditable events, such as logins, failed logins, and high-value"
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "DevSecOps teams should establish effective monitoring and alerting"
+      - doc_name: NIST.SP.1299.pdf
+        text_contains: "Configure systems and services to generate log records"
+      - doc_name: NIST.SP.1299.pdf
+        text_contains: "Collect log information from multiple organizational sources"
+    provenance:
+      - NIST.SP.800-53r5.pdf:412
+      - NIST.SP.800-53r5.pdf:413
+      - NIST.SP.800-53r5.pdf:428
+      - NIST.SP.800-53r5.pdf:1527
+      - NIST.SP.800-53r5.pdf:1528
+      - NIST.CSWP.29_CSF-2.0.pdf:130
+      - OWASP_Top_10_2021.txt:124
+      - OWASP_Top_10_2021.txt:125
+      - NIST.SP.1299.pdf:21
+      - NIST.SP.1299.pdf:23
+    notes: "Authored from NIST.SP.800-53r5.pdf:412-413, p.93, :428, p.97, and :1527-1528, p.364; NIST.CSWP.29_CSF-2.0.pdf:130, p.25; OWASP_Top_10_2021.txt:124-125 (TXT; no page); and NIST.SP.1299.pdf:21 and :23, p.6."
+
+  - id: cross_document-006
+    category: cross_document
+    question: "How should organizations identify vulnerable or outdated technology and drive its remediation?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: RA-5
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: SI-2
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.RA-01
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: PR.PS-02
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: PR.PS-03
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "software is vulnerable, unsupported, or out of date"
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Continuously inventory the versions of both client-side and"
+      - doc_name: NIST.SP.1299.pdf
+        text_contains: "Replace end-of-life software with supported versions"
+    provenance:
+      - NIST.SP.800-53r5.pdf:1128
+      - NIST.SP.800-53r5.pdf:1511
+      - NIST.CSWP.29_CSF-2.0.pdf:95
+      - NIST.CSWP.29_CSF-2.0.pdf:128
+      - NIST.CSWP.29_CSF-2.0.pdf:129
+      - OWASP_Top_10_2021.txt:99
+      - OWASP_Top_10_2021.txt:100
+      - NIST.SP.1299.pdf:21
+      - NIST.SP.1299.pdf:22
+    notes: "Authored from NIST.SP.800-53r5.pdf:1128, p.269, and :1511, p.360; NIST.CSWP.29_CSF-2.0.pdf:95, p.23, and :128-129, p.25; OWASP_Top_10_2021.txt:99-100 (TXT; no page); and NIST.SP.1299.pdf:21-22, p.6."
+
+  - id: cross_document-007
+    category: cross_document
+    question: "How can organizations verify software and data integrity and prevent unauthorized changes?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: SI-7
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: SA-10
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.RA-09
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Use digital signatures or similar mechanisms to verify the software"
+      - doc_name: NIST.SP.1299.pdf
+        text_contains: "integrity checking so only approved changes are made to data"
+    provenance:
+      - NIST.SP.800-53r5.pdf:1267
+      - NIST.SP.800-53r5.pdf:1268
+      - NIST.SP.800-53r5.pdf:1561
+      - NIST.SP.800-53r5.pdf:1562
+      - NIST.SP.800-53r5.pdf:1564
+      - NIST.SP.800-53r5.pdf:1565
+      - NIST.SP.800-53r5.pdf:1566
+      - NIST.SP.800-53r5.pdf:1567
+      - NIST.SP.800-53r5.pdf:1568
+      - NIST.SP.800-53r5.pdf:1569
+      - NIST.SP.800-53r5.pdf:1571
+      - NIST.CSWP.29_CSF-2.0.pdf:103
+      - OWASP_Top_10_2021.txt:117
+      - NIST.SP.1299.pdf:21
+    notes: "Authored from NIST.SP.800-53r5.pdf:1267-1268, p.301, and :1561-1562, p.372, :1564-1565, p.373, :1566-1569, pp.374-375, and :1571, p.375; NIST.CSWP.29_CSF-2.0.pdf:103, p.24; OWASP_Top_10_2021.txt:117 (TXT; no page); and NIST.SP.1299.pdf:21, p.6."
+
+  - id: cross_document-008
+    category: cross_document
+    question: "How should recovery progress and lessons learned be communicated to internal and external stakeholders?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: RC.CO-03
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Communicate with internal and external stakeholders."
+        page: 7
+    provenance: ["NIST.CSWP.29_CSF-2.0.pdf:179", "NIST.SP.1299.pdf:29"]
+    notes: "Authored from NIST.CSWP.29_CSF-2.0.pdf:179, p.28, and NIST.SP.1299.pdf:29, p.7."
+
+  - id: out_of_scope-001
+    category: out_of_scope
+    question: "What is the capital of France?"
+    expected: []
+    must_refuse: true
+    notes: "No source chunk or page: nothing in the four-document cybersecurity corpus addresses world capitals."
+
+  - id: out_of_scope-002
+    category: out_of_scope
+    question: "How do I bake chewy chocolate chip cookies?"
+    expected: []
+    must_refuse: true
+    notes: "No source chunk or page: nothing in the four-document cybersecurity corpus contains recipes."
+
+  - id: out_of_scope-003
+    category: out_of_scope
+    question: "When is a football player offside?"
+    expected: []
+    must_refuse: true
+    notes: "No source chunk or page: nothing in the four-document cybersecurity corpus states football rules."
+
+  - id: out_of_scope-004
+    category: out_of_scope
+    question: "What will the weather in Karachi be tomorrow?"
+    expected: []
+    must_refuse: true
+    notes: "No source chunk or page: the static cybersecurity corpus contains no weather forecasts."
+
+  - id: out_of_scope-005
+    category: out_of_scope
+    question: "Which planet has the most moons?"
+    expected: []
+    must_refuse: true
+    notes: "No source chunk or page: nothing in the four-document cybersecurity corpus addresses astronomy."
+
+  - id: out_of_scope-006
+    category: out_of_scope
+    question: "Which ISO/IEC 27001:2022 clause governs provisioning and revoking user access?"
+    expected: []
+    must_refuse: true
+    notes: "No ISO source chunk or page: ISO/IEC 27001 is absent. NIST.SP.800-53r5.pdf:204, p.46, was read only as a negative control and is not ISO evidence."
+
+  - id: out_of_scope-007
+    category: out_of_scope
+    question: "What does the ISO 27001:2022 statement of applicability have to contain?"
+    expected: []
+    must_refuse: true
+    notes: "No source chunk or page: ISO/IEC 27001 is deliberately absent from the indexed corpus."
+
+  - id: out_of_scope-008
+    category: out_of_scope
+    question: "Which safeguards does CIS Control 4 prescribe for secure configuration of enterprise assets and software?"
+    expected: []
+    must_refuse: true
+    notes: "No CIS source chunk or page: CIS Controls is absent. NIST.SP.800-53r5.pdf:578, p.134, was read only as a negative control and is not CIS evidence."
+
+  - id: out_of_scope-009
+    category: out_of_scope
+    question: "What safeguards are included in CIS Control 6 for access control management?"
+    expected: []
+    must_refuse: true
+    notes: "No CIS source chunk or page: CIS Controls is deliberately absent. NIST.CSWP.29_CSF-2.0.pdf:116, p.25, is not CIS evidence."
+
+  - id: out_of_scope-010
+    category: out_of_scope
+    question: "How often does CIS Controls v8.1 require an enterprise asset inventory to be reviewed?"
+    expected: []
+    must_refuse: true
+    notes: "No CIS source chunk or page: CIS Controls v8.1 is absent. NIST.CSWP.29_CSF-2.0.pdf:87, p.23, was read only as a negative control."
+
+  - id: spec_example-001
+    category: spec_example
+    question: "What are the functions of the NIST Cybersecurity Framework?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "2. Introduction to the CSF Core"
+        page: 8
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "2. Introduction to the CSF Core"
+        page: 9
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "2. Introduction to the CSF Core"
+        page: 10
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "Appendix A. CSF Core"
+        page: 20
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "CSF Function"
+        page: 31
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "WHAT IS THE CSF 2.0"
+        page: 2
+    provenance:
+      - NIST.CSWP.29_CSF-2.0.pdf:17
+      - NIST.CSWP.29_CSF-2.0.pdf:18
+      - NIST.CSWP.29_CSF-2.0.pdf:19
+      - NIST.CSWP.29_CSF-2.0.pdf:20
+      - NIST.CSWP.29_CSF-2.0.pdf:21
+      - NIST.CSWP.29_CSF-2.0.pdf:22
+      - NIST.CSWP.29_CSF-2.0.pdf:44
+      - NIST.CSWP.29_CSF-2.0.pdf:45
+      - NIST.CSWP.29_CSF-2.0.pdf:46
+      - NIST.CSWP.29_CSF-2.0.pdf:198
+      - NIST.SP.1299.pdf:2
+    notes: "Authored from NIST.CSWP.29_CSF-2.0.pdf:17-22, pp.8-10, :44-46, p.20, and :198, p.31; and NIST.SP.1299.pdf:2, p.2."
+
+  - id: spec_example-002
+    category: spec_example
+    question: "Explain the Identify function."
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 8
+        text_contains: "organization's current cybersecurity risks are understood"
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 9
+        text_contains: "improvement opportunities for the organization's policies"
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 23
+        text_contains: "## IDENTIFY (ID): The organization's current cybersecurity risks are understood"
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.AM
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.RA
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        control_id: ID.IM
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "NIST.SP.1299.pdf > IDENTIFY"
+        page: 5
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Identify critical business processes and assets."
+        page: 5
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Identify threats, vulnerabilities, and risk to assets."
+        page: 5
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Lessons learned are used to identify improvements."
+        page: 5
+    provenance:
+      - NIST.CSWP.29_CSF-2.0.pdf:18
+      - NIST.CSWP.29_CSF-2.0.pdf:19
+      - NIST.CSWP.29_CSF-2.0.pdf:85
+      - NIST.CSWP.29_CSF-2.0.pdf:86
+      - NIST.CSWP.29_CSF-2.0.pdf:94
+      - NIST.CSWP.29_CSF-2.0.pdf:105
+      - NIST.SP.1299.pdf:16
+      - NIST.SP.1299.pdf:17
+      - NIST.SP.1299.pdf:18
+      - NIST.SP.1299.pdf:19
+    notes: "Authored from NIST.CSWP.29_CSF-2.0.pdf:18-19, pp.8-9, :85-86, :94, and :105, pp.23-24; and NIST.SP.1299.pdf:16-19, p.5. SI-19 was inspected and excluded."
+
+  - id: spec_example-003
+    category: spec_example
+    question: "What does ISO 27001 require for access control?"
+    expected: []
+    must_refuse: true
+    provenance: []
+    notes: "No ISO source chunk or page: ISO/IEC 27001 is absent. NIST.SP.800-53r5.pdf:219, p.50, and NIST.CSWP.29_CSF-2.0.pdf:116, p.25, are not ISO evidence."
+
+  - id: spec_example-004
+    category: spec_example
+    question: "How is Incident Response handled?"
+    expected:
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: IR-4
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "RS.MA Incident Management"
+        page: 27
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "RS.AN Incident Analysis"
+        page: 27
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "RS.CO Incident Response Reporting and Communication"
+        page: 27
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 27
+        text_contains: "Activities are performed to prevent expansion of an event and mitigate its effects"
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 27
+        text_contains: "RS.MI-01: Incidents are contained"
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        page: 27
+        text_contains: "RS.MI-02: Incidents are eradicated"
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "NIST.SP.1299.pdf > RESPOND"
+        page: 7
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Execute an incident response plan once an incident is declared"
+        page: 7
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Collect incident data and preserve its integrity and"
+        page: 7
+    provenance:
+      - NIST.SP.800-53r5.pdf:765
+      - NIST.CSWP.29_CSF-2.0.pdf:153
+      - NIST.CSWP.29_CSF-2.0.pdf:154
+      - NIST.CSWP.29_CSF-2.0.pdf:155
+      - NIST.CSWP.29_CSF-2.0.pdf:156
+      - NIST.CSWP.29_CSF-2.0.pdf:157
+      - NIST.CSWP.29_CSF-2.0.pdf:158
+      - NIST.CSWP.29_CSF-2.0.pdf:159
+      - NIST.CSWP.29_CSF-2.0.pdf:160
+      - NIST.CSWP.29_CSF-2.0.pdf:161
+      - NIST.CSWP.29_CSF-2.0.pdf:162
+      - NIST.CSWP.29_CSF-2.0.pdf:163
+      - NIST.CSWP.29_CSF-2.0.pdf:164
+      - NIST.CSWP.29_CSF-2.0.pdf:165
+      - NIST.CSWP.29_CSF-2.0.pdf:166
+      - NIST.CSWP.29_CSF-2.0.pdf:167
+      - NIST.CSWP.29_CSF-2.0.pdf:168
+      - NIST.CSWP.29_CSF-2.0.pdf:169
+      - NIST.SP.1299.pdf:25
+      - NIST.SP.1299.pdf:26
+      - NIST.SP.1299.pdf:27
+    notes: "Authored from NIST.SP.800-53r5.pdf:765, p.179; NIST.CSWP.29_CSF-2.0.pdf:153-169, p.27; and NIST.SP.1299.pdf:25-27, p.7."
+
+  - id: spec_example-005
+    category: spec_example
+    question: "What are the requirements for Asset Management?"
+    expected:
+      - doc_name: NIST.CSWP.29_CSF-2.0.pdf
+        section_contains: "ID.AM Asset Management"
+        page: 23
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: CM-8
+      - doc_name: NIST.SP.800-53r5.pdf
+        control_id: PM-5
+      - doc_name: NIST.SP.1299.pdf
+        section_contains: "Identify critical business processes and assets."
+        page: 5
+    provenance:
+      - NIST.CSWP.29_CSF-2.0.pdf:86
+      - NIST.CSWP.29_CSF-2.0.pdf:87
+      - NIST.CSWP.29_CSF-2.0.pdf:88
+      - NIST.CSWP.29_CSF-2.0.pdf:89
+      - NIST.CSWP.29_CSF-2.0.pdf:90
+      - NIST.CSWP.29_CSF-2.0.pdf:91
+      - NIST.CSWP.29_CSF-2.0.pdf:92
+      - NIST.CSWP.29_CSF-2.0.pdf:93
+      - NIST.SP.800-53r5.pdf:578
+      - NIST.SP.800-53r5.pdf:579
+      - NIST.SP.800-53r5.pdf:985
+      - NIST.SP.1299.pdf:17
+    notes: "Authored from NIST.CSWP.29_CSF-2.0.pdf:86-93, p.23; NIST.SP.800-53r5.pdf:578-579, pp.134-135, and :985, p.233; and NIST.SP.1299.pdf:17, p.5."
+
+  - id: spec_example-006
+    category: spec_example
+    question: "How can web applications prevent server-side request forgery?"
+    expected:
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Segment remote resource access functionality in separate networks"
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Enforce the URL schema, port, and destination with a positive allow"
+      - doc_name: OWASP_Top_10_2021.txt
+        text_contains: "Don't deploy other security relevant services on front systems"
+    provenance:
+      - OWASP_Top_10_2021.txt:134
+      - OWASP_Top_10_2021.txt:135
+      - OWASP_Top_10_2021.txt:136
+    notes: "Authored from answer-bearing chunks OWASP_Top_10_2021.txt:134-136 (TXT; no page)."

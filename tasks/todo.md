@@ -800,9 +800,22 @@ working tree clean.
 
 ---
 
+## Phase 3 — Retrieval quality
+
+- [x] **T-3.1** Golden set
+  - [x] Read indexed chunks across all four documents and record auditable provenance.
+  - [x] Author 48 exact-ID, paraphrase, cross-document, refusal, and spec-example pairs.
+  - [x] Validate every matcher against the live store and run repository verification.
+  - **Verified:** all 48 pairs and every matcher validate against 4 documents / 2506 chunks;
+    category counts are 12 exact-ID, 12 paraphrase, 8 cross-document, 10 out-of-scope,
+    and 6 spec examples. Ruff passes and 133 offline tests pass with 1 deselected against
+    a dead Ollama port.
+
+---
+
 ## Phase 7 — React frontend + FastAPI layer
 
-Phases 3-5 stay deferred. This phase adds a second interface without changing what the
+Phases 4-5 stay deferred. This phase adds a second interface without changing what the
 RAG pipeline does. `src/csrs/app.py` (Streamlit) is **untouched** and remains the
 spec-§5 graded interface, so the Phase 2 checkpoint evidence above stays valid.
 
