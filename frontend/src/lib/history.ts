@@ -182,7 +182,7 @@ export function load(storage: HistoryStorage | null = defaultStorage()): Convers
     const conversationIds = new Set<string>();
     for (const conversationValue of value.conversations) {
       const conversation = parseConversation(conversationValue);
-      if (!conversation || conversationIds.has(conversation.id)) return [];
+      if (!conversation || conversationIds.has(conversation.id)) continue;
       conversationIds.add(conversation.id);
       conversations.push(conversation);
     }
