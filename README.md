@@ -199,6 +199,82 @@ buttons. Another port: `--server.port 8502`.
 Both interfaces read the same index, so you can run them at once. Only trigger a **rebuild**
 from one of them at a time.
 
+### Stopping and restarting
+
+**The daemons are cheap; loaded models use the memory.** Ollama normally keeps a model
+loaded for five minutes after a query, and CSRS extends that to 30 minutes for the answer
+model through `CSRS_KEEP_ALIVE`. Model weights consume gigabytes; the idle processes only
+consume tens of megabytes:
+
+| Process | Role | Idle resident memory |
+|---|---|---:|
+| `ollama serve` | Local model server, running as a Homebrew service | ~20 MB |
+| `csrs-api` | FastAPI backend and built Web UI | ~21 MB |
+| `vite` | Frontend dev server, only during frontend work | ~50 MB |
+
+So unloading the model weights is usually more useful than shutting down the server:
+
+```bash
+ollama ps                 # show the models resident in memory
+ollama stop <model-name>  # unload one model
+```
+
+To stop everything:
+
+```bash
+pkill -f 'csrs-api'
+pkill -f 'frontend/node_modules/.bin/vite'
+pkill -f 'streamlit run src/csrs/app.py'
+brew services stop ollama
+```
+
+Ctrl-C in the terminal that owns `csrs-api`, Vite, or Streamlit works too. If the development
+backend shown above is running instead of `csrs-api`, use Ctrl-C in its terminal or run
+`pkill -f 'uvicorn csrs.api.app:app'`. Ollama is a Homebrew service, so it restarts at login
+unless it is stopped with `brew services stop ollama`.
+
+Check the four application ports:
+
+```bash
+lsof -nP -iTCP:8000 -iTCP:5173 -iTCP:8501 -iTCP:11434 -sTCP:LISTEN
+```
+
+No output means everything is down. To bring it back, run `brew services start ollama`, then
+use the Web UI, frontend development, or Streamlit commands already documented above.
+
+**Stopping these processes does not cost a re-index.** The persistent 35 MB index lives in
+`chroma_db/` — including `chroma.sqlite3`, Chroma's vector index files, and `manifest.json` —
+and survives every process restart. Startup runs an incremental index check, not a full
+rebuild. At `src/csrs/pipeline.py:127`, each file's SHA-256 is compared with the manifest;
+unchanged files are skipped before parsing or embedding. With an unchanged corpus, that
+check takes about 40-80 ms and makes zero embedding calls. See
+[Adding new documents](#adding-new-documents) for how the content hashes work.
+
+Only three things force the roughly 316-second cold rebuild:
+
+1. `POST /api/index/rebuild` or `Pipeline.index(force=True)`, including the
+   **Full Rebuild Documents** button.
+2. Deleting or moving `chroma_db/`.
+3. A disagreement between the store and manifest. The consistency guard at
+   `src/csrs/pipeline.py:111-117` resets and rebuilds when manifest identities are invalid
+   or the stored chunk counts do not match the manifest.
+
+Only the third can happen by accident — kill a process mid-index, after the store and
+manifest have diverged. Processes can be stopped freely whenever an index run is not in
+flight.
+
+One quick sanity check:
+
+```bash
+python3 -c "import json;m=json.load(open('chroma_db/manifest.json'));print(len(m),sum(r['chunk_count'] for r in m.values()))"
+```
+
+For the shipped index, it prints:
+
+```text
+4 2506
+```
+
 ### Try these
 
 Measured against the shipped corpus on a warm index:
