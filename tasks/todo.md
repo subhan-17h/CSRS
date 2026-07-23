@@ -1234,9 +1234,10 @@ phase exists; streaming and the corpus browser are conveniences on top.
 - The bundle grew 156 kB -> 339 kB for `react-markdown`. Fine locally; it is the cost of not
   rendering raw `**` to the user.
 
-**Not verified: appearance.** There is no browser in this environment. Every claim above rests
-on type-checking, contract round-trips and asset resolution -- not on looking at the page.
-**A human should open both UIs once before submission.**
+**Appearance: verified by the user, 2026-07-23.** No browser existed in the agent environment,
+so every claim above rested on type-checking, contract round-trips and asset resolution rather
+than on looking at the page. The user has since opened both UIs (`csrs-api` on :8000 and
+Streamlit on :8501) and confirmed both render correctly. This open question is closed.
 
 **Suite state at phase close:** ruff clean, 133 offline tests pass on a dead Ollama port,
 frontend builds with zero TypeScript errors, all sources ASCII, index intact at 4 documents /
