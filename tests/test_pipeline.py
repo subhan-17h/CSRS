@@ -828,6 +828,7 @@ def test_ask_and_ask_stream_share_retrieve_entry_point(
         )
         return []
 
+    monkeypatch.setattr(settings, "retrieval_mode", "dense")
     monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
     monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
     monkeypatch.setattr(pipeline, "generate_answer", lambda *args: expected)
@@ -891,6 +892,7 @@ def test_ask_uses_configured_defaults_for_k_model_and_temperature(
         observed["generation"] = (question, list(chunks), model, temperature)
         return expected
 
+    monkeypatch.setattr(settings, "retrieval_mode", "dense")
     monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
     monkeypatch.setattr(offline_pipeline._store, "search", fake_search)
     monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
@@ -912,7 +914,7 @@ def test_ask_uses_configured_defaults_for_k_model_and_temperature(
     assert settings.rerank_top_n < settings.top_k_dense
 
 
-def test_ask_default_dense_never_touches_sparse_retrieval(
+def test_ask_dense_mode_never_touches_sparse_retrieval(
     monkeypatch: pytest.MonkeyPatch,
     offline_pipeline: pipeline.Pipeline,
     tmp_path: Path,
@@ -936,6 +938,7 @@ def test_ask_default_dense_never_touches_sparse_retrieval(
         searches.append((list(query_embedding), k))
         return []
 
+    monkeypatch.setattr(settings, "retrieval_mode", "dense")
     monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
     monkeypatch.setattr(offline_pipeline._store, "search", fake_search)
     monkeypatch.setattr(offline_pipeline, "sparse_index", fail_sparse)
@@ -945,7 +948,6 @@ def test_ask_default_dense_never_touches_sparse_retrieval(
 
     answer = offline_pipeline.ask("What is access control?")
 
-    assert settings.retrieval_mode == "dense"
     assert answer is expected
     assert searches == [([0.0, 1.0, 0.0], settings.rerank_top_n)]
 
