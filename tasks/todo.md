@@ -813,6 +813,42 @@ working tree clean.
 
 ---
 
+## Submission preparation — interposed before T-3.2
+
+Requested directly by the user and done ahead of the Phase 3 metrics harness, because the
+repository is being shown to the instructor now. Documentation only; no source file changed.
+
+- [x] **S-1** `Submission.md` — the instructor-facing walkthrough
+  - [x] Requirements tables mapping every line of `CSRS.md` §1-6 to its implementing file.
+  - [x] The query path and the index path, step by step, naming the function at each hop.
+  - [x] Component reference, configuration, corpus, and the honest "what isn't built yet".
+  - **Verified:** every cited `file.py:line` opened and checked; corpus figures taken from
+    `chroma_db/manifest.json`; model sizes from `ollama list`; the 133-test count from a
+    re-run of the offline suite. Grepped `src/` for any cloud client — none exists.
+
+- [x] **S-2** Architecture diagram — `assets/architecture.svg`, `assets/architecture.html`
+  - [x] Ingest lane, query lane, the `Pipeline` facade as a boundary, the offline boundary.
+  - [x] Standalone SVG with an opaque ground and no webfont, so GitHub renders it on both
+    themes; HTML twin carries the PNG/PDF export toolbar.
+  - **Verified:** rasterised both and inspected them. No overlapping boxes, no text outside
+    its container, legend clear of every boundary, nothing clipped by the viewBox.
+  - **Note for later:** placed in `assets/`, not `docs/`. `docs/` is the corpus directory
+    scanned by `iter_document_paths`, and `docs/README.md:3` says so.
+
+- [x] **S-3** README pass
+  - [x] Diagram, badge row, `Submission.md` pointer, and `eval/` + `assets/` + `scripts/`
+    added to the project layout tree.
+  - [x] Two stale claims corrected: "96 tests" → 133, and "there is no golden set" → the
+    set exists, the harness does not.
+  - **Verified:** ruff clean, 133 offline tests pass, `validate_golden_set.py` reports
+    "Golden set valid" with 48 pairs.
+
+**Inherited by T-3.6:** the 2506-chunk figure is now asserted in `Submission.md` and
+`assets/architecture.svg` as well as `README.md` and `ENGINEERING.md`. If parent-child
+retrieval ships, all four need updating.
+
+---
+
 ## Phase 7 — React frontend + FastAPI layer
 
 Phases 4-5 stay deferred. This phase adds a second interface without changing what the
