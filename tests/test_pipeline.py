@@ -1,5 +1,6 @@
 """Offline tests for the public Pipeline facade."""
 
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -20,6 +21,28 @@ def fake_document_embeddings(texts: Sequence[str]) -> list[list[float]]:
 def offline_pipeline(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> pipeline.Pipeline:
     monkeypatch.setattr(pipeline, "embed_documents", fake_document_embeddings)
     return pipeline.Pipeline(chroma_path=tmp_path / "chroma")
+
+
+def test_bm25_path_resolution_keeps_custom_chroma_isolated(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    configured_chroma = tmp_path / "configured-chroma"
+    configured_bm25 = tmp_path / "configured-bm25"
+    explicit_bm25 = tmp_path / "explicit-bm25"
+    monkeypatch.setattr(settings, "chroma_dir", configured_chroma)
+    monkeypatch.setattr(settings, "bm25_dir", configured_bm25)
+
+    default_pipeline = pipeline.Pipeline()
+    custom_pipeline = pipeline.Pipeline(chroma_path=tmp_path / "custom-chroma")
+    explicit_pipeline = pipeline.Pipeline(
+        chroma_path=tmp_path / "explicit-chroma",
+        bm25_path=explicit_bm25,
+    )
+
+    assert default_pipeline._bm25_path == configured_bm25
+    assert custom_pipeline._bm25_path == tmp_path / "custom-chroma" / "bm25_index"
+    assert explicit_pipeline._bm25_path == explicit_bm25
 
 
 def test_index_returns_counts_and_exposes_store_summary(
@@ -169,6 +192,7 @@ def test_index_reports_document_progress_for_parse_embed_skip_and_removal(
     assert progress == [
         "Parsing document: standard.txt",
         "Embedding 1 chunk from standard.txt",
+        "Rebuilding the keyword index",
     ]
 
     progress.clear()
@@ -178,7 +202,188 @@ def test_index_reports_document_progress_for_parse_embed_skip_and_removal(
     progress.clear()
     source_path.unlink()
     offline_pipeline.index(docs_dir, on_progress=progress.append)
-    assert progress == ["Removed document: standard.txt"]
+    assert progress == [
+        "Removed document: standard.txt",
+        "Rebuilding the keyword index",
+    ]
+
+
+def test_index_builds_searchable_bm25_under_custom_chroma_path(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text(
+        "Quasar authentication prevents unauthorized access.",
+        encoding="utf-8",
+    )
+
+    offline_pipeline.index(docs_dir)
+
+    assert offline_pipeline._bm25_path == tmp_path / "chroma" / "bm25_index"
+    assert offline_pipeline._bm25_path != settings.bm25_dir
+    sparse_index = pipeline.BM25Index.load(offline_pipeline._bm25_path)
+    standard_ids = {
+        chunk.id
+        for chunk in offline_pipeline._store.all_chunks()
+        if chunk.doc_name == "standard.txt"
+    }
+    assert sparse_index.search("quasar authentication", k=1)[0][0] in standard_ids
+
+
+def test_unchanged_reindex_does_not_rebuild_bm25(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text(
+        "Access control guidance.",
+        encoding="utf-8",
+    )
+    offline_pipeline.index(docs_dir)
+    original_signature = pipeline.BM25Index.load(
+        offline_pipeline._bm25_path
+    ).signature
+    original_build = pipeline.BM25Index.build
+    build_calls = 0
+
+    def record_build(chunks: Sequence[pipeline.Chunk]) -> pipeline.BM25Index:
+        nonlocal build_calls
+        build_calls += 1
+        return original_build(chunks)
+
+    monkeypatch.setattr(pipeline.BM25Index, "build", record_build)
+
+    offline_pipeline.index(docs_dir)
+
+    assert build_calls == 0
+    assert (
+        pipeline.BM25Index.load(offline_pipeline._bm25_path).signature
+        == original_signature
+    )
+
+
+def test_adding_and_removing_documents_updates_bm25_signature(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "first.txt").write_text("First access guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    initial_signature = pipeline.BM25Index.load(
+        offline_pipeline._bm25_path
+    ).signature
+    second_path = docs_dir / "second.txt"
+    second_path.write_text("Second authentication guidance.", encoding="utf-8")
+
+    offline_pipeline.index(docs_dir)
+
+    added_signature = pipeline.BM25Index.load(
+        offline_pipeline._bm25_path
+    ).signature
+    assert added_signature != initial_signature
+
+    second_path.unlink()
+    offline_pipeline.index(docs_dir)
+
+    removed_signature = pipeline.BM25Index.load(
+        offline_pipeline._bm25_path
+    ).signature
+    assert removed_signature != added_signature
+    assert removed_signature == initial_signature
+
+
+def test_sparse_index_builds_when_populated_store_has_no_persisted_index(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text(
+        "Quasar authentication guidance.",
+        encoding="utf-8",
+    )
+    offline_pipeline.index(docs_dir)
+    shutil.rmtree(offline_pipeline._bm25_path)
+
+    sparse_index = offline_pipeline.sparse_index()
+
+    assert offline_pipeline._bm25_path.is_dir()
+    assert sparse_index.search("quasar", k=1)
+
+
+def test_sparse_index_rebuilds_stale_index_only_once(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text(
+        "Quasar authentication guidance.",
+        encoding="utf-8",
+    )
+    offline_pipeline.index(docs_dir)
+    pipeline.BM25Index.build([]).save(offline_pipeline._bm25_path)
+    stale_signature = pipeline.BM25Index.load(
+        offline_pipeline._bm25_path
+    ).signature
+    original_build = pipeline.BM25Index.build
+    build_calls = 0
+
+    def record_build(chunks: Sequence[pipeline.Chunk]) -> pipeline.BM25Index:
+        nonlocal build_calls
+        build_calls += 1
+        return original_build(chunks)
+
+    monkeypatch.setattr(pipeline.BM25Index, "build", record_build)
+
+    rebuilt_index = offline_pipeline.sparse_index()
+    current_index = offline_pipeline.sparse_index()
+
+    assert build_calls == 1
+    assert rebuilt_index.signature != stale_signature
+    assert current_index.signature == rebuilt_index.signature
+
+
+def test_sparse_index_recovers_corrupt_directory(
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text(
+        "Quasar authentication guidance.",
+        encoding="utf-8",
+    )
+    offline_pipeline.index(docs_dir)
+    (offline_pipeline._bm25_path / "metadata.json").write_text(
+        "not json",
+        encoding="utf-8",
+    )
+
+    sparse_index = offline_pipeline.sparse_index()
+
+    assert sparse_index.search("quasar", k=1)
+    assert (
+        pipeline.BM25Index.load(offline_pipeline._bm25_path).signature
+        == sparse_index.signature
+    )
+
+
+def test_sparse_index_handles_empty_store(
+    tmp_path: Path,
+) -> None:
+    subject = pipeline.Pipeline(chroma_path=tmp_path / "empty-chroma")
+
+    sparse_index = subject.sparse_index()
+
+    assert sparse_index.search("anything", k=1) == []
+    assert subject._bm25_path.is_dir()
 
 
 def test_changing_one_files_content_reprocesses_only_that_file(

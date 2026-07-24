@@ -955,6 +955,34 @@ Refusal: recall **8/11**, false-refusal rate **0/37**, overall **45/48**.
   with **T-3.6**, which already re-chunks and rebuilds. Recorded rather than silently
   carried.
 
+- [x] **T-3.3b** Keep the BM25 index in step with the corpus
+  - [x] `Pipeline` gains `bm25_path`, derived from `chroma_path` like `manifest_path`.
+  - [x] `index()` rebuilds the sparse index when `added + updated + removed > 0`.
+  - [x] `sparse_index()` builds on demand when the index is absent, corrupt, or stale.
+  - [x] Eight offline tests over rebuild, staleness, recovery and path isolation.
+  - **Verified:** ruff clean, 185 offline tests pass with 1 deselected on a dead Ollama
+    port, live dense index untouched at 4 documents / 2506 chunks. The live sparse index
+    built through the on-demand path in 0.18 s without re-parsing or re-embedding, and
+    `AC-2` now returns `NIST.SP.800-53r5.pdf:207` — a real AC-2 chunk — at rank 1.
+  - **`bm25_path` is not optional plumbing.** Every existing pipeline test constructs
+    `Pipeline(chroma_path=tmp_path / "chroma")`. Without a derived default, the first test
+    to trigger a rebuild would write into the repo's real `bm25_index/` and tests would
+    quietly corrupt the working index.
+  - **Build-on-demand is required, not speculative.** This machine already has a full
+    `chroma_db/` and no `bm25_index/`, so every document hashes as unchanged, the
+    rebuild-on-change hook never fires, and a change-triggered rebuild alone would leave
+    the sparse index permanently absent on exactly the machine that matters.
+  - **D9 force rebuild deliberately not performed.** The plan expected one. It was not
+    needed: the pipeline tests are fully offline against a `tmp_path` corpus, and the live
+    proof runs through the on-demand path, which reads the existing store without
+    re-parsing. A ~316 s re-parse would have added risk to the live index and proved
+    nothing the offline tests do not. D9 permits force rebuilds where a task requires one;
+    this one does not.
+  - **Carried into T-3.4:** `sparse_index()` costs ~40 ms per call in steady state (35 ms
+    of it `all_chunks()` rescanning 2506 chunks, 8 ms the search itself). Calling it per
+    query, as fusion will, should cache the loaded index and re-check the signature only
+    when `index()` runs. Small against multi-second generation, but free to avoid.
+
 ---
 
 ## Submission preparation — interposed before T-3.2

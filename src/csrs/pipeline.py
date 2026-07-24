@@ -16,6 +16,12 @@ from csrs.generation import (
 )
 from csrs.loaders import get_parser, iter_document_paths
 from csrs.models import Answer, Chunk
+from csrs.retrieval import (
+    BM25Index,
+    BM25IndexCorruptError,
+    BM25IndexNotFoundError,
+    compute_chunk_signature,
+)
 from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
 
 __all__ = ("DocumentSummary", "IndexResult", "ModelAvailability", "Pipeline")
@@ -59,6 +65,7 @@ class Pipeline:
         chroma_path: str | Path | None = None,
         collection_name: str | None = None,
         manifest_path: str | Path | None = None,
+        bm25_path: str | Path | None = None,
     ) -> None:
         resolved_chroma_path = (
             Path(chroma_path) if chroma_path is not None else settings.chroma_dir
@@ -75,6 +82,12 @@ class Pipeline:
             self._manifest_path = resolved_chroma_path / "manifest.json"
         else:
             self._manifest_path = settings.manifest_path
+        if bm25_path is not None:
+            self._bm25_path = Path(bm25_path)
+        elif chroma_path is not None:
+            self._bm25_path = resolved_chroma_path / "bm25_index"
+        else:
+            self._bm25_path = settings.bm25_dir
 
     def index(
         self,
@@ -166,6 +179,11 @@ class Pipeline:
                 on_progress(f"Removed document: {doc_name}")
 
         save_manifest(self._manifest_path, manifest)
+        if added + updated + removed > 0:
+            if on_progress is not None:
+                on_progress("Rebuilding the keyword index")
+            sparse_index = BM25Index.build(self._store.all_chunks())
+            sparse_index.save(self._bm25_path)
 
         return IndexResult(
             documents_indexed=len(manifest),
@@ -175,6 +193,23 @@ class Pipeline:
             skipped=skipped,
             removed=removed,
         )
+
+    def sparse_index(self) -> BM25Index:
+        """Return a persisted sparse index aligned with the current chunk store."""
+        chunks = self._store.all_chunks()
+        try:
+            sparse_index = BM25Index.load(self._bm25_path)
+        except (BM25IndexNotFoundError, BM25IndexCorruptError):
+            sparse_index = None
+        if (
+            sparse_index is not None
+            and sparse_index.signature == compute_chunk_signature(chunks)
+        ):
+            return sparse_index
+
+        sparse_index = BM25Index.build(chunks)
+        sparse_index.save(self._bm25_path)
+        return sparse_index
 
     def ask(
         self,
