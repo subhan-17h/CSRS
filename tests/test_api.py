@@ -48,7 +48,15 @@ class FakePipeline:
             model=settings.default_llm,
             question="What guidance applies?",
         )
-        self.ask_calls: list[tuple[str, int | None, str | None, float | None]] = []
+        self.ask_calls: list[
+            tuple[
+                str,
+                int | None,
+                str | None,
+                float | None,
+                list[tuple[str, str]],
+            ]
+        ] = []
         self.document_chunk_calls: list[tuple[str, int, int]] = []
         self.standard_chunks = [
             Chunk(
@@ -63,7 +71,13 @@ class FakePipeline:
             for index in range(3)
         ]
         self.ask_stream_calls: list[
-            tuple[str, int | None, str | None, float | None]
+            tuple[
+                str,
+                int | None,
+                str | None,
+                float | None,
+                list[tuple[str, str]],
+            ]
         ] = []
         self.stream_tokens = ["Use the documented ", "cybersecurity guidance."]
         self.stream_error_after: int | None = None
@@ -127,8 +141,9 @@ class FakePipeline:
         k: int | None = None,
         model: str | None = None,
         temperature: float | None = None,
+        history: list[tuple[str, str]] | None = None,
     ) -> Answer:
-        self.ask_calls.append((question, k, model, temperature))
+        self.ask_calls.append((question, k, model, temperature, history or []))
         if self.raise_connection_error:
             raise ConnectionError("Ollama is unavailable")
         return self.answer
@@ -139,8 +154,9 @@ class FakePipeline:
         k: int | None = None,
         model: str | None = None,
         temperature: float | None = None,
+        history: list[tuple[str, str]] | None = None,
     ) -> Generator[str, None, Answer]:
-        self.ask_stream_calls.append((question, k, model, temperature))
+        self.ask_stream_calls.append((question, k, model, temperature, history or []))
 
         def tokens() -> Generator[str, None, Answer]:
             for position, token in enumerate(self.stream_tokens, start=1):
@@ -164,6 +180,18 @@ def client(fake_pipeline: FakePipeline) -> Iterator[TestClient]:
     with TestClient(application) as test_client:
         yield test_client
     application.dependency_overrides.clear()
+
+
+def test_chat_request_truncates_history_to_last_two_turns() -> None:
+    request = api_app_module.ChatRequest(
+        question="What guidance applies?",
+        history=[
+            {"question": f"Question {index}", "answer": f"Answer {index}"}
+            for index in range(5)
+        ],
+    )
+
+    assert [turn.question for turn in request.history] == ["Question 3", "Question 4"]
 
 
 def test_health_returns_index_and_ollama_status(client: TestClient) -> None:
@@ -356,6 +384,7 @@ def test_chat_returns_answer_timing_and_txt_source(client: TestClient) -> None:
         "refused": False,
         "model": settings.default_llm,
         "question": "What guidance applies?",
+        "rewritten_question": None,
         "sources": [
             {
                 "doc_name": "guidance.txt",
@@ -412,7 +441,7 @@ def test_chat_forwards_posted_arguments_unchanged(
 
     assert response.status_code == 200
     assert fake_pipeline.ask_calls == [
-        ("  What guidance applies?  ", 20, "qwen2.5:1.5b", 1.25)
+        ("  What guidance applies?  ", 20, "qwen2.5:1.5b", 1.25, [])
     ]
 
 
@@ -423,7 +452,42 @@ def test_chat_forwards_omitted_options_as_none(
     response = client.post("/api/chat", json={"question": "What guidance applies?"})
 
     assert response.status_code == 200
-    assert fake_pipeline.ask_calls == [("What guidance applies?", None, None, None)]
+    assert fake_pipeline.ask_calls == [
+        ("What guidance applies?", None, None, None, [])
+    ]
+
+
+def test_chat_returns_rewritten_question_and_forwards_history(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    rewritten = "What cybersecurity guidance applies?"
+    fake_pipeline.answer = fake_pipeline.answer.model_copy(
+        update={"rewritten_question": rewritten}
+    )
+    history = [
+        {
+            "question": "What topic are we discussing?",
+            "answer": "Cybersecurity guidance.",
+        }
+    ]
+
+    response = client.post(
+        "/api/chat",
+        json={"question": "What applies?", "history": history},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["rewritten_question"] == rewritten
+    assert fake_pipeline.ask_calls == [
+        (
+            "What applies?",
+            None,
+            None,
+            None,
+            [("What topic are we discussing?", "Cybersecurity guidance.")],
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -460,6 +524,10 @@ def test_chat_stream_emits_compact_ordered_ndjson_with_final_response(
     client: TestClient,
     fake_pipeline: FakePipeline,
 ) -> None:
+    rewritten = "What cybersecurity guidance applies?"
+    fake_pipeline.answer = fake_pipeline.answer.model_copy(
+        update={"rewritten_question": rewritten}
+    )
     response = client.post(
         "/api/chat/stream",
         json={
@@ -467,6 +535,12 @@ def test_chat_stream_emits_compact_ordered_ndjson_with_final_response(
             "model": "gemma2:2b",
             "top_k": 3,
             "temperature": 0.8,
+            "history": [
+                {
+                    "question": "What topic are we discussing?",
+                    "answer": "Cybersecurity guidance.",
+                }
+            ],
         },
     )
 
@@ -496,18 +570,26 @@ def test_chat_stream_emits_compact_ordered_ndjson_with_final_response(
     token_events = [event for event in events if event["event"] == "token"]
     assert "".join(event["text"] for event in token_events) == fake_pipeline.answer.text
     assert fake_pipeline.ask_stream_calls == [
-        ("What guidance applies?", 3, "gemma2:2b", 0.8)
+        (
+            "What guidance applies?",
+            3,
+            "gemma2:2b",
+            0.8,
+            [("What topic are we discussing?", "Cybersecurity guidance.")],
+        )
     ]
     assert isinstance(events[0]["ts"], float)
     assert isinstance(events[1]["elapsed_ms"], int)
     assert isinstance(events[5]["elapsed_ms"], int)
     assert isinstance(events[6]["total_ms"], int)
     final_response = events[6]["response"]
+    assert final_response["rewritten_question"] == rewritten
     assert final_response == {
         "answer": "Use the documented cybersecurity guidance.",
         "refused": False,
         "model": settings.default_llm,
         "question": "What guidance applies?",
+        "rewritten_question": rewritten,
         "elapsed_ms": events[6]["total_ms"],
         "sources": [
             {

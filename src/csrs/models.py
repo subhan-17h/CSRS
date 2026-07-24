@@ -67,3 +67,4 @@ class Answer(BaseModel):
     refused: bool = False
     model: str
     question: str
+    rewritten_question: str | None = None

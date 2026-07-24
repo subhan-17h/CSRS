@@ -1,7 +1,7 @@
 """Offline tests for the public Pipeline facade."""
 
 import shutil
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from pathlib import Path
 
 import pytest
@@ -15,6 +15,25 @@ from csrs.store import load_manifest, save_manifest
 
 def fake_document_embeddings(texts: Sequence[str]) -> list[list[float]]:
     return [[1.0, 0.0, 0.0] for _ in texts]
+
+
+def answer_stream(
+    answer: Answer,
+    tokens: Sequence[str] = (),
+) -> Generator[str, None, Answer]:
+    yield from tokens
+    return answer
+
+
+def consume_answer_stream(
+    stream: Generator[str, None, Answer],
+) -> tuple[list[str], Answer]:
+    tokens = []
+    while True:
+        try:
+            tokens.append(next(stream))
+        except StopIteration as completed:
+            return tokens, completed.value
 
 
 @pytest.fixture
@@ -742,8 +761,12 @@ def test_ask_routes_caller_k_through_retrieve_and_returns_answer_unchanged(
         observed["generation"] = (question, list(chunks), model, temperature)
         return expected
 
+    def fake_embed(question: str) -> list[float]:
+        observed["embedded_question"] = question
+        return [0.0, 1.0, 0.0]
+
     monkeypatch.setattr(settings, "retrieval_mode", "hybrid")
-    monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
+    monkeypatch.setattr(pipeline, "embed_query", fake_embed)
     monkeypatch.setattr(offline_pipeline, "sparse_index", lambda: sparse)
     monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
     monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
@@ -755,8 +778,10 @@ def test_ask_routes_caller_k_through_retrieve_and_returns_answer_unchanged(
         temperature=0.8,
     )
 
-    assert answer is expected
+    assert answer == expected
+    assert answer.rewritten_question is None
     assert observed == {
+        "embedded_question": "What is access control?",
         "question": "What is access control?",
         "query_embedding": [0.0, 1.0, 0.0],
         "store": offline_pipeline._store,
@@ -774,6 +799,67 @@ def test_ask_routes_caller_k_through_retrieve_and_returns_answer_unchanged(
         ),
         "generation": ("What is access control?", [], "gemma2:2b", 0.8),
     }
+
+
+def test_ask_with_history_retrieves_rewrite_and_generates_original(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    original = "How is it implemented?"
+    rewritten = "How is access control implemented?"
+    history = [("What is access control?", "It restricts system access.")]
+    observed: dict[str, object] = {}
+    expected = Answer(
+        text="A grounded answer.",
+        sources=[],
+        model=settings.default_llm,
+        question=original,
+    )
+
+    def fake_retrieve(
+        question: str,
+        *args: object,
+        **kwargs: object,
+    ) -> list[RetrievedChunk]:
+        observed["retrieved_question"] = question
+        return []
+
+    def fake_generation(
+        question: str,
+        chunks: Sequence[RetrievedChunk],
+        model: str | None = None,
+        temperature: float | None = None,
+    ) -> Answer:
+        observed["generated_question"] = question
+        return expected
+
+    monkeypatch.setattr(settings, "retrieval_mode", "dense")
+    monkeypatch.setattr(
+        pipeline,
+        "rewrite_query",
+        lambda question, prior, model: rewritten,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "embed_query",
+        lambda question: observed.setdefault("embedded_question", question) and [1.0],
+    )
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
+
+    answer = offline_pipeline.ask(original, history=history)
+
+    assert observed == {
+        "embedded_question": rewritten,
+        "retrieved_question": rewritten,
+        "generated_question": original,
+    }
+    assert answer.rewritten_question == rewritten
 
 
 def test_ask_and_ask_stream_share_retrieve_entry_point(
@@ -835,14 +921,14 @@ def test_ask_and_ask_stream_share_retrieve_entry_point(
     monkeypatch.setattr(
         pipeline,
         "generate_answer_stream",
-        lambda *args: iter(()),
+        lambda *args: answer_stream(expected),
     )
 
     answer = offline_pipeline.ask("What is access control?")
     stream = offline_pipeline.ask_stream("What is access control?")
 
-    assert answer is expected
-    assert list(stream) == []
+    assert answer == expected
+    assert consume_answer_stream(stream) == ([], expected)
     assert len(calls) == 2
     assert calls[0] == calls[1]
     assert calls[0] == (
@@ -860,6 +946,81 @@ def test_ask_and_ask_stream_share_retrieve_entry_point(
         settings.flashrank_model,
         settings.flashrank_cache_dir,
     )
+
+
+@pytest.mark.parametrize(
+    ("history", "search_query", "expected_rewrite"),
+    [
+        (None, "How is it implemented?", None),
+        (
+            [("What is access control?", "It restricts system access.")],
+            "How is access control implemented?",
+            "How is access control implemented?",
+        ),
+    ],
+)
+def test_ask_stream_uses_search_query_and_returns_rewrite(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+    history: Sequence[tuple[str, str]] | None,
+    search_query: str,
+    expected_rewrite: str | None,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    original = "How is it implemented?"
+    observed: dict[str, object] = {}
+    expected = Answer(
+        text="A grounded answer.",
+        sources=[],
+        model=settings.default_llm,
+        question=original,
+    )
+
+    def fake_retrieve(
+        question: str,
+        *args: object,
+        **kwargs: object,
+    ) -> list[RetrievedChunk]:
+        observed["retrieved_question"] = question
+        return []
+
+    def fake_generation_stream(
+        question: str,
+        chunks: Sequence[RetrievedChunk],
+        model: str | None = None,
+        temperature: float | None = None,
+    ) -> Generator[str, None, Answer]:
+        observed["generated_question"] = question
+        return answer_stream(expected, ["Grounded answer."])
+
+    monkeypatch.setattr(settings, "retrieval_mode", "dense")
+    monkeypatch.setattr(
+        pipeline,
+        "rewrite_query",
+        lambda question, prior, model: search_query,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "embed_query",
+        lambda question: observed.setdefault("embedded_question", question) and [1.0],
+    )
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    monkeypatch.setattr(pipeline, "generate_answer_stream", fake_generation_stream)
+
+    stream = offline_pipeline.ask_stream(original, history=history)
+    tokens, answer = consume_answer_stream(stream)
+
+    assert observed == {
+        "embedded_question": search_query,
+        "retrieved_question": search_query,
+        "generated_question": original,
+    }
+    assert tokens == ["Grounded answer."]
+    assert answer.rewritten_question == expected_rewrite
 
 
 def test_ask_uses_configured_defaults_for_k_model_and_temperature(
@@ -899,7 +1060,7 @@ def test_ask_uses_configured_defaults_for_k_model_and_temperature(
 
     answer = offline_pipeline.ask("What is access control?")
 
-    assert answer is expected
+    assert answer == expected
     # Defaults to rerank_top_n, not top_k_dense: with no reranker every retrieved chunk
     # reaches the model, and k=20 fills 92.4% of num_ctx (measured at T-1.7).
     assert observed == {
@@ -948,7 +1109,7 @@ def test_ask_dense_mode_never_touches_sparse_retrieval(
 
     answer = offline_pipeline.ask("What is access control?")
 
-    assert answer is expected
+    assert answer == expected
     assert searches == [([0.0, 1.0, 0.0], settings.rerank_top_n)]
 
 

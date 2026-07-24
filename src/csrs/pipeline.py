@@ -1,7 +1,7 @@
 """Public facade composing the CSRS indexing and question-answering pipeline."""
 
 from collections import Counter
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,6 +13,7 @@ from csrs.generation import (
     generate_answer,
     generate_answer_stream,
     list_installed_models,
+    rewrite_query,
 )
 from csrs.loaders import get_parser, iter_document_paths
 from csrs.models import Answer, Chunk
@@ -56,6 +57,14 @@ class ModelAvailability:
     selectable_models: tuple[str, ...]
     missing_models: tuple[str, ...]
     ollama_reachable: bool
+
+
+def _with_rewritten_question(
+    stream: Generator[str, None, Answer],
+    rewritten_question: str | None,
+) -> Generator[str, None, Answer]:
+    answer = yield from stream
+    return answer.model_copy(update={"rewritten_question": rewritten_question})
 
 
 class Pipeline:
@@ -226,6 +235,7 @@ class Pipeline:
         k: int | None = None,
         model: str | None = None,
         temperature: float | None = None,
+        history: Sequence[tuple[str, str]] | None = None,
     ) -> Answer:
         """Retrieve grounded context and return the generated answer unchanged."""
         selected_model = model if model is not None else settings.default_llm
@@ -243,9 +253,10 @@ class Pipeline:
         selected_temperature = (
             temperature if temperature is not None else settings.temperature
         )
-        query_embedding = embed_query(question)
+        search_query = rewrite_query(question, history or (), selected_model)
+        query_embedding = embed_query(search_query)
         chunks = retrieve(
-            question,
+            search_query,
             query_embedding,
             self._store,
             (
@@ -263,11 +274,18 @@ class Pipeline:
             flashrank_model=settings.flashrank_model,
             flashrank_cache_dir=settings.flashrank_cache_dir,
         )
-        return generate_answer(
+        answer = generate_answer(
             question,
             chunks,
             selected_model,
             selected_temperature,
+        )
+        return answer.model_copy(
+            update={
+                "rewritten_question": (
+                    search_query if search_query != question else None
+                )
+            }
         )
 
     def ask_stream(
@@ -276,6 +294,7 @@ class Pipeline:
         k: int | None = None,
         model: str | None = None,
         temperature: float | None = None,
+        history: Sequence[tuple[str, str]] | None = None,
     ) -> Generator[str, None, Answer]:
         """Retrieve grounded context now and return its lazy answer token stream."""
         selected_model = model if model is not None else settings.default_llm
@@ -292,9 +311,10 @@ class Pipeline:
         selected_temperature = (
             temperature if temperature is not None else settings.temperature
         )
-        query_embedding = embed_query(question)
+        search_query = rewrite_query(question, history or (), selected_model)
+        query_embedding = embed_query(search_query)
         chunks = retrieve(
-            question,
+            search_query,
             query_embedding,
             self._store,
             (
@@ -312,11 +332,15 @@ class Pipeline:
             flashrank_model=settings.flashrank_model,
             flashrank_cache_dir=settings.flashrank_cache_dir,
         )
-        return generate_answer_stream(
-            question,
-            chunks,
-            selected_model,
-            selected_temperature,
+        rewritten_question = search_query if search_query != question else None
+        return _with_rewritten_question(
+            generate_answer_stream(
+                question,
+                chunks,
+                selected_model,
+                selected_temperature,
+            ),
+            rewritten_question,
         )
 
     def model_availability(self) -> ModelAvailability:

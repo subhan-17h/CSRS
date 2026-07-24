@@ -92,6 +92,13 @@ class ModelsResponse(BaseModel):
     default_model: str
 
 
+class ChatTurn(BaseModel):
+    """One completed question and answer supplied as conversational context."""
+
+    question: str
+    answer: str
+
+
 class ChatRequest(BaseModel):
     """Question and optional generation overrides."""
 
@@ -99,6 +106,13 @@ class ChatRequest(BaseModel):
     model: str | None = None
     top_k: int | None = Field(default=None, ge=1, le=20)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    history: list[ChatTurn] = []
+
+    @field_validator("history")
+    @classmethod
+    def keep_last_two_turns(cls, value: list[ChatTurn]) -> list[ChatTurn]:
+        """Bound conversational context while accepting oversized client payloads."""
+        return value[-2:]
 
     @field_validator("model")
     @classmethod
@@ -128,6 +142,7 @@ class ChatResponse(BaseModel):
     refused: bool
     model: str
     question: str
+    rewritten_question: str | None = None
     elapsed_ms: int
     sources: list[SourceResponse]
 
@@ -360,6 +375,9 @@ def create_app() -> FastAPI:
                 k=request.top_k,
                 model=request.model,
                 temperature=request.temperature,
+                history=[
+                    (turn.question, turn.answer) for turn in request.history
+                ],
             )
         except ConnectionError as error:
             raise HTTPException(
@@ -373,6 +391,7 @@ def create_app() -> FastAPI:
             refused=result.refused,
             model=result.model,
             question=result.question,
+            rewritten_question=result.rewritten_question,
             elapsed_ms=elapsed_ms,
             sources=[
                 SourceResponse(
@@ -418,6 +437,9 @@ def create_app() -> FastAPI:
                     k=request.top_k,
                     model=request.model,
                     temperature=request.temperature,
+                    history=[
+                        (turn.question, turn.answer) for turn in request.history
+                    ],
                 )
             except ConnectionError:
                 yield _ndjson(
@@ -481,6 +503,7 @@ def create_app() -> FastAPI:
                 refused=result.refused,
                 model=result.model,
                 question=result.question,
+                rewritten_question=result.rewritten_question,
                 elapsed_ms=total_ms,
                 sources=[
                     SourceResponse(

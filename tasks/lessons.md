@@ -157,3 +157,19 @@ fact that the source contradicted (that refusals carry no sources, when `Pipelin
 always retrieves first). Both were caught in review rather than by the agent, and both
 were cheap to catch and expensive to have shipped. **Review the brief against the code
 before sending it, not just the diff after.**
+
+---
+
+## L-7 · Use native generator delegation before implementing the protocol
+
+**Date:** 2026-07-24 · **Trigger:** T-4.3b introduced a custom generator wrapper with
+manual `send`, `throw`, and `close` forwarding when `yield from` provided the complete
+required behavior.
+
+**Rule.** When wrapping a generator to transform its final return value, use `yield from`
+and transform the delegated result. Do not hand-implement the generator protocol unless
+the task requires behavior that native delegation cannot express.
+
+**Why.** The custom wrapper added roughly 40 lines, another metadata contract, and a
+duck-typed API probe. Native delegation preserves token streaming and correctly forwards
+`send`, `throw`, and `close` while exposing the final `StopIteration.value` directly.
