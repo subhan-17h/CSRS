@@ -98,6 +98,7 @@ class Pipeline:
             self._bm25_path = resolved_chroma_path / "bm25_index"
         else:
             self._bm25_path = settings.bm25_dir
+        self._docs_dir = settings.docs_dir.resolve()
         self._sparse_index: BM25Index | None = None
 
     def index(
@@ -108,7 +109,8 @@ class Pipeline:
         on_progress: Callable[[str], None] | None = None,
     ) -> IndexResult:
         """Incrementally index files whose source bytes changed."""
-        source_dir = docs_dir if docs_dir is not None else settings.docs_dir
+        source_dir = (docs_dir if docs_dir is not None else settings.docs_dir).resolve()
+        self._docs_dir = source_dir
         paths_by_identity = {
             path.relative_to(source_dir).as_posix(): path
             for path in iter_document_paths(source_dir)
@@ -383,6 +385,17 @@ class Pipeline:
             ),
             key=lambda document: document.filename,
         )
+
+    def document_path(self, doc_name: str) -> Path | None:
+        """Return the absolute source path for an indexed document."""
+        manifest = load_manifest(self._manifest_path)
+        for identity in manifest:
+            if Path(identity).name != doc_name:
+                continue
+            docs_dir = self._docs_dir.resolve()
+            path = (docs_dir / identity).resolve()
+            return path if path.is_relative_to(docs_dir) else None
+        return None
 
     def document_chunks(
         self,

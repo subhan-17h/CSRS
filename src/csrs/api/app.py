@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import Response, StreamingResponse
+from starlette.responses import FileResponse, Response, StreamingResponse
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
@@ -154,11 +154,11 @@ class SPAStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as error:
-            normalized_path = path.lstrip("/")
+            request_path = scope["path"].lstrip("/")
             if (
                 error.status_code != 404
-                or normalized_path == "api"
-                or normalized_path.startswith("api/")
+                or request_path == "api"
+                or request_path.startswith("api/")
             ):
                 raise
             return await super().get_response("index.html", scope)
@@ -351,6 +351,39 @@ def create_app() -> FastAPI:
             total=total,
             limit=limit,
             offset=offset,
+        )
+
+    @application.get("/api/documents/{doc_name}/file")
+    def document_file(
+        doc_name: str,
+        pipeline: Annotated[Pipeline, Depends(get_pipeline)],
+    ) -> FileResponse:
+        if doc_name not in {document.filename for document in pipeline.documents()}:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Document '{doc_name}' is not in the index.",
+            )
+        path = pipeline.document_path(doc_name)
+        if path is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Document '{doc_name}' could not be resolved.",
+            )
+        if not path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Document file '{doc_name}' no longer exists.",
+            )
+        media_type = (
+            "application/pdf"
+            if path.suffix.lower() == ".pdf"
+            else "text/plain; charset=utf-8"
+        )
+        return FileResponse(
+            path,
+            media_type=media_type,
+            filename=path.name,
+            content_disposition_type="inline",
         )
 
     @application.get("/api/models", response_model=ModelsResponse)

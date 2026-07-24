@@ -58,6 +58,7 @@ class FakePipeline:
             ]
         ] = []
         self.document_chunk_calls: list[tuple[str, int, int]] = []
+        self.document_paths: dict[str, Path] = {}
         self.standard_chunks = [
             Chunk(
                 id=f"standard.pdf:{index}",
@@ -132,6 +133,9 @@ class FakePipeline:
         chunks = self.standard_chunks if doc_name == "standard.pdf" else []
         return chunks[offset : offset + limit], len(chunks)
 
+    def document_path(self, doc_name: str) -> Path | None:
+        return self.document_paths.get(doc_name)
+
     def chunk_count(self) -> int:
         return 4
 
@@ -169,8 +173,17 @@ class FakePipeline:
 
 
 @pytest.fixture
-def fake_pipeline() -> FakePipeline:
-    return FakePipeline()
+def fake_pipeline(tmp_path: Path) -> FakePipeline:
+    pipeline = FakePipeline()
+    guidance_path = tmp_path / "guidance.txt"
+    guidance_path.write_bytes(b"Cybersecurity guidance from a plain-text document.\r\n")
+    standard_path = tmp_path / "standard.pdf"
+    standard_path.write_bytes(b"%PDF-1.7\nstub document bytes\n%%EOF\n")
+    pipeline.document_paths = {
+        guidance_path.name: guidance_path,
+        standard_path.name: standard_path,
+    }
+    return pipeline
 
 
 @pytest.fixture
@@ -263,6 +276,62 @@ def test_document_chunks_returns_404_for_unknown_document(
         "detail": "Document 'unknown.pdf' is not in the index."
     }
     assert fake_pipeline.document_chunk_calls == []
+
+
+def test_document_file_returns_byte_identical_text(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    path = fake_pipeline.document_paths["guidance.txt"]
+
+    response = client.get("/api/documents/guidance.txt/file")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/plain; charset=utf-8"
+    assert response.content == path.read_bytes()
+
+
+def test_document_file_returns_pdf(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    response = client.get("/api/documents/standard.pdf/file")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+
+
+def test_document_file_returns_404_for_unknown_document(client: TestClient) -> None:
+    response = client.get("/api/documents/unknown.pdf/file")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "doc_name",
+    ["..%2f..%2fpyproject.toml", "../pyproject.toml"],
+)
+def test_document_file_rejects_traversal(
+    client: TestClient,
+    doc_name: str,
+) -> None:
+    response = client.get(f"/api/documents/{doc_name}/file")
+
+    assert response.status_code == 404
+
+
+def test_document_file_returns_404_when_indexed_file_is_missing(
+    client: TestClient,
+    fake_pipeline: FakePipeline,
+) -> None:
+    fake_pipeline.document_paths["guidance.txt"].unlink()
+
+    response = client.get("/api/documents/guidance.txt/file")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Document file 'guidance.txt' no longer exists."
+    }
 
 
 @pytest.mark.parametrize("query", ["limit=0", "limit=201", "offset=-1"])
