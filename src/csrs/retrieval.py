@@ -352,6 +352,9 @@ def retrieve(
     flashrank_cache_dir: Path,
 ) -> list[RetrievedChunk]:
     """Gather dense or hybrid candidates and optionally rerank them."""
+    # top_k_dense and rerank_candidates are candidate-pool sizes; limit reaches generation.
+    # At T-1.7, k=20 filled 92.4% of num_ctx, and Ollama silently truncated instead
+    # of erroring.
     candidate_limit = max(rerank_candidates, limit) if rerank_enabled else limit
     if mode == "hybrid":
         if sparse_index is None:
