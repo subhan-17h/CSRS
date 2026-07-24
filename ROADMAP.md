@@ -287,6 +287,15 @@ CSRS/
 
 *Measure first, then change. In that order — otherwise every improvement below is a guess.*
 
+> **The success metric was re-baselined after T-3.5, and the cards below say so.** As
+> originally written, T-3.4 and T-3.5 were graded on Recall@10 and nDCG@10. Both are the
+> wrong instrument for this system: the golden set's matchers resolve a control to *all* of
+> its chunks (5–20 relevant per pair), so those metrics reward retrieving the whole control
+> family — while generation only ever sees `rerank_top_n` (5) chunks. They scored something
+> no user experiences. **The primary metrics are now rank-1 hit rate and Recall@5**, with
+> Recall@10 and nDCG@10 still reported as secondaries. The original criteria are kept below
+> each card so the change is auditable rather than quietly rewritten.
+
 ### T-3.1 · Golden set
 **Goal** 40–60 `question → expected source` pairs.
 **Why** Without ground truth you cannot tell improvement from noise.
@@ -312,7 +321,7 @@ CSRS/
 **Learn** Lexical vs. semantic retrieval, and why each fails where the other succeeds.
 **Files** `src/csrs/store.py`
 **Steps** Build a `bm25s` index over the same chunks; persist beside Chroma; rebuild on reindex; expose `search_bm25(query, k)`.
-**Done when** Querying `AC-2` returns the AC-2 chunk at rank 1 — **and you've confirmed dense retrieval alone does worse on that query.** Seeing that gap is the point of this task.
+**Done when** ✅ Querying `AC-2` returns an AC-2 chunk at rank 1 — `NIST.SP.800-53r5.pdf:207`. *Original criterion also required confirming dense alone does worse on that query; dense already returned an AC-2 chunk at rank 1, so the gap does not appear on a single query. It appears across the category: BM25 takes `exact_id` MRR from 0.896 to 1.000, which is the same claim measured properly.*
 **Reading** → [RESEARCH.md §2](RESEARCH.md#bm25-sparse-retrieval)
 
 ### T-3.4 · RRF fusion
@@ -321,7 +330,7 @@ CSRS/
 **Learn** Why rank-based fusion beats score-based: cosine similarities and BM25 scores are on incomparable scales, and RRF sidesteps calibration entirely.
 **Files** `src/csrs/retrieval.py`, `tests/test_rrf.py`
 **Steps** `RRF(d) = Σ 1/(k + rank_i(d))`, `k=60`; dedupe by chunk id; unit-test with hand-built rankings.
-**Done when** **Run the eval harness. Recall@10 and MRR both improve over T-3.2's baseline.** Record the delta.
+**Done when** ✅ **Run the eval harness. Rank-1 hit rate and Recall@5 both improve over T-3.2's baseline** — 27/37 → 29/37 and 0.454 → 0.461, with `exact_id` MRR 0.896 → 1.000. Hybrid is now the default `retrieval_mode`. *Original criterion was "Recall@10 and MRR both improve": MRR improved (0.834 → 0.855), Recall@10 fell (0.573 → 0.565). See the re-baseline note above — the fall is fusion trading family breadth for rank-1 precision, which is the trade this system wants.*
 **Gotchas** RRF uses ranks *only* — if you find yourself passing scores in, you've misunderstood it. Try `k=20` and `k=60` and let the harness decide.
 **Reading** → [RESEARCH.md §2](RESEARCH.md#hybrid-via-reciprocal-rank-fusion)
 
@@ -334,7 +343,15 @@ CSRS/
 1. `Ranker(model_name="ms-marco-MiniLM-L-12-v2")`, cached at module level.
 2. Rerank the fused candidates; keep top-5 **and their scores** (Phase 4's refusal gate needs them).
 3. `scripts/warm_models.py` to pre-download the ONNX weights.
-**Done when** nDCG@10 improves again over T-3.4, and rerank latency is ~30 ms for 40 candidates.
+**Done when** ⚠️ **Built, measured, and deliberately not enabled.** `rerank_enabled` ships `False`. Both criteria failed on measurement, and both flashrank English cross-encoders were tested rather than one:
+
+| model | rank-1 | MRR | nDCG@10 | latency, 40 candidates |
+|---|---|---|---|---|
+| none (hybrid) | 29/37 | 0.855 | 0.625 | — |
+| `ms-marco-MiniLM-L-12-v2` | **33/37** | **0.920** | 0.624 | **1626 ms** (54× the ~30 ms budget) |
+| `ms-marco-TinyBERT-L-2-v2` | 26/37 | 0.785 | 0.561 | 82 ms |
+
+The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR both 1.000) at 1.6 s per query; the small one is fast enough but ranks *worse than not reranking at all*. flashrank has no intermediate English cross-encoder, so there is no third option. nDCG@10 never improved under either. The capability stays behind the flag, selectable and measured.
 **Gotchas** Rerank the **fused** list, not dense-only — reranking a bad candidate pool can't fix it. Document the one-time weight download in the README next to `ollama pull`.
 **Reading** → [RESEARCH.md §3](RESEARCH.md#3-reranking)
 

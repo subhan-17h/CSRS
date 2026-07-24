@@ -5,9 +5,9 @@ Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
 **Status:** Phases 0, 1, and 2 complete and verified, and the Phase 2 checkpoint passes --
 `CSRS.md` §1-6 is demonstrable against the running app. **This is the submittable state.**
 Submission documentation is written: [README.md](../README.md) (install, setup, running,
-adding documents, limitations) and [ENGINEERING.md](../ENGINEERING.md) (the decision
-narrative and the measurements behind it). Phases 3-5 are deferred as extended optimization;
-every limitation that leaves behind is stated plainly in both documents.
+adding documents, limitations) and [Submission.md](../project-docs/Submission.md) (the
+requirements walkthrough, the decision narrative, and the measurements behind it). Phase 3
+is now complete as well; every limitation that remains is stated plainly in both documents.
 
 **Phase 7 is also complete:** a FastAPI layer and React frontend now run alongside the
 Streamlit app, which is unchanged. The pipeline was not modified, so the Phase 2 checkpoint
@@ -1071,6 +1071,65 @@ Refusal: recall **8/11**, false-refusal rate **0/37**, overall **45/48**.
   top 20, hybrid rank 12, hybrid+rerank rank 6. It is not a retrieval-tuning problem, which
   is what T-4.3's conversational rewriting was always meant to address.
 
+- [x] **T-3.5b** Re-baseline the phase metric, test the cheap reranker, flip the default.
+      **The phase's conclusion, and the one decision escalated to the user rather than
+      taken autonomously.**
+
+  Three retrieval components in a row had "failed" their done-whens while the system was
+  visibly getting better at the thing it does. That pattern is a signal about the metric,
+  not about the components, so it was put to the user rather than worked around.
+
+  **The mis-specification.** The golden set's matchers resolve a control to *all* of its
+  chunks -- 5 to 20 relevant per pair. Recall@10 and nDCG@10 therefore reward retrieving
+  the whole control family. Generation only ever sees `rerank_top_n` (5) chunks, so those
+  metrics scored something no user experiences, and optimising toward them would have meant
+  optimising for breadth the model never reads. **Primary metrics are now rank-1 hit rate
+  and Recall@5**; Recall@10 and nDCG@10 stay reported as secondaries.
+
+  Per-category, which is what made the call non-obvious -- the handoff into this session
+  predicted re-baselining would flip the default to hybrid, and on the totals alone it
+  barely does (Recall@5 +0.007 is noise over 37 pairs). The category breakdown is the
+  actual evidence:
+
+  | category | n | dense R@5 / rank-1 | hybrid | dense+rr | hybrid+rr |
+  |---|---|---|---|---|---|
+  | exact_id | 12 | 0.613 / 10 | 0.594 / **12** | 0.552 / 11 | 0.567 / **12** |
+  | paraphrase | 12 | 0.546 / 9 | **0.606** / 9 | 0.581 / 10 | 0.569 / **10** |
+  | cross_document | 8 | 0.272 / 6 | 0.288 / 6 | 0.284 / 7 | **0.298 / 8** |
+  | spec_example | 5 | **0.144** / 2 | 0.069 / 2 | 0.048 / **3** | 0.048 / **3** |
+  | TOTAL | 37 | **0.454** / 27 | 0.461 / 29 | 0.435 / 31 | 0.439 / **33** |
+
+  Hybrid's win is `exact_id` rank-1, 10/12 -> 12/12 -- exact control-ID lookup becoming
+  perfect, which is the entire reason BM25 was added -- at no measurable latency cost. Its
+  loss is `spec_example`, and `spec_example` is broken under every configuration (2-3 rank-1
+  of 5, best-case R@5 0.144). That is T-4.3's problem, and pricing it into a retrieval
+  decision would be paying twice for one defect.
+
+  **`retrieval_mode` now defaults to `hybrid`** (commit `f8f75b0`). Verified: the unqualified
+  harness run prints TOTAL 0.461 / 0.565 / 0.710 / 0.855 / 0.625 under `retrieval=hybrid`
+  where it previously printed the dense baseline; ruff clean; 205 offline tests pass; index
+  untouched at 4 documents / 2506 chunks.
+
+  **The cheap reranker was tested, and it is not a trade -- it is worse.** T-3.5 left open
+  whether flashrank's default TinyBERT, roughly 10x smaller, would change the latency
+  calculus. Measured on this hardware, warmed, median of six runs, same protocol as T-3.5:
+
+  | model | 5 | 20 | 40 candidates | rank-1 | MRR | nDCG@10 |
+  |---|---|---|---|---|---|---|
+  | `ms-marco-MiniLM-L-12-v2` | 156 ms | 913 ms | **1855 ms** | 33/37 | 0.920 | 0.624 |
+  | `ms-marco-TinyBERT-L-2-v2` | 9 ms | 43 ms | **82 ms** | 26/37 | 0.785 | 0.561 |
+
+  **22.6x faster and it ranks worse than not reranking at all** (26/37 against plain
+  hybrid's 29/37, MRR 0.785 against 0.855). flashrank's registry has no intermediate English
+  cross-encoder -- `rank-T5-flan` and `rank_zephyr_7b` are both larger, so slower still --
+  which means there is no third option to try. `rerank_enabled` stays `False` on stronger
+  evidence than T-3.5 had: not "the good model is too slow" but "the fast model is not good".
+
+  The MiniLM benchmark was re-run before trusting the comparison, and reproduced T-3.5's
+  profile (156/913/1855 against the recorded 125/717/1626 -- same shape, machine slightly
+  busier). Without that control the TinyBERT numbers would have been a measurement of the
+  laptop rather than of the model.
+
 ---
 
 ## Submission preparation — interposed before T-3.2
@@ -1103,9 +1162,9 @@ repository is being shown to the instructor now. Documentation only; no source f
   - **Verified:** ruff clean, 133 offline tests pass, `validate_golden_set.py` reports
     "Golden set valid" with 48 pairs.
 
-**Inherited by T-3.6:** the 2506-chunk figure is now asserted in `Submission.md` and
-`assets/architecture.svg` as well as `README.md` and `ENGINEERING.md`. If parent-child
-retrieval ships, all four need updating.
+**Inherited by T-3.6:** the 2506-chunk figure is asserted in `project-docs/Submission.md`,
+`assets/architecture.svg` and `README.md`. If parent-child retrieval ships, all three need
+updating.
 
 ---
 

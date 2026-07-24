@@ -41,7 +41,7 @@ web UI was added on top of the finished pipeline; it renders the citations the S
 interface never displayed, which is the main reason it exists.
 
 The reasoning behind each choice — and the measurements that drove it — is in
-[ENGINEERING.md](ENGINEERING.md). The diagram above is also available as a browsable page
+[Submission.md](Submission.md). The diagram above is also available as a browsable page
 with PNG and PDF export: `assets/architecture.html`.
 
 ---
@@ -345,8 +345,10 @@ or a `.env` file, all prefixed `CSRS_`. Copy `.env.example` to `.env` to start.
 
 ```bash
 CSRS_DEFAULT_LLM=qwen2.5:1.5b     # faster, less reliable at staying grounded
+CSRS_RETRIEVAL_MODE=dense         # 'hybrid' (default) fuses BM25 with dense; 'dense' is semantic only
 CSRS_TOP_K_DENSE=20               # retrieval candidate pool
 CSRS_RERANK_TOP_N=5               # chunks that actually reach the model
+CSRS_RERANK_ENABLED=true          # cross-encoder rerank; off by default, see limitations
 CSRS_CHUNK_SIZE=400               # approximate tokens
 CSRS_PDF_PARSER=pypdf             # emergency fallback; see below
 ```
@@ -383,10 +385,40 @@ Full licensing detail is in [docs/README.md](docs/README.md).
 
 ---
 
+## Retrieval quality, measured
+
+Retrieval is **hybrid**: dense cosine search and a BM25 keyword index are run in parallel
+and merged by reciprocal rank fusion. Quality is measured against `eval/golden_set.yaml` —
+48 hand-written question/answer pairs across exact control-ID lookup, semantic paraphrase,
+cross-document, out-of-scope (must refuse), and the specification's own example questions.
+
+```bash
+uv run --group eval python eval/run_eval.py --no-generate
+```
+
+Over the 37 answerable pairs:
+
+| configuration | rank-1 | Recall@5 | Recall@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|
+| dense only | 27/37 | 0.454 | 0.573 | 0.834 | 0.628 |
+| **hybrid — the default** | **29/37** | **0.461** | 0.565 | 0.855 | 0.625 |
+| hybrid + rerank (MiniLM-L-12) | 33/37 | 0.439 | 0.525 | 0.920 | 0.624 |
+
+**Read the first two columns, not the last three.** The golden set resolves a control to
+*all* of its chunks, so Recall@10 and nDCG@10 reward retrieving a whole control family —
+but only 5 chunks ever reach the model. Rank-1 hit rate and Recall@5 are what a user
+experiences. On those, hybrid wins, and its real prize is exact control-ID lookup going
+from 0.896 MRR to a perfect **1.000** — which is what BM25 was added for.
+
+Refusal behaviour is measured on the same set: 8 of 11 out-of-scope questions are correctly
+refused, with **zero** false refusals of answerable ones.
+
+---
+
 ## Known limitations
 
 Stated plainly, because a system that hides its failure modes is harder to trust than one
-that names them. Measurements and analysis are in [ENGINEERING.md](ENGINEERING.md).
+that names them. Measurements and analysis are in [Submission.md](Submission.md).
 
 **No conversational memory.** Each question is answered independently. This has a concrete,
 reproducible cost: *"Explain the Identify function."* — asked cold — retrieves SP 800-53's
@@ -400,13 +432,16 @@ this is exactly what it would fix. **Phrase questions to name the standard.**
 emitting the configured refusal string is recorded as having answered. This under-reports
 refusals; it never causes a wrong answer.
 
-**Retrieval is dense-only, and not yet measured.** Semantic similarity with no BM25 hybrid,
-no reciprocal rank fusion, and no reranker — all planned, none built. The evaluation golden
-set now exists (`eval/golden_set.yaml`: 48 question/answer pairs across exact-ID lookup,
-paraphrase, cross-document, out-of-scope and the specification's own example questions,
-checked by `eval/validate_golden_set.py`). The harness that turns it into Recall@10, MRR and
-nDCG figures is the next task, so until it runs, retrieval quality is still demonstrated by
-example rather than proven by metric.
+**Reranking is built but disabled.** A cross-encoder rerank puts the right chunk first far
+more often — 33 of 37 questions versus 29 — and costs **1.6 s per query** on this hardware,
+against a ~30 ms budget. flashrank's smaller model runs in 82 ms but ranks *worse than no
+reranking at all*. There is no middle option in its model registry, so `rerank_enabled`
+ships `False`. Turn it on with `CSRS_RERANK_ENABLED=true` if you would rather have the
+precision than the second and a half.
+
+**Parent–child retrieval is not built.** The model receives the exact retrieved passages,
+with no expansion to their surrounding section. Grounding is honest but sometimes narrower
+than a reader would like.
 
 **Smaller models are less reliable.** All five required LLMs are selectable, but they are not
 equally good at staying grounded. `qwen2.5:1.5b` has been observed refusing a question that
