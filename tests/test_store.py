@@ -59,6 +59,40 @@ def test_chunk_with_none_metadata_round_trips_equal(store: ChunkStore) -> None:
     assert store.search([1.0, 0.0, 0.0], k=1)[0].chunk == chunk
 
 
+def test_all_chunks_returns_every_chunk_in_stable_id_order(
+    store: ChunkStore,
+) -> None:
+    chunks = [make_chunk(index) for index in [2, 0, 1]]
+    store.add_chunks(chunks, [[1.0, float(index)] for index in range(3)])
+
+    expected = sorted(chunks, key=lambda chunk: chunk.id)
+
+    assert store.all_chunks() == expected
+    assert store.all_chunks() == expected
+
+
+def test_all_chunks_round_trips_optional_metadata(store: ChunkStore) -> None:
+    empty_metadata = make_chunk(0)
+    full_metadata = make_chunk(1).model_copy(
+        update={
+            "section": "standard.txt > AC-2 ACCOUNT MANAGEMENT",
+            "page": 17,
+            "control_id": "AC-2",
+            "parent_id": "standard.txt:parent:AC",
+        }
+    )
+    store.add_chunks(
+        [empty_metadata, full_metadata],
+        [[1.0, 0.0], [0.0, 1.0]],
+    )
+
+    assert store.all_chunks() == [empty_metadata, full_metadata]
+
+
+def test_all_chunks_returns_empty_list_for_empty_store(store: ChunkStore) -> None:
+    assert store.all_chunks() == []
+
+
 def test_count_and_reset(store: ChunkStore) -> None:
     chunks = [make_chunk(0), make_chunk(1)]
     store.add_chunks(chunks, [[1.0, 0.0], [0.0, 1.0]])

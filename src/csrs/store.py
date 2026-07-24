@@ -181,6 +181,29 @@ class ChunkStore:
             )
         return retrieved
 
+    def all_chunks(self) -> list[Chunk]:
+        """Return every stored chunk in deterministic chunk-ID order."""
+        result = self._collection.get(include=["documents", "metadatas"])
+        documents = result["documents"] or []
+        metadatas = result["metadatas"] or []
+        rows = sorted(
+            zip(result["ids"], documents, metadatas, strict=True),
+            key=lambda row: row[0],
+        )
+        return [
+            Chunk(
+                id=chunk_id,
+                text=text,
+                doc_name=metadata["doc_name"],
+                section=metadata.get("section"),
+                page=metadata.get("page"),
+                control_id=metadata.get("control_id"),
+                parent_id=metadata.get("parent_id"),
+                content_hash=metadata["content_hash"],
+            )
+            for chunk_id, text, metadata in rows
+        ]
+
     def chunks_for_document(
         self,
         doc_name: str,

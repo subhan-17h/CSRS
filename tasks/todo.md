@@ -896,6 +896,65 @@ Refusal: recall **8/11**, false-refusal rate **0/37**, overall **45/48**.
   - Per-pair rows go into the JSON, not just aggregates. Finding *which* pair regressed is
     the entire point of keeping the file.
 
+- [x] **T-3.3a** Persisted BM25 sparse index
+  - [x] Add deterministic `ChunkStore.all_chunks()` reconstruction with full metadata.
+  - [x] Build, save, load, search, and fingerprint a BM25 index over `Chunk.embed_text`.
+  - [x] Preserve hyphenated control IDs through one shared indexing/query tokenizer.
+  - [x] Cover store retrieval, BM25 ranking, persistence, signatures, failures, and empties.
+  - [x] Prove lint, the offline suite against a dead Ollama port, ASCII, and index integrity.
+  - **Empty corpus:** persist a signed no-index sentinel and return `[]`. This keeps startup
+    and rebuild paths uniform without forcing bm25s through its crashing empty-index path.
+  - **Verified:** ruff clean; 177 offline tests pass with 1 deselected against a dead Ollama
+    port; the live index remains exactly 4 documents / 2506 chunks. The content-aware
+    signature was **mutation-checked** — reverting it to the id-only digest fails 2 tests,
+    and the suite goes green on restore.
+  - **Tokenization is the whole task.** bm25s's default `token_pattern` (`(?u)\b\w\w+\b`)
+    turns `AC-2 ACCOUNT MANAGEMENT` into `['ac', 'account', 'manag']`: the `2` is dropped as
+    a single character, so `AC-2` and `AC-3` become the same token. Exact-ID lookup is the
+    main reason BM25 exists here, so the index pins `(?u)\b\w[\w-]*\b` and a test asserts it
+    directly — a silent revert to the default would fail nothing else while undoing the task.
+  - **Two brief claims of mine were wrong; both pushbacks were correct.**
+    1. The id-plus-count signature could not detect changed text under stable ids. Since
+       chunk ids are `{doc}:{ordinal}`, re-parsing a document whose content changed but
+       whose chunk count did not would leave the index reporting itself fresh while stale.
+       Fixed: the digest now covers `content_hash` too, `_FORMAT_VERSION` bumped to 2.
+    2. bm25s 0.3.9 tokenizes `AC-17` as `['ac', '17']`, not `['ac']`. The load-bearing
+       claim — `AC-2` and `AC-3` collapsing to `ac` — stands.
+
+  ### Sparse-only baseline, measured against the same golden set
+
+  | category | n | R@5 | R@10 | R@20 | MRR | nDCG@10 |
+  |---|---|---|---|---|---|---|
+  | exact_id | 12 | 0.552 | 0.707 | 0.872 | **0.944** | **0.740** |
+  | paraphrase | 12 | 0.484 | 0.557 | 0.664 | 0.771 | 0.570 |
+  | cross_document | 8 | 0.242 | 0.309 | 0.393 | **0.906** | 0.498 |
+  | spec_example | 5 | 0.057 | 0.077 | 0.159 | 0.352 | 0.137 |
+  | **BM25 TOTAL** | 37 | 0.396 | 0.487 | 0.605 | 0.800 | 0.551 |
+  | *dense baseline* | 37 | *0.454* | *0.573* | *0.702* | *0.834* | *0.628* |
+
+  **The plan's done-when for T-3.3 is empirically false and is restated here.** It required
+  that querying `AC-2` return an AC-2 chunk at rank 1 "and the same query through dense-only
+  retrieval is shown to do worse". Measured on the live corpus, BM25 ranks *SR-12* chunks
+  first for a bare `AC-2` and dense retrieves real AC-2 chunks at ranks 1-2 — **dense wins
+  that query**, and BM25-only is worse overall on every aggregate.
+
+  What is true, and is the actual argument for T-3.4: the two are **complementary**. BM25
+  beats dense on exact-ID MRR (0.944 vs 0.896) and cross-document MRR (0.906 vs 0.824), and
+  loses badly on paraphrase and spec examples. That is the case for fusion, not for sparse
+  replacing dense. The keep/revert call belongs to T-3.4's harness run under the same rule
+  D2 applies to T-3.6: if it does not improve the numbers, it does not ship.
+
+  **Defect found while verifying, deliberately not fixed here — `D-1`:** the 20 Appendix C
+  control-family summary tables (`## TABLE C-1: ACCESS CONTROL FAMILY` through C-20) are all
+  attributed to `control_id=SR-12`, the last control heading before the appendix. A table
+  listing every AC control is labelled supply-chain component disposal. This is what put
+  SR-12 at rank 1 for `AC-2`: those tables are dense with control-id tokens, so BM25 rewards
+  them, and their metadata is wrong. Bounded — 20 of 2506 chunks, and no golden-set pair
+  depends on them. **Not fixed in T-3.3** because the fix is a chunking change requiring a
+  force rebuild, which renumbers chunk ids and invalidates the T-3.2 baseline. It belongs
+  with **T-3.6**, which already re-chunks and rebuilds. Recorded rather than silently
+  carried.
+
 ---
 
 ## Submission preparation — interposed before T-3.2
