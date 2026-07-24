@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" width="1200" height="860" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <defs>
+    <marker id="ah-slate" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="ah-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
+    </marker>
+    <marker id="ah-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+    </marker>
+    <marker id="ah-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Opaque ground so the file reads identically on light and dark GitHub themes -->
+  <rect width="1200" height="860" fill="#020617"/>
+  <rect width="1200" height="860" fill="url(#grid)"/>
+
+  <!-- ============================================================
+       OUTER BOUNDARY - the offline guarantee
+       ============================================================ -->
+  <rect x="16" y="30" width="1168" height="766" rx="12" fill="rgba(136, 19, 55, 0.06)" stroke="#fb7185" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="34" y="52" fill="#fb7185" font-size="11" font-weight="700">FULLY OFFLINE  |  no cloud API  |  every model runs locally  |  127.0.0.1 only</text>
+
+  <!-- ============================================================
+       ARROWS (drawn before boxes so they sit behind)
+       ============================================================ -->
+  <line x1="300" y1="132" x2="300" y2="172" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah-emerald)"/>
+  <text x="312" y="157" fill="#94a3b8" font-size="8">HTTP + NDJSON</text>
+  <line x1="300" y1="232" x2="300" y2="270" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah-emerald)"/>
+  <line x1="900" y1="132" x2="900" y2="270" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah-emerald)"/>
+  <text x="912" y="205" fill="#94a3b8" font-size="8">imports Pipeline directly</text>
+
+  <line x1="230" y1="360" x2="256" y2="360" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+  <line x1="408" y1="360" x2="434" y2="360" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+  <line x1="586" y1="360" x2="612" y2="360" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+  <line x1="764" y1="360" x2="790" y2="360" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+  <line x1="942" y1="360" x2="968" y2="360" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah-amber)"/>
+
+  <line x1="230" y1="488" x2="256" y2="488" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)"/>
+  <line x1="408" y1="488" x2="434" y2="488" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)"/>
+  <line x1="586" y1="488" x2="612" y2="488" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)"/>
+  <line x1="764" y1="488" x2="790" y2="488" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)"/>
+  <line x1="942" y1="488" x2="968" y2="488" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ah-cyan)"/>
+
+  <!-- ============================================================
+       CLIENTS
+       ============================================================ -->
+  <rect x="150" y="70" width="300" height="62" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="300" y="92" fill="white" font-size="12" font-weight="600" text-anchor="middle">React + TypeScript Web UI</text>
+  <text x="300" y="109" fill="#94a3b8" font-size="8" text-anchor="middle">streaming answers | citations | corpus browser</text>
+  <text x="300" y="123" fill="#22d3ee" font-size="8" text-anchor="middle">frontend/ built by Vite, served on :8000</text>
+
+  <rect x="750" y="70" width="300" height="62" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="900" y="92" fill="white" font-size="12" font-weight="600" text-anchor="middle">Streamlit UI</text>
+  <text x="900" y="109" fill="#94a3b8" font-size="8" text-anchor="middle">question | answer | doc list | model | reload</text>
+  <text x="900" y="123" fill="#22d3ee" font-size="8" text-anchor="middle">src/csrs/app.py on :8501</text>
+
+  <rect x="150" y="176" width="300" height="56" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="300" y="198" fill="white" font-size="12" font-weight="600" text-anchor="middle">FastAPI</text>
+  <text x="300" y="214" fill="#94a3b8" font-size="8" text-anchor="middle">/api/chat | /api/chat/stream | /api/index/*</text>
+  <text x="300" y="226" fill="#34d399" font-size="8" text-anchor="middle">src/csrs/api/app.py</text>
+
+  <!-- ============================================================
+       FACADE BOUNDARY - both lanes live inside it
+       ============================================================ -->
+  <rect x="50" y="272" width="1100" height="452" rx="10" fill="rgba(6, 78, 59, 0.05)" stroke="#34d399" stroke-width="1" stroke-dasharray="6,4"/>
+  <text x="66" y="292" fill="#34d399" font-size="11" font-weight="700">Pipeline facade  -  src/csrs/pipeline.py  |  index()  ask()  ask_stream()</text>
+  <text x="700" y="292" fill="#64748b" font-size="9">neither interface imports Chroma or Ollama</text>
+
+  <!-- = INGEST LANE = -->
+  <text x="66" y="318" fill="#fbbf24" font-size="10" font-weight="700">INGEST  -  Pipeline.index()</text>
+
+  <rect x="80" y="326" width="150" height="68" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="155" y="350" fill="white" font-size="11" font-weight="600" text-anchor="middle">docs/</text>
+  <text x="155" y="368" fill="#94a3b8" font-size="8" text-anchor="middle">PDF and TXT</text>
+  <text x="155" y="382" fill="#94a3b8" font-size="8" text-anchor="middle">scanned recursively</text>
+
+  <rect x="258" y="326" width="150" height="68" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="333" y="350" fill="white" font-size="11" font-weight="600" text-anchor="middle">SHA-256 gate</text>
+  <text x="333" y="368" fill="#94a3b8" font-size="8" text-anchor="middle">hash the file bytes</text>
+  <text x="333" y="382" fill="#fbbf24" font-size="8" text-anchor="middle">unchanged -&gt; skip</text>
+
+  <rect x="436" y="326" width="150" height="68" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="511" y="350" fill="white" font-size="11" font-weight="600" text-anchor="middle">Parse</text>
+  <text x="511" y="368" fill="#94a3b8" font-size="8" text-anchor="middle">Docling layout model</text>
+  <text x="511" y="382" fill="#94a3b8" font-size="8" text-anchor="middle">or TextParser</text>
+
+  <rect x="614" y="326" width="150" height="68" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="689" y="350" fill="white" font-size="11" font-weight="600" text-anchor="middle">Chunk</text>
+  <text x="689" y="368" fill="#94a3b8" font-size="8" text-anchor="middle">400 tok / 60 overlap</text>
+  <text x="689" y="382" fill="#94a3b8" font-size="8" text-anchor="middle">+page +section +ctrl ID</text>
+
+  <rect x="792" y="326" width="150" height="68" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="867" y="350" fill="white" font-size="11" font-weight="600" text-anchor="middle">Embed</text>
+  <text x="867" y="368" fill="#94a3b8" font-size="8" text-anchor="middle">nomic-embed-text</text>
+  <text x="867" y="382" fill="#94a3b8" font-size="8" text-anchor="middle">batch 32 -&gt; 768-dim</text>
+
+  <rect x="970" y="326" width="150" height="68" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="1045" y="350" fill="white" font-size="11" font-weight="600" text-anchor="middle">Chroma + manifest</text>
+  <text x="1045" y="368" fill="#94a3b8" font-size="8" text-anchor="middle">cosine, chroma_db/</text>
+  <text x="1045" y="382" fill="#a78bfa" font-size="8" text-anchor="middle">4 docs, 2506 chunks</text>
+
+  <!-- = QUERY LANE = -->
+  <text x="66" y="446" fill="#22d3ee" font-size="10" font-weight="700">QUERY  -  Pipeline.ask() / ask_stream()</text>
+
+  <rect x="80" y="454" width="150" height="68" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="155" y="482" fill="white" font-size="11" font-weight="600" text-anchor="middle">Question</text>
+  <text x="155" y="500" fill="#94a3b8" font-size="8" text-anchor="middle">from either interface</text>
+
+  <rect x="258" y="454" width="150" height="68" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="333" y="478" fill="white" font-size="11" font-weight="600" text-anchor="middle">embed_query</text>
+  <text x="333" y="496" fill="#94a3b8" font-size="8" text-anchor="middle">nomic-embed-text</text>
+  <text x="333" y="510" fill="#94a3b8" font-size="8" text-anchor="middle">search_query: prefix</text>
+
+  <rect x="436" y="454" width="150" height="68" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="511" y="478" fill="white" font-size="11" font-weight="600" text-anchor="middle">Vector search</text>
+  <text x="511" y="496" fill="#94a3b8" font-size="8" text-anchor="middle">Chroma cosine, top 5</text>
+  <text x="511" y="510" fill="#94a3b8" font-size="8" text-anchor="middle">score = 1.0 - distance</text>
+
+  <rect x="614" y="454" width="150" height="68" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="689" y="478" fill="white" font-size="11" font-weight="600" text-anchor="middle">build_prompt</text>
+  <text x="689" y="496" fill="#94a3b8" font-size="8" text-anchor="middle">[S1]...[/S1] context</text>
+  <text x="689" y="510" fill="#fbbf24" font-size="8" text-anchor="middle">+ grounding rule</text>
+
+  <rect x="792" y="454" width="150" height="68" rx="6" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="867" y="478" fill="white" font-size="11" font-weight="600" text-anchor="middle">Generate</text>
+  <text x="867" y="496" fill="#94a3b8" font-size="8" text-anchor="middle">llama3.2 by default</text>
+  <text x="867" y="510" fill="#94a3b8" font-size="8" text-anchor="middle">num_ctx 8192, temp 0.1</text>
+
+  <rect x="970" y="454" width="150" height="68" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="1045" y="478" fill="white" font-size="11" font-weight="600" text-anchor="middle">Answer</text>
+  <text x="1045" y="496" fill="#94a3b8" font-size="8" text-anchor="middle">text + cited sources</text>
+  <text x="1045" y="510" fill="#34d399" font-size="8" text-anchor="middle">or the refusal</text>
+
+  <!-- = LOCAL MODEL RUNTIME = -->
+  <rect x="80" y="580" width="1040" height="76" rx="6" fill="rgba(251, 146, 60, 0.18)" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="100" y="604" fill="white" font-size="11" font-weight="600">Ollama  -  http://127.0.0.1:11434</text>
+  <text x="420" y="604" fill="#fb923c" font-size="9">every orange stage above is a call to this, and to nothing else</text>
+  <text x="100" y="626" fill="#94a3b8" font-size="9">Embedding (mandatory):  nomic-embed-text  |  274 MB  |  768 dimensions</text>
+  <text x="100" y="644" fill="#94a3b8" font-size="9">Answer models:  llama3.2 2.0 GB (default)  |  qwen2.5:1.5b  |  gemma2:2b  |  phi4-mini  |  gemma4:e2b   - all five selectable in both UIs</text>
+
+  <text x="80" y="690" fill="#64748b" font-size="9">Cold index 316 s for 532 pages  |  unchanged reload 0.057 s with zero embedding calls  |  answers stream token by token over NDJSON</text>
+  <text x="80" y="708" fill="#64748b" font-size="9">Add a standard by dropping a .pdf or .txt into docs/ and pressing Restart and Reload Documents - no code change, no restart</text>
+
+  <!-- = OFFLINE PROOF = -->
+  <text x="34" y="752" fill="#fb7185" font-size="9">Proven, not asserted:  133 offline tests pass with Ollama pointed at a dead port - no module silently reaches the network.</text>
+  <text x="34" y="772" fill="#fb7185" font-size="9">Web fonts are vendored as local .woff2 files. There is no cloud LLM client anywhere in src/.</text>
+
+  <!-- ============================================================
+       LEGEND - outside every boundary
+       ============================================================ -->
+  <text x="34" y="816" fill="white" font-size="10" font-weight="600">Legend</text>
+
+  <rect x="100" y="808" width="16" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
+  <text x="122" y="817" fill="#94a3b8" font-size="9">User interface</text>
+
+  <rect x="240" y="808" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+  <text x="262" y="817" fill="#94a3b8" font-size="9">Backend / facade</text>
+
+  <rect x="400" y="808" width="16" height="10" rx="2" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+  <text x="422" y="817" fill="#94a3b8" font-size="9">Local processing stage</text>
+
+  <rect x="600" y="808" width="16" height="10" rx="2" fill="rgba(251, 146, 60, 0.3)" stroke="#fb923c" stroke-width="1"/>
+  <text x="622" y="817" fill="#94a3b8" font-size="9">Ollama model call</text>
+
+  <rect x="770" y="808" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+  <text x="792" y="817" fill="#94a3b8" font-size="9">Vector store</text>
+
+  <rect x="910" y="808" width="16" height="10" rx="2" fill="transparent" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="932" y="817" fill="#94a3b8" font-size="9">Offline boundary</text>
+
+  <rect x="1070" y="808" width="16" height="10" rx="2" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"/>
+  <text x="1092" y="817" fill="#94a3b8" font-size="9">Input</text>
+</svg>
