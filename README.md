@@ -383,7 +383,10 @@ Two of the standards named in the task specification are **deliberately absent**
 - **CIS Controls v8.1** is free but requires registration, and its terms restrict
   redistribution. Same story: download it yourself, drop it in.
 
-Full licensing detail is in [docs/README.md](docs/README.md).
+Full licensing detail for the corpus is in [docs/README.md](docs/README.md).
+
+**This project's own code is MIT licensed** — see [LICENSE](LICENSE). That covers the source
+only; the standards under `docs/` remain under their publishers' terms.
 
 ---
 
