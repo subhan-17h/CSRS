@@ -1,8 +1,15 @@
 # CSRS — Cybersecurity Standards RAG System
 
+![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab)
+![Ollama](https://img.shields.io/badge/LLM-Ollama%20(local)-000000)
+![Offline](https://img.shields.io/badge/runtime-100%25%20offline-fb7185)
+![Tests](https://img.shields.io/badge/tests-133%20offline-34d399)
+
 Ask questions about cybersecurity standards and get answers grounded in the documents
 themselves, with page-level citations. Everything runs locally: the language models, the
 embeddings, and the vector store. **No cloud API is used or permitted.**
+
+<img src="assets/architecture.svg" alt="CSRS architecture: the ingest and query pipelines, the Pipeline facade both interfaces call, and the offline boundary enclosing Ollama" width="100%">
 
 ```
 Question → nomic-embed-text → Chroma (cosine) → top-k chunks → llama3.2 → grounded answer
@@ -10,6 +17,9 @@ Question → nomic-embed-text → Chroma (cosine) → top-k chunks → llama3.2 
 
 Built on [Ollama](https://ollama.com), with
 [Docling](https://github.com/docling-project/docling) for layout-aware PDF parsing.
+
+**New here?** [Submission.md](Submission.md) is the component-by-component walkthrough:
+what each module does, which task requirement it satisfies, and how the pieces connect.
 
 ### Two interfaces, one pipeline
 
@@ -31,7 +41,8 @@ web UI was added on top of the finished pipeline; it renders the citations the S
 interface never displayed, which is the main reason it exists.
 
 The reasoning behind each choice — and the measurements that drove it — is in
-[ENGINEERING.md](ENGINEERING.md).
+[ENGINEERING.md](ENGINEERING.md). The diagram above is also available as a browsable page
+with PNG and PDF export: `assets/architecture.html`.
 
 ---
 
@@ -389,10 +400,13 @@ this is exactly what it would fix. **Phrase questions to name the standard.**
 emitting the configured refusal string is recorded as having answered. This under-reports
 refusals; it never causes a wrong answer.
 
-**Retrieval is dense-only, and unmeasured.** Semantic similarity with no BM25 hybrid, no
-reciprocal rank fusion, and no reranker — all planned, none built. There is no golden set
-and no Recall/MRR/nDCG figures, so retrieval quality is demonstrated by example rather than
-proven by metric.
+**Retrieval is dense-only, and not yet measured.** Semantic similarity with no BM25 hybrid,
+no reciprocal rank fusion, and no reranker — all planned, none built. The evaluation golden
+set now exists (`eval/golden_set.yaml`: 48 question/answer pairs across exact-ID lookup,
+paraphrase, cross-document, out-of-scope and the specification's own example questions,
+checked by `eval/validate_golden_set.py`). The harness that turns it into Recall@10, MRR and
+nDCG figures is the next task, so until it runs, retrieval quality is still demonstrated by
+example rather than proven by metric.
 
 **Smaller models are less reliable.** All five required LLMs are selectable, but they are not
 equally good at staying grounded. `qwen2.5:1.5b` has been observed refusing a question that
@@ -450,9 +464,10 @@ uv run ruff check .                                              # lint
 CSRS_OLLAMA_HOST=http://127.0.0.1:9 uv run pytest -q -m "not ollama and not docling"
 uv run pytest -q -m docling                                      # needs Docling weights
 uv run pytest -q -m ollama                                       # needs a live Ollama
+uv run --group eval python eval/validate_golden_set.py           # needs the built index
 ```
 
-The offline suite (96 tests) points at a dead port on purpose: it proves nothing silently
+The offline suite (133 tests) points at a dead port on purpose: it proves nothing silently
 reaches the network. Tests needing real models are marked and deselected by default.
 
 ### Project layout
@@ -476,6 +491,18 @@ frontend/
   src/lib/history.ts    localStorage persistence
   src/components/       SourcesCard (citations), CorpusExplorer, Sidebar, Composer
   public/fonts/         woff2 vendored locally so the UI never calls a CDN
+
+eval/
+  golden_set.yaml           48 graded question/answer pairs, five categories
+  validate_golden_set.py    asserts every expected answer resolves in the live index
+
+assets/
+  architecture.svg          the diagram at the top of this file
+  architecture.html         same diagram, browsable, with PNG/PDF export
+
+scripts/
+  warm_models.py            fetches every model weight; the only step needing the internet
+  fetch_docs.py             downloads the two large NIST standards; stdlib only
 ```
 
 **`pipeline.py` is the load-bearing boundary.** Neither UI imports Chroma, Ollama or the
