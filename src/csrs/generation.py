@@ -14,6 +14,7 @@ __all__ = (
     "generate_answer",
     "generate_answer_stream",
     "list_installed_models",
+    "rewrite_query",
 )
 
 _client = ollama.Client(host=settings.ollama_host)
@@ -39,6 +40,57 @@ def build_prompt(question: str, chunks: Sequence[RetrievedChunk]) -> str:
         f"reply with exactly: {settings.refusal_message}"
     )
     return f"CONTEXT\n{context}\n\nQUESTION\n{question}\n\nINSTRUCTION\n{instruction}"
+
+
+def rewrite_query(
+    question: str,
+    history: Sequence[tuple[str, str]],
+    model: str | None = None,
+) -> str:
+    """Rewrite a conversational follow-up as a standalone search query."""
+    if not history:
+        return question
+
+    context = "\n\n".join(
+        f"QUESTION\n{prior_question}\n\nANSWER\n{answer}"
+        for prior_question, answer in history[-2:]
+    )
+    instruction = (
+        "Rewrite the question as a single standalone search query. Resolve pronouns and "
+        "implied subjects from the conversation. Output only the rewritten query with no "
+        "preamble."
+    )
+    prompt = (
+        f"CONTEXT\n{context}\n\nQUESTION\n{question}\n\nINSTRUCTION\n{instruction}"
+    )
+    selected_model = model if model is not None else settings.default_llm
+
+    try:
+        response = _client.chat(
+            model=selected_model,
+            messages=[{"role": "user", "content": prompt}],
+            options={"num_ctx": settings.num_ctx, "temperature": 0.0},
+            keep_alive=settings.keep_alive,
+        )
+    except (OSError, ollama.RequestError, ollama.ResponseError):
+        return question
+
+    reply = response["message"]["content"]
+    if len(reply) > 300:
+        return question
+
+    first_line = next((line.strip() for line in reply.splitlines() if line.strip()), "")
+    if not first_line:
+        return question
+    if (
+        len(first_line) >= 2
+        and first_line[0] == first_line[-1]
+        and first_line[0] in {'"', "'"}
+    ):
+        first_line = first_line[1:-1].strip()
+    if not first_line:
+        return question
+    return first_line
 
 
 def _is_refusal(text: str) -> bool:

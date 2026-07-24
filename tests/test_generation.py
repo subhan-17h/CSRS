@@ -7,6 +7,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
+import ollama
 import pytest
 
 from csrs import generation
@@ -146,6 +147,157 @@ def test_prompt_labels_all_chunks_in_order_and_places_instruction_last() -> None
     assert chunks[0].chunk.text in prompt
     assert chunks[1].chunk.text in prompt
     assert settings.refusal_message in prompt
+
+
+def test_rewrite_query_empty_history_returns_question_without_calling_chat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NoChatClient(FakeClient):
+        def chat(self, **kwargs: Any) -> dict[str, dict[str, str]]:
+            raise AssertionError("chat must not be called")
+
+    client = NoChatClient("unused")
+    monkeypatch.setattr(generation, "_client", client)
+    question = "What are the functions of the framework?"
+
+    assert generation.rewrite_query(question, []) == question
+    assert client.calls == []
+
+
+def test_rewrite_query_returns_reply_and_sends_prior_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient("What is the Identify function of the NIST CSF?")
+    monkeypatch.setattr(generation, "_client", client)
+    prior_question = "What are the functions of the NIST Cybersecurity Framework?"
+    prior_answer = "The functions are Govern, Identify, Protect, Detect, Respond, and Recover."
+
+    result = generation.rewrite_query(
+        "Explain the Identify function.",
+        [(prior_question, prior_answer)],
+        model="gemma2:2b",
+    )
+
+    assert result == "What is the Identify function of the NIST CSF?"
+    prompt = client.calls[0]["messages"][0]["content"]
+    assert prior_question in prompt
+    assert prior_answer in prompt
+    assert prompt.index("CONTEXT") < prompt.rindex("QUESTION") < prompt.index(
+        "INSTRUCTION"
+    )
+    assert client.calls[0]["model"] == "gemma2:2b"
+    assert client.calls[0]["options"] == {
+        "num_ctx": settings.num_ctx,
+        "temperature": 0.0,
+    }
+    assert client.calls[0]["keep_alive"] == settings.keep_alive
+
+
+def test_rewrite_query_uses_only_last_two_turns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient("Standalone query")
+    monkeypatch.setattr(generation, "_client", client)
+    history = [
+        ("old question one", "old answer one"),
+        ("old question two", "old answer two"),
+        ("recent question three", "recent answer three"),
+        ("recent question four", "recent answer four"),
+    ]
+
+    generation.rewrite_query("Follow-up?", history)
+
+    prompt = client.calls[0]["messages"][0]["content"]
+    assert "old question one" not in prompt
+    assert "old answer one" not in prompt
+    assert "old question two" not in prompt
+    assert "old answer two" not in prompt
+    assert "recent question three" in prompt
+    assert "recent answer three" in prompt
+    assert "recent question four" in prompt
+    assert "recent answer four" in prompt
+
+
+def test_rewrite_query_returns_only_first_non_empty_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient("\n  Standalone query  \nHere is why I rewrote it.")
+    monkeypatch.setattr(generation, "_client", client)
+
+    result = generation.rewrite_query("Follow-up?", [("Prior?", "Prior answer.")])
+
+    assert result == "Standalone query"
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [
+        ('"Double-quoted query"', "Double-quoted query"),
+        ("'Single-quoted query'", "Single-quoted query"),
+    ],
+)
+def test_rewrite_query_strips_wrapping_quotes(
+    monkeypatch: pytest.MonkeyPatch, reply: str, expected: str
+) -> None:
+    client = FakeClient(reply)
+    monkeypatch.setattr(generation, "_client", client)
+
+    result = generation.rewrite_query("Follow-up?", [("Prior?", "Prior answer.")])
+
+    assert result == expected
+
+
+@pytest.mark.parametrize("reply", ['""', "''", '" "'])
+def test_rewrite_query_empty_quoted_reply_falls_back_to_question(
+    monkeypatch: pytest.MonkeyPatch, reply: str
+) -> None:
+    client = FakeClient(reply)
+    monkeypatch.setattr(generation, "_client", client)
+    question = "Follow-up?"
+
+    assert generation.rewrite_query(question, [("Prior?", "Prior answer.")]) == question
+
+
+@pytest.mark.parametrize("reply", ["", " \n\t "])
+def test_rewrite_query_empty_reply_falls_back_to_question(
+    monkeypatch: pytest.MonkeyPatch, reply: str
+) -> None:
+    client = FakeClient(reply)
+    monkeypatch.setattr(generation, "_client", client)
+    question = "Follow-up?"
+
+    assert generation.rewrite_query(question, [("Prior?", "Prior answer.")]) == question
+
+
+def test_rewrite_query_long_reply_falls_back_to_question(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient("x" * 301)
+    monkeypatch.setattr(generation, "_client", client)
+    question = "Follow-up?"
+
+    assert generation.rewrite_query(question, [("Prior?", "Prior answer.")]) == question
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OSError("Ollama is down"),
+        ollama.RequestError("request failed"),
+        ollama.ResponseError("response failed"),
+    ],
+)
+def test_rewrite_query_ollama_failure_falls_back_to_question(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    class FailingClient(FakeClient):
+        def chat(self, **kwargs: Any) -> dict[str, dict[str, str]]:
+            raise error
+
+    monkeypatch.setattr(generation, "_client", FailingClient("unused"))
+    question = "Follow-up?"
+
+    assert generation.rewrite_query(question, [("Prior?", "Prior answer.")]) == question
 
 
 def test_empty_chunks_refuses_without_calling_ollama(
