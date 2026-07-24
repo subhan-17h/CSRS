@@ -811,7 +811,7 @@ working tree clean.
     and 6 spec examples. Ruff passes and 133 offline tests pass with 1 deselected against
     a dead Ollama port.
 
-- [ ] **T-3.2** Metrics harness
+- [x] **T-3.2** Metrics harness
   - [x] **T-3.2a** `eval/metrics.py` + `tests/test_metrics.py` — Recall@k, MRR, nDCG@10 and
         refusal accuracy as pure stdlib functions, unit-tested on hand-computed cases.
         Relevance is defined **once**, in `chunk_matches()`, and `validate_golden_set.py`
@@ -823,10 +823,60 @@ working tree clean.
       **Mutation-checked:** an off-by-one in the DCG discount and a wrong recall
       denominator were both injected; 6 tests failed, and the suite went green again on
       restore. A metrics harness nobody has tried to break is not evidence of anything.
-  - [ ] **T-3.2b** `eval/run_eval.py` — embed each golden question, search the live index
+  - [x] **T-3.2b** `eval/run_eval.py` — embed each golden question, search the live index
         once at depth 20, score the ranked list, optionally generate to measure refusal,
         print the baseline table and write `eval/results/<timestamp>.json`.
-  - [ ] Record the baseline row. Every later Phase 3 task is measured against it.
+    - [x] Reuse the golden-set loader and scan the live Chroma collection exactly once.
+    - [x] Resolve pair-level relevant chunk IDs with `chunk_matches()`, ignoring provenance.
+    - [x] Retrieve once per pair and score Recall@5/@10/@20, MRR, and nDCG@10.
+    - [x] Generate from the scored ranking's top five and aggregate refusal outcomes.
+    - [x] Print category/TOTAL and refusal summaries and persist every per-pair result.
+    - [x] Prove lint, offline tests, retrieval-only output, full baseline, and index integrity.
+  - [x] Record the baseline row. Every later Phase 3 task is measured against it.
+  - **Verified:** ruff clean, 165 offline tests pass with 1 deselected, index unchanged at
+    4 documents / 2506 chunks. Rather than accept the reported figures, all five aggregates
+    were recomputed from the JSON's per-pair rows (exact to 6 dp), every pair's MRR was
+    cross-checked against its recorded first-relevant rank (no disagreements), the refusal
+    counts were recounted from the raw rows, and the retrieval-only run was repeated —
+    identical numbers, so the retrieval half is deterministic.
+
+### The Phase 3 baseline — every later row is measured against this
+
+| category | pairs | scored | R@5 | R@10 | R@20 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|---|
+| exact_id | 12 | 12 | 0.613 | 0.730 | 0.878 | 0.896 | 0.725 |
+| paraphrase | 12 | 12 | 0.546 | 0.682 | 0.796 | 0.875 | 0.673 |
+| cross_document | 8 | 8 | 0.272 | 0.386 | 0.567 | 0.824 | 0.601 |
+| out_of_scope | 10 | 0 | - | - | - | - | - |
+| spec_example | 6 | 5 | 0.144 | 0.232 | 0.271 | 0.600 | 0.329 |
+| **TOTAL** | **48** | **37** | **0.454** | **0.573** | **0.702** | **0.834** | **0.628** |
+
+Refusal: recall **8/11**, false-refusal rate **0/37**, overall **45/48**.
+
+  **What the baseline actually says — three things worth carrying forward:**
+  1. **The documented "Identify" failure is now measured.** `spec_example-002` first
+     reaches a relevant chunk at **rank 6**, so its Recall@5 is **0.0** — not one of the
+     five chunks sent to the model was relevant, and it answered anyway instead of
+     refusing. That is the number T-3.3 through T-4.3 exist to move.
+  2. **All three refusal failures are CIS Controls questions** (`out_of_scope-008/009/010`).
+     The system answers about a document that is not in the corpus. T-4.2's gate now has a
+     concrete target rather than an argument.
+  3. **Absolute recall reads low for a structural reason, not a retrieval one.** Relevant
+     sets are large — `cross_document` has a median of 20 relevant chunks, so Recall@10
+     there is capped near 0.5 by arithmetic. The values are valid *relatively*, which is
+     all the five-row comparison needs; nobody should read 0.454 as "finds 45% of what it
+     should."
+
+  **Caveat on reproducibility:** generation runs at `temperature: 0.1`, matching
+  production rather than forcing 0.0, so the refusal figures can move slightly between
+  runs. Retrieval metrics cannot — they reproduced exactly. Production fidelity was
+  preferred over a determinism that the deployed system does not have.
+
+  **Review fix sent back to Codex rather than patched directly:** the table's `pairs`
+  column showed the category total while every metric in the row averages over answerable
+  pairs only, so TOTAL read "48 pairs, MRR 0.834" for a mean over 37. A `scored` column
+  was added. Five of these tables get compared across Phase 3; a wrong denominator in the
+  header would have been read as a real movement.
 
   **Decisions taken for this task** (settled before the handoff, so they are not Codex's
   to invent):
