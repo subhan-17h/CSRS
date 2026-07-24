@@ -983,6 +983,50 @@ Refusal: recall **8/11**, false-refusal rate **0/37**, overall **45/48**.
     query, as fusion will, should cache the loaded index and re-check the signature only
     when `index()` runs. Small against multi-second generation, but free to avoid.
 
+- [x] **T-3.4** RRF fusion — **shipped as a capability, not as the default. Measured
+      negative result.**
+  - [x] `rrf_fuse()` on ranks only, `tests/test_rrf.py`, hand-computed expectations.
+  - [x] `hybrid_search()` composing dense + sparse; `RetrievedChunk.rrf_score` added
+        without touching `score`; `ChunkStore.chunks_with_embeddings()` so sparse-only hits
+        still carry an honest cosine.
+  - [x] `retrieval_mode` setting, defaulting to `dense`; harness `--retrieval` / `--rrf-k`.
+  - [x] Sparse index cached on the Pipeline; dense mode touches nothing sparse.
+  - **Verified:** ruff clean, 200 offline tests pass with 1 deselected, index untouched at
+    4 documents / 2506 chunks. The unqualified harness run reproduces the dense baseline
+    exactly, which is what proves the default path did not move.
+
+  | run | R@5 | R@10 | R@20 | MRR | nDCG@10 |
+  |---|---|---|---|---|---|
+  | dense (baseline) | 0.454 | **0.573** | 0.702 | 0.834 | **0.628** |
+  | hybrid k=60 | 0.461 | 0.565 | 0.710 | 0.855 | 0.625 |
+  | hybrid k=20 | 0.466 | 0.565 | 0.710 | 0.855 | 0.626 |
+
+  **The done-when was "Recall@10 and MRR both improve". Recall@10 fell, so it is not met.**
+  Per category the reason is a real property of the two methods, not a defect:
+
+  | category | R@10 | MRR | nDCG@10 |
+  |---|---|---|---|
+  | exact_id | +0.041 | **0.896 -> 1.000** | +0.075 |
+  | paraphrase | +0.026 | -0.025 | -0.007 |
+  | cross_document | -0.050 | +0.051 | -0.031 |
+  | spec_example | **-0.142** | -0.117 | **-0.135** |
+
+  BM25 makes exact-ID lookup perfect and makes natural-language questions worse, injecting
+  lexically similar but semantically wrong chunks that RRF weights highly enough to displace
+  good dense hits. Per pair: 5 improved, 4 worsened, 28 unchanged. **The headline failure
+  regressed** — *"Explain the Identify function."* moved from rank 6 to rank 12.
+
+  **`D-1` was ruled out as the cause,** rather than assumed: only 1 of 37 answerable pairs
+  has an Appendix C mislabelled chunk anywhere in its BM25 top-10. The regression is genuine
+  BM25 behaviour on natural language.
+
+  **Decision.** Hybrid does not become the production default while it regresses the
+  questions the product is judged on, and the work is not thrown away either. Both paths
+  exist behind `retrieval_mode`, dense is the default, and **T-3.5 decides on evidence**:
+  its reranker consumes the fused pool, and candidate-pool recall (R@20 0.7022 -> 0.7096)
+  is the single thing fusion did improve. If reranking converts that, hybrid becomes the
+  default with numbers behind it. If not, D2's rule applies and it does not ship.
+
 ---
 
 ## Submission preparation — interposed before T-3.2

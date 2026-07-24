@@ -682,7 +682,7 @@ def test_ask_on_empty_store_refuses_without_embedding_or_generation(
     assert calls == {"embedding": 0, "generation": 0}
 
 
-def test_ask_passes_caller_k_to_search_and_returns_answer_unchanged(
+def test_ask_routes_caller_k_through_hybrid_search_and_returns_answer_unchanged(
     monkeypatch: pytest.MonkeyPatch,
     offline_pipeline: pipeline.Pipeline,
     tmp_path: Path,
@@ -698,10 +698,24 @@ def test_ask_passes_caller_k_to_search_and_returns_answer_unchanged(
         model="gemma2:2b",
         question="What is access control?",
     )
+    sparse = pipeline.BM25Index.build([])
 
-    def fake_search(query_embedding: Sequence[float], k: int) -> list[RetrievedChunk]:
+    def fake_hybrid_search(
+        question: str,
+        query_embedding: Sequence[float],
+        store: object,
+        sparse_index: pipeline.BM25Index,
+        *,
+        limit: int,
+        top_k_dense: int,
+        top_k_bm25: int,
+        rrf_k: int,
+    ) -> list[RetrievedChunk]:
+        observed["question"] = question
         observed["query_embedding"] = list(query_embedding)
-        observed["k"] = k
+        observed["store"] = store
+        observed["sparse"] = sparse_index
+        observed["retrieval"] = (limit, top_k_dense, top_k_bm25, rrf_k)
         return []
 
     def fake_generation(
@@ -713,8 +727,10 @@ def test_ask_passes_caller_k_to_search_and_returns_answer_unchanged(
         observed["generation"] = (question, list(chunks), model, temperature)
         return expected
 
+    monkeypatch.setattr(settings, "retrieval_mode", "hybrid")
     monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
-    monkeypatch.setattr(offline_pipeline._store, "search", fake_search)
+    monkeypatch.setattr(offline_pipeline, "sparse_index", lambda: sparse)
+    monkeypatch.setattr(pipeline, "hybrid_search", fake_hybrid_search)
     monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
 
     answer = offline_pipeline.ask(
@@ -726,8 +742,16 @@ def test_ask_passes_caller_k_to_search_and_returns_answer_unchanged(
 
     assert answer is expected
     assert observed == {
+        "question": "What is access control?",
         "query_embedding": [0.0, 1.0, 0.0],
-        "k": 7,
+        "store": offline_pipeline._store,
+        "sparse": sparse,
+        "retrieval": (
+            7,
+            settings.top_k_dense,
+            settings.top_k_bm25,
+            settings.rrf_k,
+        ),
         "generation": ("What is access control?", [], "gemma2:2b", 0.8),
     }
 
@@ -781,6 +805,99 @@ def test_ask_uses_configured_defaults_for_k_model_and_temperature(
         ),
     }
     assert settings.rerank_top_n < settings.top_k_dense
+
+
+def test_ask_default_dense_never_touches_sparse_retrieval(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    expected = Answer(
+        text="A grounded answer.",
+        sources=[],
+        model=settings.default_llm,
+        question="What is access control?",
+    )
+    searches: list[tuple[list[float], int]] = []
+
+    def fail_sparse(*args: object, **kwargs: object) -> object:
+        raise AssertionError("dense ask must not touch sparse retrieval")
+
+    def fake_search(query_embedding: Sequence[float], k: int) -> list[RetrievedChunk]:
+        searches.append((list(query_embedding), k))
+        return []
+
+    monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
+    monkeypatch.setattr(offline_pipeline._store, "search", fake_search)
+    monkeypatch.setattr(offline_pipeline, "sparse_index", fail_sparse)
+    monkeypatch.setattr(offline_pipeline._store, "all_chunks", fail_sparse)
+    monkeypatch.setattr(pipeline.BM25Index, "load", fail_sparse)
+    monkeypatch.setattr(pipeline, "hybrid_search", fail_sparse)
+    monkeypatch.setattr(pipeline, "generate_answer", lambda *args: expected)
+
+    answer = offline_pipeline.ask("What is access control?")
+
+    assert settings.retrieval_mode == "dense"
+    assert answer is expected
+    assert searches == [([0.0, 1.0, 0.0], settings.rerank_top_n)]
+
+
+def test_ask_reuses_cached_sparse_index_across_queries(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    original_all_chunks = offline_pipeline._store.all_chunks
+    scans = 0
+    sparse_indexes: list[pipeline.BM25Index] = []
+
+    def record_all_chunks() -> list[pipeline.Chunk]:
+        nonlocal scans
+        scans += 1
+        return original_all_chunks()
+
+    def fake_hybrid_search(
+        question: str,
+        query_embedding: Sequence[float],
+        store: object,
+        sparse_index: pipeline.BM25Index,
+        *,
+        limit: int,
+        top_k_dense: int,
+        top_k_bm25: int,
+        rrf_k: int,
+    ) -> list[RetrievedChunk]:
+        sparse_indexes.append(sparse_index)
+        return []
+
+    def fake_generation(
+        question: str,
+        chunks: Sequence[RetrievedChunk],
+        model: str | None = None,
+        temperature: float | None = None,
+    ) -> Answer:
+        return Answer(text="Answer.", sources=[], model=model or "", question=question)
+
+    monkeypatch.setattr(settings, "retrieval_mode", "hybrid")
+    monkeypatch.setattr(offline_pipeline._store, "all_chunks", record_all_chunks)
+    monkeypatch.setattr(pipeline, "embed_query", lambda question: [1.0, 0.0, 0.0])
+    monkeypatch.setattr(pipeline, "hybrid_search", fake_hybrid_search)
+    monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
+
+    offline_pipeline.ask("First question?")
+    offline_pipeline.ask("Second question?")
+
+    assert scans == 1
+    assert len(sparse_indexes) == 2
+    assert sparse_indexes[0] is sparse_indexes[1]
 
 
 def test_model_availability_normalizes_latest_and_preserves_supported_order(

@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     chunk_overlap: int = 60
 
     # --- Retrieval --------------------------------------------------------
+    # Hybrid improved exact-ID ranking but regressed spec-example recall. T-3.5
+    # revisits this default after reranking the fused candidate pool.
+    retrieval_mode: Literal["dense", "hybrid"] = "dense"
     top_k_dense: int = 20
     top_k_bm25: int = 20
     rrf_k: int = 60

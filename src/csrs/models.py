@@ -55,6 +55,7 @@ class RetrievedChunk(BaseModel):
     # Chroma's cosine distance is converted at the store boundary with 1.0 - distance.
     score: float
     rank: int | None = None
+    rrf_score: float | None = None
 
 
 class Answer(BaseModel):

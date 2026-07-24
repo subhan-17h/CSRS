@@ -15,6 +15,8 @@ from typing import Any
 from csrs.config import PROJECT_ROOT, settings
 from csrs.embeddings import embed_query
 from csrs.generation import generate_answer
+from csrs.pipeline import Pipeline
+from csrs.retrieval import BM25Index, hybrid_search
 from csrs.store import ChunkStore
 from metrics import (
     chunk_matches,
@@ -55,6 +57,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=positive_int,
         default=settings.top_k_dense,
         help=f"retrieval depth (default: {settings.top_k_dense})",
+    )
+    parser.add_argument(
+        "--retrieval",
+        choices=("dense", "hybrid"),
+        default=settings.retrieval_mode,
+        help=f"retrieval strategy (default: {settings.retrieval_mode})",
+    )
+    parser.add_argument(
+        "--rrf-k",
+        type=positive_int,
+        default=settings.rrf_k,
+        help=f"RRF rank constant for hybrid retrieval (default: {settings.rrf_k})",
     )
     parser.add_argument(
         "--model",
@@ -115,12 +129,31 @@ def evaluate_pairs(
     depth: int,
     model: str,
     generate: bool,
+    retrieval: str,
+    sparse: BM25Index | None,
+    rrf_k: int,
 ) -> list[dict[str, Any]]:
     """Retrieve, score, and optionally generate exactly once for every pair."""
     rows = []
     total = len(pairs)
     for position, pair in enumerate(pairs, start=1):
-        chunks = store.search(embed_query(pair["question"]), depth)
+        question = pair["question"]
+        query_embedding = embed_query(question)
+        if retrieval == "hybrid":
+            if sparse is None:
+                raise EvaluationError("hybrid retrieval requires a sparse index")
+            chunks = hybrid_search(
+                question,
+                query_embedding,
+                store,
+                sparse,
+                limit=depth,
+                top_k_dense=settings.top_k_dense,
+                top_k_bm25=settings.top_k_bm25,
+                rrf_k=rrf_k,
+            )
+        else:
+            chunks = store.search(query_embedding, depth)
         ranked_ids = [retrieved.chunk.id for retrieved in chunks]
         pair_relevant_ids = relevant_ids[pair["id"]]
         answerable = bool(pair["expected"])
@@ -247,9 +280,11 @@ def print_summary(
     aggregate: dict[str, int | float | None],
     refusal: dict[str, bool | int | float | None],
     result_path: Path,
+    retrieval: str,
+    rrf_k: int,
 ) -> None:
     """Print retrieval and refusal results in the validator's table style."""
-    print("Evaluation results")
+    print(f"Evaluation results (retrieval={retrieval}, rrf_k={rrf_k})")
     print(
         f"{'category':<18} {'pairs':>5} {'scored':>6} {'Recall@5':>10} "
         f"{'Recall@10':>10} {'Recall@20':>10} {'MRR':>8} {'nDCG@10':>10}"
@@ -307,6 +342,7 @@ def run(args: argparse.Namespace) -> Path:
     store = ChunkStore()
     indexed_rows, document_count = scan_index(store)
     relevant_ids = resolve_relevant_ids(pairs, indexed_rows)
+    sparse = Pipeline().sparse_index() if args.retrieval == "hybrid" else None
     pair_rows = evaluate_pairs(
         pairs,
         relevant_ids,
@@ -314,6 +350,9 @@ def run(args: argparse.Namespace) -> Path:
         args.depth,
         args.model,
         not args.no_generate,
+        args.retrieval,
+        sparse,
+        args.rrf_k,
     )
     aggregate = aggregate_rows(pair_rows)
     categories = {
@@ -331,6 +370,8 @@ def run(args: argparse.Namespace) -> Path:
         "git_commit": git_commit(),
         "parameters": {
             "depth": args.depth,
+            "retrieval": args.retrieval,
+            "rrf_k": args.rrf_k,
             "model": args.model,
             "temperature": settings.temperature,
             "generate": not args.no_generate,
@@ -346,7 +387,14 @@ def run(args: argparse.Namespace) -> Path:
         "pairs": pair_rows,
     }
     result_path = write_result(result, timestamp)
-    print_summary(categories, aggregate, refusal, result_path)
+    print_summary(
+        categories,
+        aggregate,
+        refusal,
+        result_path,
+        args.retrieval,
+        args.rrf_k,
+    )
     return result_path
 
 

@@ -1,6 +1,7 @@
 """Offline tests for sparse BM25 retrieval."""
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,9 @@ from csrs.retrieval import (
     BM25IndexNotFoundError,
     _tokenize,
     compute_chunk_signature,
+    hybrid_search,
 )
+from csrs.store import ChunkStore
 
 
 def make_chunk(
@@ -176,3 +179,105 @@ def test_empty_corpus_searches_and_round_trips_as_empty(tmp_path: Path) -> None:
 
     assert loaded.search("AC-2", k=5) == []
     assert loaded.signature == index.signature
+
+
+def test_chunks_with_embeddings_returns_existing_ids_as_plain_floats(
+    tmp_path: Path,
+) -> None:
+    store = ChunkStore(path=tmp_path / "chroma")
+    first = make_chunk("first", "First guidance")
+    second = make_chunk("second", "Second guidance")
+    store.add_chunks([first, second], [[1, 0], [0, 1]])
+
+    stored = store.chunks_with_embeddings(["second", "missing", "first"])
+
+    assert stored["first"] == (first, [1.0, 0.0])
+    assert stored["second"] == (second, [0.0, 1.0])
+    assert "missing" not in stored
+    assert all(
+        type(value) is float
+        for _, embedding in stored.values()
+        for value in embedding
+    )
+
+
+def test_hybrid_search_keeps_dense_and_sparse_only_chunks_with_cosine_scores(
+    tmp_path: Path,
+) -> None:
+    store = ChunkStore(path=tmp_path / "chroma")
+    dense_chunk = make_chunk("a-dense", "General access guidance")
+    sparse_chunk = make_chunk("b-sparse", "Quasar authentication requirements")
+    store.add_chunks([dense_chunk, sparse_chunk], [[1.0, 0.0], [1.0, 1.0]])
+    sparse = BM25Index.build([dense_chunk, sparse_chunk])
+    dense_result = store.search([1.0, 0.0], k=1)[0]
+
+    results = hybrid_search(
+        "quasar",
+        [1.0, 0.0],
+        store,
+        sparse,
+        limit=2,
+        top_k_dense=1,
+        top_k_bm25=1,
+        rrf_k=60,
+    )
+
+    assert [result.chunk.id for result in results] == ["a-dense", "b-sparse"]
+    assert [result.rank for result in results] == [0, 1]
+    assert all(result.rrf_score is not None for result in results)
+    assert results[0].score == dense_result.score
+    assert results[1].score == pytest.approx(1.0 / math.sqrt(2.0))
+
+    limited = hybrid_search(
+        "quasar",
+        [1.0, 0.0],
+        store,
+        sparse,
+        limit=1,
+        top_k_dense=1,
+        top_k_bm25=1,
+        rrf_k=60,
+    )
+    assert len(limited) == 1
+    assert limited[0].rank == 0
+
+
+def test_hybrid_search_scores_zero_norm_sparse_embedding_as_zero(
+    tmp_path: Path,
+) -> None:
+    store = ChunkStore(path=tmp_path / "chroma")
+    dense_chunk = make_chunk("a-dense", "General access guidance")
+    zero_chunk = make_chunk("b-zero", "Nebula authentication requirements")
+    store.add_chunks([dense_chunk, zero_chunk], [[1.0, 0.0], [0.0, 0.0]])
+
+    results = hybrid_search(
+        "nebula",
+        [1.0, 0.0],
+        store,
+        BM25Index.build([dense_chunk, zero_chunk]),
+        limit=2,
+        top_k_dense=1,
+        top_k_bm25=1,
+        rrf_k=60,
+    )
+
+    zero_result = next(result for result in results if result.chunk.id == "b-zero")
+    assert zero_result.score == 0.0
+    assert zero_result.rrf_score is not None
+
+
+def test_hybrid_search_returns_empty_for_empty_store_and_sparse_index(
+    tmp_path: Path,
+) -> None:
+    store = ChunkStore(path=tmp_path / "chroma")
+
+    assert hybrid_search(
+        "anything",
+        [1.0, 0.0],
+        store,
+        BM25Index.build([]),
+        limit=5,
+        top_k_dense=20,
+        top_k_bm25=20,
+        rrf_k=60,
+    ) == []

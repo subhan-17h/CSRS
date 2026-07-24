@@ -204,6 +204,47 @@ class ChunkStore:
             for chunk_id, text, metadata in rows
         ]
 
+    def chunks_with_embeddings(
+        self,
+        chunk_ids: Sequence[str],
+    ) -> dict[str, tuple[Chunk, list[float]]]:
+        """Return requested stored chunks and their embeddings, keyed by chunk ID."""
+        if not chunk_ids:
+            return {}
+
+        result = self._collection.get(
+            ids=list(chunk_ids),
+            include=["documents", "metadatas", "embeddings"],
+        )
+        documents = result["documents"] or []
+        metadatas = result["metadatas"] or []
+        embeddings = result["embeddings"]
+        if embeddings is None:
+            embeddings = []
+
+        return {
+            chunk_id: (
+                Chunk(
+                    id=chunk_id,
+                    text=text,
+                    doc_name=metadata["doc_name"],
+                    section=metadata.get("section"),
+                    page=metadata.get("page"),
+                    control_id=metadata.get("control_id"),
+                    parent_id=metadata.get("parent_id"),
+                    content_hash=metadata["content_hash"],
+                ),
+                [float(value) for value in embedding],
+            )
+            for chunk_id, text, metadata, embedding in zip(
+                result["ids"],
+                documents,
+                metadatas,
+                embeddings,
+                strict=True,
+            )
+        }
+
     def chunks_for_document(
         self,
         doc_name: str,

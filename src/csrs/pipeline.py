@@ -21,6 +21,7 @@ from csrs.retrieval import (
     BM25IndexCorruptError,
     BM25IndexNotFoundError,
     compute_chunk_signature,
+    hybrid_search,
 )
 from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
 
@@ -88,6 +89,7 @@ class Pipeline:
             self._bm25_path = resolved_chroma_path / "bm25_index"
         else:
             self._bm25_path = settings.bm25_dir
+        self._sparse_index: BM25Index | None = None
 
     def index(
         self,
@@ -127,6 +129,7 @@ class Pipeline:
             or expected_chunk_counts != self._store.document_chunk_counts()
         ):
             self._store.reset()
+            self._sparse_index = None
             manifest = {}
         added = 0
         updated = 0
@@ -184,6 +187,7 @@ class Pipeline:
                 on_progress("Rebuilding the keyword index")
             sparse_index = BM25Index.build(self._store.all_chunks())
             sparse_index.save(self._bm25_path)
+            self._sparse_index = None
 
         return IndexResult(
             documents_indexed=len(manifest),
@@ -196,6 +200,9 @@ class Pipeline:
 
     def sparse_index(self) -> BM25Index:
         """Return a persisted sparse index aligned with the current chunk store."""
+        if self._sparse_index is not None:
+            return self._sparse_index
+
         chunks = self._store.all_chunks()
         try:
             sparse_index = BM25Index.load(self._bm25_path)
@@ -205,10 +212,12 @@ class Pipeline:
             sparse_index is not None
             and sparse_index.signature == compute_chunk_signature(chunks)
         ):
+            self._sparse_index = sparse_index
             return sparse_index
 
         sparse_index = BM25Index.build(chunks)
         sparse_index.save(self._bm25_path)
+        self._sparse_index = sparse_index
         return sparse_index
 
     def ask(
@@ -240,7 +249,19 @@ class Pipeline:
             temperature if temperature is not None else settings.temperature
         )
         query_embedding = embed_query(question)
-        chunks = self._store.search(query_embedding, selected_k)
+        if settings.retrieval_mode == "hybrid":
+            chunks = hybrid_search(
+                question,
+                query_embedding,
+                self._store,
+                self.sparse_index(),
+                limit=selected_k,
+                top_k_dense=settings.top_k_dense,
+                top_k_bm25=settings.top_k_bm25,
+                rrf_k=settings.rrf_k,
+            )
+        else:
+            chunks = self._store.search(query_embedding, selected_k)
         return generate_answer(
             question,
             chunks,
@@ -272,7 +293,19 @@ class Pipeline:
             temperature if temperature is not None else settings.temperature
         )
         query_embedding = embed_query(question)
-        chunks = self._store.search(query_embedding, selected_k)
+        if settings.retrieval_mode == "hybrid":
+            chunks = hybrid_search(
+                question,
+                query_embedding,
+                self._store,
+                self.sparse_index(),
+                limit=selected_k,
+                top_k_dense=settings.top_k_dense,
+                top_k_bm25=settings.top_k_bm25,
+                rrf_k=settings.rrf_k,
+            )
+        else:
+            chunks = self._store.search(query_embedding, selected_k)
         return generate_answer_stream(
             question,
             chunks,
