@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     top_k_dense: int = 20
     top_k_bm25: int = 20
     rrf_k: int = 60
+    rerank_enabled: bool = False
+    flashrank_model: str = "ms-marco-MiniLM-L-12-v2"
+    flashrank_cache_dir: Path = Path.home() / ".cache" / "flashrank"
+    rerank_candidates: int = 40
     rerank_top_n: int = 5
 
     # --- Generation -------------------------------------------------------

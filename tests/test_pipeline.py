@@ -682,7 +682,7 @@ def test_ask_on_empty_store_refuses_without_embedding_or_generation(
     assert calls == {"embedding": 0, "generation": 0}
 
 
-def test_ask_routes_caller_k_through_hybrid_search_and_returns_answer_unchanged(
+def test_ask_routes_caller_k_through_retrieve_and_returns_answer_unchanged(
     monkeypatch: pytest.MonkeyPatch,
     offline_pipeline: pipeline.Pipeline,
     tmp_path: Path,
@@ -700,22 +700,37 @@ def test_ask_routes_caller_k_through_hybrid_search_and_returns_answer_unchanged(
     )
     sparse = pipeline.BM25Index.build([])
 
-    def fake_hybrid_search(
+    def fake_retrieve(
         question: str,
         query_embedding: Sequence[float],
         store: object,
         sparse_index: pipeline.BM25Index,
         *,
         limit: int,
+        mode: str,
+        rerank_enabled: bool,
         top_k_dense: int,
         top_k_bm25: int,
         rrf_k: int,
+        rerank_candidates: int,
+        flashrank_model: str,
+        flashrank_cache_dir: Path,
     ) -> list[RetrievedChunk]:
         observed["question"] = question
         observed["query_embedding"] = list(query_embedding)
         observed["store"] = store
         observed["sparse"] = sparse_index
-        observed["retrieval"] = (limit, top_k_dense, top_k_bm25, rrf_k)
+        observed["retrieval"] = (
+            limit,
+            mode,
+            rerank_enabled,
+            top_k_dense,
+            top_k_bm25,
+            rrf_k,
+            rerank_candidates,
+            flashrank_model,
+            flashrank_cache_dir,
+        )
         return []
 
     def fake_generation(
@@ -730,7 +745,7 @@ def test_ask_routes_caller_k_through_hybrid_search_and_returns_answer_unchanged(
     monkeypatch.setattr(settings, "retrieval_mode", "hybrid")
     monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
     monkeypatch.setattr(offline_pipeline, "sparse_index", lambda: sparse)
-    monkeypatch.setattr(pipeline, "hybrid_search", fake_hybrid_search)
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
     monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
 
     answer = offline_pipeline.ask(
@@ -748,12 +763,102 @@ def test_ask_routes_caller_k_through_hybrid_search_and_returns_answer_unchanged(
         "sparse": sparse,
         "retrieval": (
             7,
+            "hybrid",
+            settings.rerank_enabled,
             settings.top_k_dense,
             settings.top_k_bm25,
             settings.rrf_k,
+            settings.rerank_candidates,
+            settings.flashrank_model,
+            settings.flashrank_cache_dir,
         ),
         "generation": ("What is access control?", [], "gemma2:2b", 0.8),
     }
+
+
+def test_ask_and_ask_stream_share_retrieve_entry_point(
+    monkeypatch: pytest.MonkeyPatch,
+    offline_pipeline: pipeline.Pipeline,
+    tmp_path: Path,
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "standard.txt").write_text("Access control guidance.", encoding="utf-8")
+    offline_pipeline.index(docs_dir)
+    calls: list[tuple[object, ...]] = []
+    expected = Answer(
+        text="A grounded answer.",
+        sources=[],
+        model=settings.default_llm,
+        question="What is access control?",
+    )
+
+    def fake_retrieve(
+        question: str,
+        query_embedding: Sequence[float],
+        store: object,
+        sparse_index: pipeline.BM25Index | None,
+        *,
+        limit: int,
+        mode: str,
+        rerank_enabled: bool,
+        top_k_dense: int,
+        top_k_bm25: int,
+        rrf_k: int,
+        rerank_candidates: int,
+        flashrank_model: str,
+        flashrank_cache_dir: Path,
+    ) -> list[RetrievedChunk]:
+        calls.append(
+            (
+                question,
+                list(query_embedding),
+                store,
+                sparse_index,
+                limit,
+                mode,
+                rerank_enabled,
+                top_k_dense,
+                top_k_bm25,
+                rrf_k,
+                rerank_candidates,
+                flashrank_model,
+                flashrank_cache_dir,
+            )
+        )
+        return []
+
+    monkeypatch.setattr(pipeline, "embed_query", lambda question: [0.0, 1.0, 0.0])
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    monkeypatch.setattr(pipeline, "generate_answer", lambda *args: expected)
+    monkeypatch.setattr(
+        pipeline,
+        "generate_answer_stream",
+        lambda *args: iter(()),
+    )
+
+    answer = offline_pipeline.ask("What is access control?")
+    stream = offline_pipeline.ask_stream("What is access control?")
+
+    assert answer is expected
+    assert list(stream) == []
+    assert len(calls) == 2
+    assert calls[0] == calls[1]
+    assert calls[0] == (
+        "What is access control?",
+        [0.0, 1.0, 0.0],
+        offline_pipeline._store,
+        None,
+        settings.rerank_top_n,
+        "dense",
+        settings.rerank_enabled,
+        settings.top_k_dense,
+        settings.top_k_bm25,
+        settings.rrf_k,
+        settings.rerank_candidates,
+        settings.flashrank_model,
+        settings.flashrank_cache_dir,
+    )
 
 
 def test_ask_uses_configured_defaults_for_k_model_and_temperature(
@@ -836,7 +941,6 @@ def test_ask_default_dense_never_touches_sparse_retrieval(
     monkeypatch.setattr(offline_pipeline, "sparse_index", fail_sparse)
     monkeypatch.setattr(offline_pipeline._store, "all_chunks", fail_sparse)
     monkeypatch.setattr(pipeline.BM25Index, "load", fail_sparse)
-    monkeypatch.setattr(pipeline, "hybrid_search", fail_sparse)
     monkeypatch.setattr(pipeline, "generate_answer", lambda *args: expected)
 
     answer = offline_pipeline.ask("What is access control?")
@@ -864,16 +968,21 @@ def test_ask_reuses_cached_sparse_index_across_queries(
         scans += 1
         return original_all_chunks()
 
-    def fake_hybrid_search(
+    def fake_retrieve(
         question: str,
         query_embedding: Sequence[float],
         store: object,
         sparse_index: pipeline.BM25Index,
         *,
         limit: int,
+        mode: str,
+        rerank_enabled: bool,
         top_k_dense: int,
         top_k_bm25: int,
         rrf_k: int,
+        rerank_candidates: int,
+        flashrank_model: str,
+        flashrank_cache_dir: Path,
     ) -> list[RetrievedChunk]:
         sparse_indexes.append(sparse_index)
         return []
@@ -889,7 +998,7 @@ def test_ask_reuses_cached_sparse_index_across_queries(
     monkeypatch.setattr(settings, "retrieval_mode", "hybrid")
     monkeypatch.setattr(offline_pipeline._store, "all_chunks", record_all_chunks)
     monkeypatch.setattr(pipeline, "embed_query", lambda question: [1.0, 0.0, 0.0])
-    monkeypatch.setattr(pipeline, "hybrid_search", fake_hybrid_search)
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
     monkeypatch.setattr(pipeline, "generate_answer", fake_generation)
 
     offline_pipeline.ask("First question?")

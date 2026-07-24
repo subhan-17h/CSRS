@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from csrs.models import Chunk, content_hash
+from csrs import retrieval as retrieval_module
+from csrs.config import settings
+from csrs.models import Chunk, RetrievedChunk, content_hash
 from csrs.retrieval import (
     BM25Index,
     BM25IndexCorruptError,
@@ -14,6 +16,8 @@ from csrs.retrieval import (
     _tokenize,
     compute_chunk_signature,
     hybrid_search,
+    rerank,
+    retrieve,
 )
 from csrs.store import ChunkStore
 
@@ -281,3 +285,225 @@ def test_hybrid_search_returns_empty_for_empty_store_and_sparse_index(
         top_k_bm25=20,
         rrf_k=60,
     ) == []
+
+
+def test_rerank_returns_empty_without_constructing_ranker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_ranker(model: str, cache_dir: Path) -> object:
+        raise AssertionError("empty candidates must not construct a Ranker")
+
+    monkeypatch.setattr(retrieval_module, "_ranker", fail_ranker)
+
+    assert rerank(
+        "anything",
+        [],
+        limit=5,
+        model="fake-model",
+        cache_dir=tmp_path,
+    ) == []
+
+
+def test_ranker_is_cached_by_model_and_cache_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    constructions: list[tuple[str, str, str]] = []
+
+    class FakeRanker:
+        def __init__(self, model_name: str, cache_dir: str, log_level: str) -> None:
+            constructions.append((model_name, cache_dir, log_level))
+
+    retrieval_module._ranker.cache_clear()
+    monkeypatch.setattr(retrieval_module, "Ranker", FakeRanker)
+
+    first = retrieval_module._ranker("model-a", tmp_path)
+    second = retrieval_module._ranker("model-a", tmp_path)
+    other = retrieval_module._ranker("model-b", tmp_path)
+
+    assert first is second
+    assert other is not first
+    assert constructions == [
+        ("model-a", str(tmp_path), "WARNING"),
+        ("model-b", str(tmp_path), "WARNING"),
+    ]
+    retrieval_module._ranker.cache_clear()
+
+
+def test_retrieve_reranks_full_dense_candidate_pool_without_touching_sparse(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    candidates = [
+        RetrievedChunk(
+            chunk=make_chunk(f"chunk-{index}", f"Passage {index}"),
+            score=1.0 - index / 100,
+            rank=index,
+        )
+        for index in range(45)
+    ]
+    observed: dict[str, object] = {}
+
+    class FakeStore:
+        def search(
+            self,
+            query_embedding: list[float],
+            k: int,
+        ) -> list[RetrievedChunk]:
+            observed["search"] = (query_embedding, k)
+            return candidates[:k]
+
+    class FailSparse:
+        def search(self, question: str, k: int) -> list[tuple[str, float]]:
+            raise AssertionError("dense retrieval must not consult the sparse index")
+
+    class FakeRanker:
+        def rerank(self, request: object) -> list[dict[str, object]]:
+            observed["question"] = request.query
+            observed["texts"] = [
+                passage["text"] for passage in request.passages
+            ]
+            return [
+                {**passage, "score": 1.0 - index / 100}
+                for index, passage in enumerate(reversed(request.passages))
+            ]
+
+    monkeypatch.setattr(
+        retrieval_module,
+        "_ranker",
+        lambda model, cache_dir: FakeRanker(),
+    )
+
+    results = retrieve(
+        "Which passage is relevant?",
+        [1.0, 0.0],
+        FakeStore(),
+        FailSparse(),
+        limit=5,
+        mode="dense",
+        rerank_enabled=True,
+        top_k_dense=20,
+        top_k_bm25=20,
+        rrf_k=60,
+        rerank_candidates=40,
+        flashrank_model="fake-model",
+        flashrank_cache_dir=tmp_path,
+    )
+
+    assert observed["search"] == ([1.0, 0.0], 40)
+    assert len(observed["texts"]) == 40
+    assert [result.chunk.id for result in results] == [
+        "chunk-39",
+        "chunk-38",
+        "chunk-37",
+        "chunk-36",
+        "chunk-35",
+    ]
+    assert [result.rank for result in results] == [0, 1, 2, 3, 4]
+    assert [result.score for result in results] == [
+        candidates[index].score for index in (39, 38, 37, 36, 35)
+    ]
+    assert [result.rerank_score for result in results] == [
+        1.0,
+        0.99,
+        0.98,
+        0.97,
+        0.96,
+    ]
+    assert all(
+        result.chunk is candidates[index].chunk
+        for result, index in zip(results, (39, 38, 37, 36, 35), strict=True)
+    )
+
+
+def test_retrieve_sizes_hybrid_pool_before_reranking(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed: dict[str, object] = {}
+    sparse = BM25Index.build([])
+    store = object()
+
+    def fake_hybrid_search(
+        question: str,
+        query_embedding: list[float],
+        store: object,
+        sparse_index: BM25Index,
+        *,
+        limit: int,
+        top_k_dense: int,
+        top_k_bm25: int,
+        rrf_k: int,
+    ) -> list[RetrievedChunk]:
+        observed["hybrid"] = (
+            question,
+            query_embedding,
+            store,
+            sparse_index,
+            limit,
+            top_k_dense,
+            top_k_bm25,
+            rrf_k,
+        )
+        return []
+
+    monkeypatch.setattr(retrieval_module, "hybrid_search", fake_hybrid_search)
+
+    results = retrieve(
+        "question",
+        [0.0, 1.0],
+        store,
+        sparse,
+        limit=20,
+        mode="hybrid",
+        rerank_enabled=True,
+        top_k_dense=20,
+        top_k_bm25=20,
+        rrf_k=60,
+        rerank_candidates=40,
+        flashrank_model="fake-model",
+        flashrank_cache_dir=tmp_path,
+    )
+
+    assert results == []
+    assert observed["hybrid"] == (
+        "question",
+        [0.0, 1.0],
+        store,
+        sparse,
+        40,
+        20,
+        20,
+        60,
+    )
+
+
+@pytest.mark.flashrank
+def test_real_flashrank_prioritizes_obviously_relevant_passage() -> None:
+    relevant = RetrievedChunk(
+        chunk=make_chunk("relevant", "Paris is the capital city of France."),
+        score=0.4,
+    )
+    candidates = [
+        RetrievedChunk(
+            chunk=make_chunk("irrelevant-1", "Bananas grow in warm tropical climates."),
+            score=0.9,
+        ),
+        relevant,
+        RetrievedChunk(
+            chunk=make_chunk("irrelevant-2", "Whales are large marine mammals."),
+            score=0.8,
+        ),
+    ]
+
+    results = rerank(
+        "What is the capital of France?",
+        candidates,
+        limit=3,
+        model=settings.flashrank_model,
+        cache_dir=settings.flashrank_cache_dir,
+    )
+
+    assert results[0].chunk.id == "relevant"
+    assert results[0].rerank_score is not None

@@ -21,7 +21,7 @@ from csrs.retrieval import (
     BM25IndexCorruptError,
     BM25IndexNotFoundError,
     compute_chunk_signature,
-    hybrid_search,
+    retrieve,
 )
 from csrs.store import ChunkStore, file_content_hash, load_manifest, save_manifest
 
@@ -238,30 +238,31 @@ class Pipeline:
                 question=question,
             )
 
-        # Everything retrieved goes straight to the model, because there is no reranker.
-        # `top_k_dense` (20) is the retrieval *candidate pool*, not the generation context:
-        # measured at T-1.7, k=20 fills 92.4% of `num_ctx` and Ollama truncates silently
-        # rather than erroring. `rerank_top_n` already means "chunks that reach generation",
-        # so default to it. When a reranker lands it narrows top_k_dense -> rerank_top_n
-        # here, and this default stops being a stand-in.
+        # `rerank_top_n` means "chunks that reach generation"; callers may override it.
         selected_k = k if k is not None else settings.rerank_top_n
         selected_temperature = (
             temperature if temperature is not None else settings.temperature
         )
         query_embedding = embed_query(question)
-        if settings.retrieval_mode == "hybrid":
-            chunks = hybrid_search(
-                question,
-                query_embedding,
-                self._store,
-                self.sparse_index(),
-                limit=selected_k,
-                top_k_dense=settings.top_k_dense,
-                top_k_bm25=settings.top_k_bm25,
-                rrf_k=settings.rrf_k,
-            )
-        else:
-            chunks = self._store.search(query_embedding, selected_k)
+        chunks = retrieve(
+            question,
+            query_embedding,
+            self._store,
+            (
+                self.sparse_index()
+                if settings.retrieval_mode == "hybrid"
+                else None
+            ),
+            limit=selected_k,
+            mode=settings.retrieval_mode,
+            rerank_enabled=settings.rerank_enabled,
+            top_k_dense=settings.top_k_dense,
+            top_k_bm25=settings.top_k_bm25,
+            rrf_k=settings.rrf_k,
+            rerank_candidates=settings.rerank_candidates,
+            flashrank_model=settings.flashrank_model,
+            flashrank_cache_dir=settings.flashrank_cache_dir,
+        )
         return generate_answer(
             question,
             chunks,
@@ -286,26 +287,31 @@ class Pipeline:
                 temperature,
             )
 
-        # Keep this retrieval path visibly identical to ask(); stage events depend on
-        # retrieval finishing when this method returns, before generation is advanced.
+        # Retrieval finishes when this method returns, before generation is advanced.
         selected_k = k if k is not None else settings.rerank_top_n
         selected_temperature = (
             temperature if temperature is not None else settings.temperature
         )
         query_embedding = embed_query(question)
-        if settings.retrieval_mode == "hybrid":
-            chunks = hybrid_search(
-                question,
-                query_embedding,
-                self._store,
-                self.sparse_index(),
-                limit=selected_k,
-                top_k_dense=settings.top_k_dense,
-                top_k_bm25=settings.top_k_bm25,
-                rrf_k=settings.rrf_k,
-            )
-        else:
-            chunks = self._store.search(query_embedding, selected_k)
+        chunks = retrieve(
+            question,
+            query_embedding,
+            self._store,
+            (
+                self.sparse_index()
+                if settings.retrieval_mode == "hybrid"
+                else None
+            ),
+            limit=selected_k,
+            mode=settings.retrieval_mode,
+            rerank_enabled=settings.rerank_enabled,
+            top_k_dense=settings.top_k_dense,
+            top_k_bm25=settings.top_k_bm25,
+            rrf_k=settings.rrf_k,
+            rerank_candidates=settings.rerank_candidates,
+            flashrank_model=settings.flashrank_model,
+            flashrank_cache_dir=settings.flashrank_cache_dir,
+        )
         return generate_answer_stream(
             question,
             chunks,

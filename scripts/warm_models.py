@@ -20,8 +20,6 @@ DOCLING_REQUIRED_FILES = (
     ),
 )
 
-# TODO(T-3.5): Warm FlashRank weights here once the application selects a reranker model.
-
 
 def _directory_size(path: Path) -> int:
     """Return the total size of regular files below path."""
@@ -72,6 +70,47 @@ def warm_docling() -> bool:
         return False
 
     print(f"  {size:,} bytes  [downloaded]\n")
+    return True
+
+
+def warm_flashrank() -> bool:
+    """Download and verify the configured FlashRank model weights."""
+    path = settings.flashrank_cache_dir.expanduser()
+    model_path = path / settings.flashrank_model
+    print("FlashRank model:")
+    print(f"  path: {model_path}")
+
+    try:
+        from flashrank import Ranker
+        from flashrank.Config import model_file_map
+    except ImportError:
+        print("  FAILED: FlashRank is unavailable; run `uv sync`.\n")
+        return False
+
+    model_file = model_file_map.get(settings.flashrank_model)
+    if model_file is None:
+        print(f"  FAILED: unsupported model {settings.flashrank_model!r}.\n")
+        return False
+
+    weights_path = model_path / model_file
+    already_present = weights_path.is_file()
+    try:
+        Ranker(
+            model_name=settings.flashrank_model,
+            cache_dir=str(path),
+            log_level="WARNING",
+        )
+    except Exception as exc:
+        print(f"  FAILED: could not prepare the model: {exc}\n")
+        return False
+
+    size = _directory_size(model_path)
+    if not weights_path.is_file():
+        print(f"  {size:,} bytes  [FAILED: required weights are still missing]\n")
+        return False
+
+    status = "skipped (already present)" if already_present else "downloaded"
+    print(f"  {size:,} bytes  [{status}]\n")
     return True
 
 
@@ -153,14 +192,15 @@ def main() -> int:
 
     print("Preparing model weights for offline use\n")
     docling_ok = warm_docling()
+    flashrank_ok = warm_flashrank()
     ollama_ok, ollama_present, ollama_total = warm_ollama(args.pull_ollama)
 
     print("Summary:")
     print(f"  Docling: {'ready' if docling_ok else 'not ready'}")
+    print(f"  FlashRank: {'ready' if flashrank_ok else 'not ready'}")
     print(f"  Ollama: {ollama_present} of {ollama_total} required models present")
-    print("  FlashRank: deferred until T-3.5 selects the reranker model")
 
-    if not docling_ok or not ollama_ok:
+    if not docling_ok or not flashrank_ok or not ollama_ok:
         print("\nRequired model weights are missing or could not be verified.")
         return 1
     print("\nAll required model weights are present.")

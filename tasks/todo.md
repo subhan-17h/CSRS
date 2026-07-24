@@ -1027,6 +1027,50 @@ Refusal: recall **8/11**, false-refusal rate **0/37**, overall **45/48**.
   is the single thing fusion did improve. If reranking converts that, hybrid becomes the
   default with numbers behind it. If not, D2's rule applies and it does not ship.
 
+- [x] **T-3.5** FlashRank reranking — **shipped as a capability, disabled by default.
+      Second measured negative result.**
+  - [x] `rerank()` with a module-cached Ranker; `RetrievedChunk.rerank_score` added without
+        touching `score`; `flashrank_cache_dir` pinned so `/tmp` cannot be wiped from under it.
+  - [x] One `retrieve()` entry point; the duplicated dense/hybrid branch is gone from
+        `ask()` and `ask_stream()`, and the harness calls the same function.
+  - [x] `warm_flashrank()` resolves the `TODO(T-3.5)`; `--rerank/--no-rerank` in the harness;
+        a `flashrank` pytest marker keeps the offline suite green without weights.
+  - **Verified:** ruff clean, 205 offline tests pass with 2 deselected, the `flashrank`-marked
+    test passes against real weights, `warm_models.py` reports **FlashRank: ready** (33 MB
+    under `~/.cache/flashrank`), index untouched at 4 documents / 2506 chunks.
+
+  | run | R@5 | R@10 | R@20 | MRR | nDCG@10 | rank-1 hits |
+  |---|---|---|---|---|---|---|
+  | dense (baseline) | **0.454** | **0.573** | **0.702** | 0.834 | **0.628** | 27/37 |
+  | dense + rerank | 0.435 | 0.513 | 0.642 | 0.875 | 0.614 | 31/37 |
+  | hybrid | 0.461 | 0.565 | 0.710 | 0.855 | 0.625 | 29/37 |
+  | hybrid + rerank | 0.439 | 0.525 | 0.693 | **0.920** | 0.624 | **33/37** |
+
+  **The done-when was "nDCG@10 improves again". It does not** — 0.624 and 0.614 against
+  0.628. What reranking actually does is trade breadth for precision at rank 1: it puts the
+  right chunk first far more often (33/37 vs 27/37, MRR 0.920 vs 0.834, `exact_id` and
+  `cross_document` MRR both 1.000) while pushing the rest of the relevant set out of the
+  top 10. On `spec_example` — the five questions from the spec — Recall@5 falls 0.144 ->
+  0.048, a threefold loss on exactly the questions the product is demonstrated with.
+
+  **Latency is the finding that settles it.** The roadmap budgeted ~30 ms for 40 candidates.
+  Measured on this hardware with `ms-marco-MiniLM-L-12-v2`, warmed, median of six runs:
+
+  | pool | median | min | max |
+  |---|---|---|---|
+  | 5 candidates | 125 ms | 105 | 234 |
+  | 20 candidates | 717 ms | 533 | 939 |
+  | 40 candidates | **1626 ms** | 1420 | 2257 |
+
+  **54x the planning assumption.** Reranking would add ~1.6 s to every query in exchange for
+  flat nDCG, worse recall on the demo questions, and better rank-1 precision. So
+  `rerank_enabled` stays `False` and `retrieval_mode` stays `dense`; both remain selectable
+  and both are now measured.
+
+  **No configuration fixes the Identify pair.** dense rank 6, dense+rerank absent from the
+  top 20, hybrid rank 12, hybrid+rerank rank 6. It is not a retrieval-tuning problem, which
+  is what T-4.3's conversational rewriting was always meant to address.
+
 ---
 
 ## Submission preparation — interposed before T-3.2

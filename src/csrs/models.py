@@ -56,6 +56,7 @@ class RetrievedChunk(BaseModel):
     score: float
     rank: int | None = None
     rrf_score: float | None = None
+    rerank_score: float | None = None
 
 
 class Answer(BaseModel):

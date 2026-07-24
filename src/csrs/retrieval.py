@@ -4,10 +4,12 @@ import hashlib
 import json
 import math
 from collections.abc import Sequence
+from functools import lru_cache
 from pathlib import Path
 
 import bm25s
 import Stemmer
+from flashrank import Ranker, RerankRequest
 
 from csrs.models import Chunk, RetrievedChunk
 from csrs.store import ChunkStore
@@ -19,6 +21,8 @@ __all__ = (
     "BM25IndexNotFoundError",
     "compute_chunk_signature",
     "hybrid_search",
+    "rerank",
+    "retrieve",
     "rrf_fuse",
 )
 
@@ -293,3 +297,86 @@ def hybrid_search(
             )
         )
     return retrieved
+
+
+@lru_cache
+def _ranker(model: str, cache_dir: Path) -> Ranker:
+    """Return one FlashRank model instance per process and cache location."""
+    return Ranker(model_name=model, cache_dir=str(cache_dir), log_level="WARNING")
+
+
+def rerank(
+    question: str,
+    candidates: Sequence[RetrievedChunk],
+    *,
+    limit: int,
+    model: str,
+    cache_dir: Path,
+) -> list[RetrievedChunk]:
+    """Rerank candidate text while preserving dense scores and chunk identity."""
+    if not candidates:
+        return []
+
+    passages = [
+        {"id": index, "text": candidate.chunk.text}
+        for index, candidate in enumerate(candidates)
+    ]
+    ranked_passages = _ranker(model, cache_dir).rerank(
+        RerankRequest(query=question, passages=passages)
+    )
+    return [
+        candidates[passage["id"]].model_copy(
+            update={
+                "rank": rank,
+                "rerank_score": float(passage["score"]),
+            }
+        )
+        for rank, passage in enumerate(ranked_passages[:limit])
+    ]
+
+
+def retrieve(
+    question: str,
+    query_embedding: Sequence[float],
+    store: ChunkStore,
+    sparse_index: BM25Index | None,
+    *,
+    limit: int,
+    mode: str,
+    rerank_enabled: bool,
+    top_k_dense: int,
+    top_k_bm25: int,
+    rrf_k: int,
+    rerank_candidates: int,
+    flashrank_model: str,
+    flashrank_cache_dir: Path,
+) -> list[RetrievedChunk]:
+    """Gather dense or hybrid candidates and optionally rerank them."""
+    candidate_limit = max(rerank_candidates, limit) if rerank_enabled else limit
+    if mode == "hybrid":
+        if sparse_index is None:
+            raise ValueError("hybrid retrieval requires a sparse index")
+        candidates = hybrid_search(
+            question,
+            query_embedding,
+            store,
+            sparse_index,
+            limit=candidate_limit,
+            top_k_dense=top_k_dense,
+            top_k_bm25=top_k_bm25,
+            rrf_k=rrf_k,
+        )
+    elif mode == "dense":
+        candidates = store.search(query_embedding, candidate_limit)
+    else:
+        raise ValueError(f"unsupported retrieval mode: {mode}")
+
+    if not rerank_enabled:
+        return candidates[:limit]
+    return rerank(
+        question,
+        candidates,
+        limit=limit,
+        model=flashrank_model,
+        cache_dir=flashrank_cache_dir,
+    )

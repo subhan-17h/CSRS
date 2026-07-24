@@ -16,7 +16,7 @@ from csrs.config import PROJECT_ROOT, settings
 from csrs.embeddings import embed_query
 from csrs.generation import generate_answer
 from csrs.pipeline import Pipeline
-from csrs.retrieval import BM25Index, hybrid_search
+from csrs.retrieval import BM25Index, retrieve
 from csrs.store import ChunkStore
 from metrics import (
     chunk_matches,
@@ -69,6 +69,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=positive_int,
         default=settings.rrf_k,
         help=f"RRF rank constant for hybrid retrieval (default: {settings.rrf_k})",
+    )
+    parser.add_argument(
+        "--rerank",
+        action=argparse.BooleanOptionalAction,
+        default=settings.rerank_enabled,
+        help=f"rerank the retrieval candidate pool (default: {settings.rerank_enabled})",
     )
     parser.add_argument(
         "--model",
@@ -132,6 +138,7 @@ def evaluate_pairs(
     retrieval: str,
     sparse: BM25Index | None,
     rrf_k: int,
+    rerank_enabled: bool,
 ) -> list[dict[str, Any]]:
     """Retrieve, score, and optionally generate exactly once for every pair."""
     rows = []
@@ -139,21 +146,21 @@ def evaluate_pairs(
     for position, pair in enumerate(pairs, start=1):
         question = pair["question"]
         query_embedding = embed_query(question)
-        if retrieval == "hybrid":
-            if sparse is None:
-                raise EvaluationError("hybrid retrieval requires a sparse index")
-            chunks = hybrid_search(
-                question,
-                query_embedding,
-                store,
-                sparse,
-                limit=depth,
-                top_k_dense=settings.top_k_dense,
-                top_k_bm25=settings.top_k_bm25,
-                rrf_k=rrf_k,
-            )
-        else:
-            chunks = store.search(query_embedding, depth)
+        chunks = retrieve(
+            question,
+            query_embedding,
+            store,
+            sparse,
+            limit=depth,
+            mode=retrieval,
+            rerank_enabled=rerank_enabled,
+            top_k_dense=settings.top_k_dense,
+            top_k_bm25=settings.top_k_bm25,
+            rrf_k=rrf_k,
+            rerank_candidates=settings.rerank_candidates,
+            flashrank_model=settings.flashrank_model,
+            flashrank_cache_dir=settings.flashrank_cache_dir,
+        )
         ranked_ids = [retrieved.chunk.id for retrieved in chunks]
         pair_relevant_ids = relevant_ids[pair["id"]]
         answerable = bool(pair["expected"])
@@ -282,9 +289,14 @@ def print_summary(
     result_path: Path,
     retrieval: str,
     rrf_k: int,
+    rerank_enabled: bool,
 ) -> None:
     """Print retrieval and refusal results in the validator's table style."""
-    print(f"Evaluation results (retrieval={retrieval}, rrf_k={rrf_k})")
+    print(
+        f"Evaluation results (retrieval={retrieval}, rerank={rerank_enabled}, "
+        f"rerank_candidates={settings.rerank_candidates}, "
+        f"flashrank_model={settings.flashrank_model}, rrf_k={rrf_k})"
+    )
     print(
         f"{'category':<18} {'pairs':>5} {'scored':>6} {'Recall@5':>10} "
         f"{'Recall@10':>10} {'Recall@20':>10} {'MRR':>8} {'nDCG@10':>10}"
@@ -353,6 +365,7 @@ def run(args: argparse.Namespace) -> Path:
         args.retrieval,
         sparse,
         args.rrf_k,
+        args.rerank,
     )
     aggregate = aggregate_rows(pair_rows)
     categories = {
@@ -372,6 +385,9 @@ def run(args: argparse.Namespace) -> Path:
             "depth": args.depth,
             "retrieval": args.retrieval,
             "rrf_k": args.rrf_k,
+            "rerank": args.rerank,
+            "rerank_candidates": settings.rerank_candidates,
+            "flashrank_model": settings.flashrank_model,
             "model": args.model,
             "temperature": settings.temperature,
             "generate": not args.no_generate,
@@ -394,6 +410,7 @@ def run(args: argparse.Namespace) -> Path:
         result_path,
         args.retrieval,
         args.rrf_k,
+        args.rerank,
     )
     return result_path
 
