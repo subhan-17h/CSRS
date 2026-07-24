@@ -331,6 +331,15 @@ export function App() {
     const conversationId = existingConversation?.id ?? nextId("c");
     const conversationCreatedAt = existingConversation?.createdAt ?? Date.now();
     const userMessage: MessageType = { id: nextId("m"), role: "user", text };
+    const completedHistory: { question: string; answer: string }[] = [];
+    for (let index = 0; index < messages.length - 1; index += 1) {
+      const question = messages[index];
+      const answer = messages[index + 1];
+      if (question.role !== "user" || answer.role !== "assistant") continue;
+      if (answer.streaming || !answer.text.trim()) continue;
+      completedHistory.push({ question: question.text, answer: answer.text });
+    }
+    const history = completedHistory.slice(-2);
     const answeredMessages = [...messages, userMessage];
     activeConversationIdRef.current = conversationId;
     setActiveConversationId(conversationId);
@@ -349,6 +358,7 @@ export function App() {
       model: selectedModel,
       topK,
       temperature,
+      history,
       signal: controller.signal
     };
     requestAbort.current = controller;

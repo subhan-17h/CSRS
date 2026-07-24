@@ -17,6 +17,7 @@ export type ChatResponse = {
   refused: boolean;
   model: string;
   question: string;
+  rewritten_question?: string | null;
   elapsed_ms: number;
   sources: Source[];
 };

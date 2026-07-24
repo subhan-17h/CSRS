@@ -12,6 +12,7 @@ export type ChatOptions = {
   model?: string;
   topK?: number;
   temperature?: number;
+  history?: { question: string; answer: string }[];
   signal?: AbortSignal;
 };
 
@@ -113,7 +114,8 @@ export async function sendChat(
       question,
       model: options.model,
       top_k: options.topK,
-      temperature: options.temperature
+      temperature: options.temperature,
+      history: options.history
     }),
     signal: options.signal
   });
@@ -134,7 +136,8 @@ export async function streamChat(
         question,
         model: options.model,
         top_k: options.topK,
-        temperature: options.temperature
+        temperature: options.temperature,
+        history: options.history
       }),
       signal: options.signal
     });
