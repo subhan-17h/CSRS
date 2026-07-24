@@ -811,6 +811,41 @@ working tree clean.
     and 6 spec examples. Ruff passes and 133 offline tests pass with 1 deselected against
     a dead Ollama port.
 
+- [ ] **T-3.2** Metrics harness
+  - [x] **T-3.2a** `eval/metrics.py` + `tests/test_metrics.py` — Recall@k, MRR, nDCG@10 and
+        refusal accuracy as pure stdlib functions, unit-tested on hand-computed cases.
+        Relevance is defined **once**, in `chunk_matches()`, and `validate_golden_set.py`
+        is refactored onto it so the validator and the harness cannot drift apart.
+    - **Verified:** ruff clean; 165 offline tests pass against a dead Ollama port (133 + 32
+      new), 1 deselected; `validate_golden_set.py` prints output byte-identical to its
+      pre-refactor run — 48 pairs, distinct chunks 65/73/122/0/61. The nDCG, recall and
+      refusal expectations were re-derived by hand independently of the implementation.
+      **Mutation-checked:** an off-by-one in the DCG discount and a wrong recall
+      denominator were both injected; 6 tests failed, and the suite went green again on
+      restore. A metrics harness nobody has tried to break is not evidence of anything.
+  - [ ] **T-3.2b** `eval/run_eval.py` — embed each golden question, search the live index
+        once at depth 20, score the ranked list, optionally generate to measure refusal,
+        print the baseline table and write `eval/results/<timestamp>.json`.
+  - [ ] Record the baseline row. Every later Phase 3 task is measured against it.
+
+  **Decisions taken for this task** (settled before the handoff, so they are not Codex's
+  to invent):
+  - Metrics grade on the D5 triple via the golden set's matchers, never on chunk ids —
+    T-3.6 renumbers all of them.
+  - `eval/metrics.py` imports **stdlib only** — no `yaml`, no `numpy`, no `csrs`. The
+    offline suite runs without the `eval` dependency group, so anything else makes
+    `tests/test_metrics.py` uncollectable. YAML loading lives in `run_eval.py`.
+  - One embed + one search per pair at depth 20; Recall@5/@10/@20, MRR and nDCG@10 all
+    come off that single ranked list, and generation (when enabled) gets its top 5 —
+    which is exactly what `Pipeline.ask()` sends today (`pipeline.py:203`).
+  - Refusal accuracy needs real generation, because `refused` is decided by matching the
+    model's text (`generation.py:44`). It therefore defaults **on**, with `--no-generate`
+    for fast retrieval-only iteration. Both rates are reported separately: refusals on
+    must-refuse pairs, and false refusals on answerable ones. An aggregate alone would
+    hide a model that refuses everything.
+  - Per-pair rows go into the JSON, not just aggregates. Finding *which* pair regressed is
+    the entire point of keeping the file.
+
 ---
 
 ## Submission preparation — interposed before T-3.2

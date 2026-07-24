@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from csrs.store import ChunkStore
+from metrics import MATCHER_FIELDS, chunk_matches
 
 GOLDEN_SET_PATH = Path(__file__).with_name("golden_set.yaml")
 CATEGORY_MINIMUMS = {
@@ -20,7 +21,6 @@ CATEGORY_MINIMUMS = {
     "out_of_scope": 10,
     "spec_example": 6,
 }
-MATCHER_FIELDS = {"doc_name", "control_id", "page", "section_contains", "text_contains"}
 IndexedRow = tuple[str, str, dict[str, Any]]
 
 
@@ -98,20 +98,8 @@ def matcher_ids(
 
     matches = set()
     for chunk_id, text, metadata in indexed_rows:
-        if metadata["doc_name"] != matcher["doc_name"]:
-            continue
-        if "control_id" in matcher and metadata.get("control_id") != matcher["control_id"]:
-            continue
-        if "page" in matcher and metadata.get("page") != matcher["page"]:
-            continue
-        section = metadata.get("section")
-        if "section_contains" in matcher and (
-            not isinstance(section, str) or matcher["section_contains"] not in section
-        ):
-            continue
-        if "text_contains" in matcher and matcher["text_contains"] not in text:
-            continue
-        matches.add(chunk_id)
+        if chunk_matches(matcher, text, metadata):
+            matches.add(chunk_id)
 
     if not matches:
         fail(pair_id, f"{label} resolves to zero chunks: {matcher!r}")
