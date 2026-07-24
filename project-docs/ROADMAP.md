@@ -356,6 +356,8 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 **Reading** → [RESEARCH.md §3](RESEARCH.md#3-reranking)
 
 ### T-3.6 · Parent–child retrieval
+> **DESCOPED for submission (2026-07-24).** Would force a full re-index that renumbers all 2506 chunk ids and invalidates the chunk count asserted in three documents and the architecture diagram, for no requirement behind it. Not required by [CSRS.md](CSRS.md); recorded as a decision rather than left silently unchecked.
+
 **Goal** Retrieve precise children, answer with parent context.
 **Why** Resolves precision-vs-context: small chunks retrieve better, large chunks answer better.
 **Learn** Small-to-big retrieval, and how our corpus's existing hierarchy makes it nearly free.
@@ -372,6 +374,8 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 # Phase 4 — Answer quality
 
 ### T-4.1 · Inline citations
+> **DESCOPED for submission (2026-07-24).** The specification never asks for citations at all, and the UI already shows every retrieved chunk with document, page, section, control ID and score. Not required by [CSRS.md](CSRS.md); recorded as a decision rather than left silently unchecked.
+
 **Goal** Answers cite `[S1]`; UI resolves to `document › section › p.N` with expandable source text.
 **Why** Converts "trust the model" into "check the source" — the whole point of a compliance tool.
 **Learn** Attribution design; making citing *easier* for the model than not citing.
@@ -381,6 +385,8 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 **Gotchas** Small models cite inconsistently. Labels must be short and visually distinctive; verbose citation formats get mangled.
 
 ### T-4.2 · Confidence-gated refusal
+> **DESCOPED for submission (2026-07-24).** The specification asks only that the system say when it cannot find an answer, which prompt-based refusal already does at 8/11 out-of-scope with zero false refusals. T-2.x also measured that a single scalar threshold cannot catch the failure this card targeted -- the bad answer scored 0.7127, above any workable band. Not required by [CSRS.md](CSRS.md); recorded as a decision rather than left silently unchecked.
+
 **Goal** Refuse when retrieval is weak.
 **Why** Spec: "inform the user when sufficient information cannot be found." Prompting alone is unreliable at 1.5B.
 **Learn** CRAG's core idea, reduced to the part that pays for itself — a structural guard beats a politely-worded instruction.
@@ -391,6 +397,8 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 **Reading** → [RESEARCH.md §4](RESEARCH.md#crag-reduced-to-what-we-actually-need)
 
 ### T-4.3 · Conversational query rewriting
+> **DONE (2026-07-24).** Shipped as query rewriting: the last two turns fold a follow-up into a standalone search query before retrieval, and generation still receives the user's original wording. This is the specification's one bonus item.
+
 **Goal** Rewrite follow-ups into standalone queries.
 **Why** "How about least privilege?" retrieves noise. Rewritten against history, it retrieves correctly. **This is what makes the spec's conversational bonus real** rather than cosmetic.
 **Learn** Query understanding as a first-class pipeline stage.
@@ -401,6 +409,8 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 **Reading** → [RESEARCH.md §6](RESEARCH.md#6-conversational-rag)
 
 ### T-4.4 · Chat UI + streaming
+> **DONE.** Delivered by Phase 7's React interface -- streaming tokens, persisted history, and a clear-conversation control.
+
 **Goal** Proper chat interface with streamed tokens.
 **Why** Time-to-first-token drops below 1 s. Total time is unchanged; perceived speed transforms.
 **Learn** Perceived vs. actual latency.
@@ -416,6 +426,8 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 *Everything here is measured against Phase 3's harness. If it doesn't improve the numbers, don't keep it.*
 
 ### T-5.1 · Performance pass
+> **DESCOPED for submission (2026-07-24).** Submission.md already carries the latency numbers that matter, measured where they were relevant. Not required by [CSRS.md](CSRS.md); recorded as a decision rather than left silently unchecked.
+
 **Steps** Confirm `keep_alive="30m"`; batch embeddings at 32; LRU-cache query embeddings; time each pipeline stage and log it.
 **Done when** A stage-by-stage timing table exists and matches [RESEARCH.md §9](RESEARCH.md#9-local--cpu-optimisation)'s expectations (~70 ms retrieval, ~3–5 s generation).
 **Gotchas** **Read the timing table before optimising.** Retrieval is ~1% of query time; optimising it further is wasted effort.
@@ -446,6 +458,8 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 **Gotchas** Actually follow your own README on a clean machine. Assumed steps are invisible to the author and glaring to a grader.
 
 ### T-6.2 · Packaging
+> **DESCOPED for submission (2026-07-24).** The specification accepts "requirements.txt **or** pyproject.toml"; pyproject.toml plus uv.lock is the stronger of the two and already ships. Not required by [CSRS.md](CSRS.md); recorded as a decision rather than left silently unchecked.
+
 **Steps** `uv lock`; export a pinned `requirements.txt` (`uv export --no-hashes --format requirements-txt`); verify a plain `pip install -r requirements.txt` works in a fresh venv.
 **Done when** Both `uv sync` and `pip install -r requirements.txt` produce a working install.
 **Gotchas** Export without dev groups. `requirements.txt` now includes the core Docling dependency; document `scripts/warm_models.py` as the required weights setup step.

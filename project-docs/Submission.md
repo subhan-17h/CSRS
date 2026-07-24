@@ -65,7 +65,7 @@ Every row maps a line from [CSRS.md](CSRS.md) to the code that satisfies it.
 | Answer using retrieved context | `generation.py:51` | The prompt is `CONTEXT` / `QUESTION` / `INSTRUCTION`, in that order |
 | Avoid inventing information | `generation.py:37-40` | The instruction is explicit: *"Answer using only the context above."* Temperature is 0.1 |
 | Say so when information is not found | `generation.py:44` | The model is told to reply with an exact refusal sentence. `_is_refusal()` detects it and sets `Answer.refused = True` |
-| Preserve conversational context (**bonus**) | — | **Not built.** See section 10 |
+| Preserve conversational context (**bonus**) | `generation.py:rewrite_query`, `pipeline.py:ask` | **Built.** A follow-up is rewritten into a standalone query before retrieval, using the last two turns. Retrieval searches the rewrite; generation still receives the user's original wording |
 
 ### Section 5 — User Interface (Streamlit)
 
@@ -95,46 +95,53 @@ and a corpus browser. Both are described in the README.
 
 | Asked for | Provided |
 |---|---|
-| Complete source code | `src/csrs/` (2696 lines), `frontend/` (4112 lines), `tests/` (205 passing offline) |
+| Complete source code | `src/csrs/` (2696 lines), `frontend/` (4112 lines), `tests/` (231 passing offline) |
 | README with install / setup / adding documents / running | [README.md](../README.md) |
 | `requirements.txt` or `pyproject.toml` | [pyproject.toml](../pyproject.toml) plus `uv.lock` for byte-reproducible installs |
 | Sample cybersecurity documents | `docs/samples/` — one PDF and one TXT, committed |
+| *(not asked for)* Licence | [LICENSE](../LICENSE) — MIT for the source; the standards under `docs/` stay under their publishers' terms |
 
 ---
 
 ## 3. How a question gets answered
 
-Seven steps, from typing to answer. The entry point is `Pipeline.ask()` at `pipeline.py:179`.
+Eight steps, from typing to answer. The entry point is `Pipeline.ask()` at `pipeline.py:179`.
 
 1. **Empty-index guard.** If nothing is indexed, refuse immediately rather than asking a
    model about an empty corpus.
-2. **Embed the question.** `embed_query()` sends it to `nomic-embed-text` with the
+2. **Rewrite a follow-up.** If the request carried prior turns, `rewrite_query()` folds the
+   last two into a standalone search query — *"Explain the Identify function."* becomes
+   *"What are the functions of the NIST Cybersecurity Framework, specifically the Identify
+   function?"*. With no history it returns the question untouched and makes no model call,
+   so a first question costs nothing extra. Everything downstream searches the rewrite;
+   generation still receives the original wording.
+3. **Embed the question.** `embed_query()` sends it to `nomic-embed-text` with the
    `search_query:` prefix and gets back a 768-dimension vector. That prefix matters: Nomic
    was trained with different prefixes for stored text and search text, and mixing them up
    silently degrades results without erroring.
-3. **Retrieve.** `retrieve()` in `retrieval.py` is the single composition point. By default
+4. **Retrieve.** `retrieve()` in `retrieval.py` is the single composition point. By default
    it runs **hybrid** retrieval: Chroma returns the 20 nearest chunks by cosine distance,
    a BM25 index returns its own top 20, and the two ranked lists are merged by reciprocal
    rank fusion — `RRF(d) = Σ 1/(k + rank_i(d))` with `k=60`. RRF uses *ranks only*, which
    is the point: cosine similarities and BM25 scores are on incomparable scales, and fusing
    by rank sidesteps calibration entirely. Setting `CSRS_RETRIEVAL_MODE=dense` skips the
    sparse half.
-4. **Convert distance to similarity.** Chroma returns a distance; `1.0 - distance` gives the
+5. **Convert distance to similarity.** Chroma returns a distance; `1.0 - distance` gives the
    cosine similarity actually shown in the UI. Each result carries its chunk text plus the
    metadata stored with it: document name, page, section breadcrumb, control ID. A chunk
    found only by BM25 still gets a real cosine, computed from its stored embedding, so the
    score in the UI never changes meaning depending on how the chunk was found.
-5. **Build the prompt.** `build_prompt()` wraps each chunk as `[S1]...[/S1]`, then appends
+6. **Build the prompt.** `build_prompt()` wraps each chunk as `[S1]...[/S1]`, then appends
    the question, then the grounding instruction. The order is deliberate — the instruction
    is last so it is the most recent thing in the model's context.
-6. **Generate.** `ollama.chat()` with `num_ctx=8192`, `temperature=0.1`, and
+7. **Generate.** `ollama.chat()` with `num_ctx=8192`, `temperature=0.1`, and
    `keep_alive=30m` so the model stays in memory between questions.
-7. **Detect refusal and return.** `_is_refusal()` compares the answer against the configured
+8. **Detect refusal and return.** `_is_refusal()` compares the answer against the configured
    refusal sentence, ignoring case, trailing whitespace and a trailing period. The result is
    an `Answer` object carrying the text, the refusal flag, the model name, and every source
    chunk used.
 
-`ask_stream()` at `pipeline.py:216` is the same seven steps, except step 6 yields tokens as
+`ask_stream()` is the same eight steps, except step 7 yields tokens as
 they arrive so the web UI can display the answer as it is written.
 
 ---
@@ -272,7 +279,7 @@ return byte-identical answers at temperature 0.
 document, page, section breadcrumb, control ID, and cosine score — expandable to the full
 retrieved text.
 
-**The test suite proves the offline claim.** The 205 offline tests run with Ollama pointed at
+**The test suite proves the offline claim.** The 231 offline tests run with Ollama pointed at
 a dead port. If any module silently reached the network, they would fail. That is a stronger
 guarantee than reading the code and concluding nothing does.
 
@@ -347,11 +354,30 @@ English cross-encoder, so there is no third option to try. `rerank_enabled` ship
 the code stays, and both models are recorded above rather than quietly dropped.
 
 **One finding invalidated a planned feature.** The intended defence against confabulation
-was a retrieval-score confidence gate, calibrated on a 0.654–0.684 band. The system's worst
-surviving answer scores **0.7127** — above that band, and well above the 0.5685 that would
+was a retrieval-score confidence gate, calibrated on a 0.654–0.684 band. The project's worst
+recorded answer scored **0.7127** — above that band, and well above the 0.5685 that would
 have caught an earlier hallucination. A single scalar threshold provably cannot separate
 *confidently-wrong-but-well-retrieved* from *nothing-relevant-retrieved*. They are different
-failure classes and need more than one number.
+failure classes and need more than one number, which is why the gate was never built.
+
+### The documented failure was fixed twice, and the second fix was the smaller one
+
+*"Explain the Identify function."* is the specification's example question 2 of 5. It was
+this project's headline failure: bare "Identify" collides lexically with `DE-IDENTIFICATION`
+and `IDENTIFICATION AND AUTHENTICATION`, and SP 800-53 is 2119 of the corpus's 2506 chunks,
+so it dominated the candidate pool. Measured live on the shipped system:
+
+| configuration | what it retrieves | answer |
+|---|---|---|
+| dense only | 5/5 chunks `SI-19 DE-IDENTIFICATION` | wrong — explains PII de-identification |
+| **hybrid (default)** | CSF 2.0 p.10 at rank 1, 2/5 CSF | **correct** |
+| hybrid + rewriting | 5/5 CSF sources | correct, and cleanly grounded |
+
+**Hybrid retrieval fixed the answer; conversational rewriting improved the grounding.** That
+ordering is worth stating plainly because it is the opposite of what was planned — the
+failure had been diagnosed as needing conversational context, and it turned out BM25 fusion
+was enough on its own. Rewriting still earns its place on turn three, where *"How is it
+different from Protect?"* has no retrievable subject at all until "it" is resolved.
 
 ### Page citations were verified with a different library
 
@@ -370,20 +396,18 @@ citing a number the system can no longer verify.
 
 Stated plainly, because these are the questions worth asking.
 
-**No conversational memory.** This is the bonus item in section 4 of the specification, and
-not having it has one reproducible cost. Asked cold, *"Explain the Identify function."*
-retrieves SP 800-53's `SI-19 DE-IDENTIFICATION` and answers confidently about the wrong
-thing. Ask *"Explain the Identify function of the NIST Cybersecurity Framework"* and it is
-correct. Bare "Identify" collides lexically with de-identification, and SP 800-53 is 2119 of
-the corpus's 2506 chunks, so it dominates the candidate pool. In the specification, that
-question directly follows "What are the functions of the NIST Cybersecurity Framework?" — it
-is a *follow-up*, and conversational context is exactly what resolves it. The failure appears
-precisely where the specification predicted it would.
+**Conversational memory is shallow.** It is built — the specification's bonus item — but it
+is *query rewriting*, not a conversation the model participates in. The last two turns are
+used to rewrite a follow-up into a standalone search query; the model itself still answers
+each question from retrieved context alone, with no memory of what it previously said. Ask
+something that depends on the model's own earlier phrasing rather than on the subject of the
+question, and it will not resolve. Only the last two turns are used, so a reference reaching
+further back is lost.
 
-**No retrieval configuration fixes that question, and I checked.** Dense puts the right
-chunk at rank 6; hybrid at 12; hybrid plus reranking back at 6; dense plus reranking loses
-it from the top 20 entirely. It is not a retrieval-tuning problem, which is the clearest
-evidence that conversational rewriting — not more retrieval work — is what it needs.
+**Multi-turn quality is not measured.** The golden set is single-turn by construction, so
+`eval/run_eval.py` cannot score rewriting. The evidence for it is a worked example, not a
+metric — which is exactly the weaker form of evidence this project spends section 9 arguing
+against. Building a multi-turn golden set is the honest next step.
 
 **Parent–child retrieval is not built.** Chunks are retrieved and passed to the model as-is;
 there is no expansion to a surrounding parent section for context. Answers are grounded in

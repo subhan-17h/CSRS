@@ -1613,6 +1613,107 @@ frontend builds with zero TypeScript errors, all sources ASCII, index intact at 
 
 ---
 
+## Phase 8 — Reduced scope to submission
+
+Scope was cut with the user on 2026-07-24. The project had substantially overshot
+`project-docs/CSRS.md`: a second React/FastAPI interface, a 48-pair golden set with a metrics
+harness, hybrid dense+BM25 retrieval, and a measured cross-encoder reranker. **The purpose of
+this phase was to stop adding capability**, close the gap to a submittable deliverable, and
+record every cut as a decision rather than as unfinished work.
+
+**Descoped, each annotated in `project-docs/ROADMAP.md` with its reason:** T-3.6 parent-child
+retrieval, T-4.1 inline citations, T-4.2 confidence-gated refusal, T-5.1 performance pass,
+T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranker.
+
+- [x] **T-4.3** Conversational query rewriting -- the specification's one bonus item, and the
+      only remaining feature kept.
+  - [x] **T-4.3a** `rewrite_query()` in `generation.py`, temperature 0.0, last two turns.
+        Empty history returns the question unchanged **without calling Ollama**, so a first
+        question costs exactly what it did before. Fails open to the original question on
+        Ollama errors, an over-long reply, an empty reply, or a reply that collapses to
+        nothing once wrapping quotes are stripped.
+    - Review caught the last of those: the unquoting step ran *after* the emptiness check, so
+      a reply of `""` returned an empty string that would then have been embedded and sent to
+      retrieval -- worse than not rewriting. Sent back to Codex rather than patched directly.
+  - [x] **T-4.3b** Wired into `ask()` / `ask_stream()`. The rewritten query goes to
+        `retrieve()` **as well as** `embed_query()`, because `retrieve()`'s first argument
+        feeds BM25 -- passing the original there would have left the sparse half of hybrid
+        searching un-rewritten text, a half-fix invisible to any dense-only test.
+    - Review replaced a 40-line hand-rolled generator wrapper with three lines of
+      `yield from`. Recorded as `L-7` in `tasks/lessons.md`.
+  - [x] **T-4.3c** The web UI sends the last two completed turns, derived from the `messages`
+        array it already holds. No new state.
+
+  **Measured on the specification's own example sequence, live:**
+
+  | configuration | retrieves | answer |
+  |---|---|---|
+  | dense only | 5/5 chunks `SI-19 DE-IDENTIFICATION` | wrong -- explains PII de-identification |
+  | **hybrid (shipped default)** | CSF 2.0 p.10 at rank 1, 2/5 CSF | **correct** |
+  | hybrid + rewriting | 5/5 CSF sources | correct, cleanly grounded |
+
+  **The headline finding, and it contradicts the plan.** The documented "Identify" failure was
+  recorded under *dense* retrieval. Hybrid -- shipped earlier the same day in `f8f75b0` --
+  already fixed the answer. Rewriting improves the grounding from 2/5 to 5/5 relevant sources
+  and resolves turn 3 (*"How is it different from Protect?"*, which has no retrievable subject
+  until "it" is resolved), but it is **not** rescuing a broken answer. The docs asserted
+  otherwise and were corrected in T-8.5 rather than left flattering.
+
+  Regression guard held throughout: the harness still prints TOTAL 0.461 / 0.565 / 0.710 /
+  0.855 / 0.625 under `retrieval=hybrid`, proving the single-turn path never moved.
+
+- [x] **T-8.1** `GET /api/documents/{doc_name}/file` -- serves the real PDF or TXT inline.
+      Resolution goes through the manifest, whose keys are docs-relative paths; the route
+      reuses the membership check `/chunks` already applies, so only indexed names resolve.
+  - Found and fixed while testing traversal: `SPAStaticFiles.get_response` tested the path
+    Starlette hands it, which is already normalised, so `..%2f..%2fpyproject.toml` was no
+    longer recognised as API-scoped and answered **200 with index.html**. It now tests
+    `scope["path"]` and correctly re-raises the 404. SPA deep links still resolve.
+  - Verified: served bytes hash-match disk for a 2.2 MB PDF and a 120 kB TXT.
+
+- [x] **T-8.2** Document viewer in the Corpus tab. `CSRS.md:108` requires "Display loaded
+      documents"; the tab previously showed only chunks -- the parsed output -- so a reader
+      could not see the actual standard.
+  - PDFs render in a **same-origin iframe**: the browser's own viewer, so no PDF library, no
+    CDN request, no CSP concern, and `package.json` unchanged. TXT is typeset with pre-wrap.
+  - The chunk browser is untouched. Built from the existing `.dv-tab` primitives so it reads
+    as part of the design system rather than bolted on. Visual review approved by the user.
+
+- [x] **T-8.3** MIT `LICENSE`, scoped to the source only -- the standards under `docs/` stay
+      under their publishers' terms, the same distinction `docs/README.md` already draws.
+
+- [x] **T-8.4** Architecture diagram redrawn. It still showed "Vector search - Chroma cosine,
+      top 5", which had not been true since `f8f75b0`. The query lane is now seven stages
+      including the rewrite and RRF fusion; ingest shows Chroma + BM25 rebuilt together. Also
+      removed an orphan "Item one / Item two" list left from the diagram template, which had
+      been committed and was rendering on the page.
+
+- [x] **T-8.5** Final specification audit, **run against the running application** rather than
+      the source -- `tasks/lessons.md` L-2 exists because a README draft was once written from
+      memory.
+
+  **19/19 checks passed.** All five `CSRS.md` example questions asked live, in order:
+
+  | question | result |
+  |---|---|
+  | functions of the NIST CSF | SP 1299 p.2 @ 0.7793, 1550 ms |
+  | Explain the Identify function | CSF 2.0 p.10 @ 0.6737, 4570 ms -- **correct** |
+  | ISO 27001 access control | **refuses**, 3290 ms -- correct, it is not in the corpus |
+  | How is Incident Response handled | SP 800-53 p.181 @ 0.8066, 7590 ms |
+  | requirements for Asset Management | CSF 2.0 p.23 @ 0.7744, 4131 ms |
+
+  Semantic retrieval confirmed non-lexical: *"How do I manage user accounts?"* returns
+  `AC-2`, `AC-2(1)`, `AC-2(3)`, `AC-2(7)` without sharing vocabulary with the source. All
+  five mandated LLMs exposed with `missing_models` empty.
+
+  **Docs corrected, not flattered:** the conversational-context row moved from "Not built" to
+  built; the "No conversational memory" limitation in both documents was replaced with what
+  is actually true -- rewriting is shallow, only two turns deep, absent from Streamlit, and
+  **not measured**, because the golden set is single-turn. That last point is stated plainly
+  in both documents because it is the weakest evidence in the submission.
+
+---
+
 ## Notes
 
 - Phase 2 tasks get pulled in here once Phase 1's checkpoint passes.

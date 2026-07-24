@@ -3,7 +3,7 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab)
 ![Ollama](https://img.shields.io/badge/LLM-Ollama%20(local)-000000)
 ![Offline](https://img.shields.io/badge/runtime-100%25%20offline-fb7185)
-![Tests](https://img.shields.io/badge/tests-205%20offline-34d399)
+![Tests](https://img.shields.io/badge/tests-231%20offline-34d399)
 
 Ask questions about cybersecurity standards and get answers grounded in the documents
 themselves, with page-level citations. Everything runs locally: the language models, the
@@ -33,7 +33,7 @@ Both talk to the same `Pipeline` facade and give the same grounded answers.
 | Answers stream token by token | yes | no |
 | Live retrieval progress | yes | indexing only |
 | **Citations shown** | **yes — page, section, control ID, score** | no |
-| Corpus browser | yes | document list only |
+| Corpus browser | yes — read the source PDF/TXT, plus a chunk browser | document list only |
 | Conversation history | yes (local, in-browser) | no |
 | Extra requirement | Node 18+ to build once | none |
 
@@ -196,8 +196,8 @@ The interface gives you:
   Ollama indicator;
 - the **list of indexed documents** with page and chunk counts;
 - **Restart & Reload Documents**, plus a full rebuild behind a confirmation;
-- a **Corpus** tab for browsing the indexed chunks;
-- **conversation history**, stored in your browser only.
+- a **Corpus** tab that shows each indexed document two ways: the **source file itself**, PDFs rendered page by page and TXT typeset, and the **chunks** the pipeline built from it;
+- **conversation history**, stored in your browser only, with follow-up questions rewritten into standalone queries before retrieval.
 
 ### Streamlit
 
@@ -425,13 +425,17 @@ refused, with **zero** false refusals of answerable ones.
 Stated plainly, because a system that hides its failure modes is harder to trust than one
 that names them. Measurements and analysis are in [Submission.md](project-docs/Submission.md).
 
-**No conversational memory.** Each question is answered independently. This has a concrete,
-reproducible cost: *"Explain the Identify function."* — asked cold — retrieves SP 800-53's
-`SI-19 DE-IDENTIFICATION` and answers confidently about the wrong thing. Ask *"Explain the
-Identify function **of the NIST Cybersecurity Framework**"* and it is correct. Bare
-"Identify" collides lexically with de-identification, and SP 800-53 is 2119 of the corpus's
-2506 chunks. Follow-up context is marked a bonus in the specification and was not built;
-this is exactly what it would fix. **Phrase questions to name the standard.**
+**Conversational memory is shallow, and only in the web UI.** Follow-up questions work:
+the last two turns are used to rewrite a question like *"Explain the Identify function."*
+into a standalone search query before retrieval. But it is query rewriting, not a
+conversation — the model answers each question from retrieved context alone and remembers
+nothing it previously said, and only two turns back are considered. **The Streamlit app has
+no history at all**; each question there is independent, so name the standard in the
+question when using it.
+
+**Multi-turn quality is not measured.** The golden set is single-turn, so the eval harness
+cannot score rewriting. Its evidence is a worked example rather than a number — weaker than
+everything else in the table above, and worth saying out loud.
 
 **Refusal detection is exact-match.** A model that refuses *in its own words* rather than
 emitting the configured refusal string is recorded as having answered. This under-reports
@@ -507,7 +511,7 @@ uv run pytest -q -m ollama                                       # needs a live 
 uv run --group eval python eval/validate_golden_set.py           # needs the built index
 ```
 
-The offline suite (133 tests) points at a dead port on purpose: it proves nothing silently
+The offline suite (231 tests) points at a dead port on purpose: it proves nothing silently
 reaches the network. Tests needing real models are marked and deselected by default.
 
 ### Project layout
