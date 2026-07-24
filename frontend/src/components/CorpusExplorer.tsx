@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchDocumentChunks, fetchDocuments } from "../lib/api";
 import type { DocumentChunk, DocumentChunksResponse, DocumentsResponse } from "../types";
+import { DocumentViewer } from "./DocumentViewer";
 import { Ico } from "./icons";
 
 const PAGE_SIZE = 50;
+
+type CorpusView = "document" | "chunks";
 
 type CorpusExplorerProps = {
   active: boolean;
@@ -33,6 +36,7 @@ export function CorpusExplorer({ active }: CorpusExplorerProps) {
   const [chunksLoading, setChunksLoading] = useState(false);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState("");
+  const [view, setView] = useState<CorpusView>("document");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,6 +99,9 @@ export function CorpusExplorer({ active }: CorpusExplorerProps) {
   const pageEnd = chunks ? Math.min(chunks.offset + chunks.chunks.length, chunks.total) : 0;
   const previousDisabled = !chunks || chunks.offset === 0 || chunksLoading;
   const nextDisabled = !chunks || chunks.offset + chunks.limit >= chunks.total || chunksLoading;
+  const selectedDocumentSummary = documents?.documents.find(
+    (document) => document.filename === selectedDocument
+  );
 
   const selectDocument = (filename: string) => {
     if (filename === selectedDocument) return;
@@ -211,9 +218,35 @@ export function CorpusExplorer({ active }: CorpusExplorerProps) {
         </div>
       )}
 
+      {documents && documents.documents.length > 0 && (
+        <div className="dv-view-switch" role="group" aria-label="Corpus view">
+          <button
+            className={"dv-tab" + (view === "document" ? " active" : "")}
+            type="button"
+            aria-pressed={view === "document"}
+            onClick={() => setView("document")}
+          >
+            <span className="d" aria-hidden="true" />
+            Document
+          </button>
+          <button
+            className={"dv-tab" + (view === "chunks" ? " active" : "")}
+            type="button"
+            aria-pressed={view === "chunks"}
+            onClick={() => setView("chunks")}
+          >
+            <span className="d" aria-hidden="true" />
+            Chunks
+          </button>
+        </div>
+      )}
+
       <div className="dv-area">
-        <section className="dv-card" aria-label="Document chunks">
-          {documents && documents.documents.length > 0 && (
+        <section
+          className="dv-card"
+          aria-label={view === "document" ? "Source document" : "Document chunks"}
+        >
+          {view === "chunks" && documents && documents.documents.length > 0 && (
             <div className="dv-toolbar">
               <label className="dv-search">
                 <Ico.Search className="gs-icon" />
@@ -233,9 +266,18 @@ export function CorpusExplorer({ active }: CorpusExplorerProps) {
             </div>
           )}
 
-          <div className="dv-scroll">{renderContent()}</div>
+          <div className="dv-scroll">
+            {view === "document" && selectedDocumentSummary ? (
+              <DocumentViewer
+                document={selectedDocumentSummary}
+                key={selectedDocumentSummary.filename}
+              />
+            ) : (
+              renderContent()
+            )}
+          </div>
 
-          {chunks && !chunksError && (
+          {view === "chunks" && chunks && !chunksError && (
             <footer className="dv-foot">
               <span className="dv-page-summary">
                 Showing {pageStart}-{pageEnd} of {chunks.total}

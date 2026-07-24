@@ -218,6 +218,19 @@ export async function fetchDocuments(signal?: AbortSignal): Promise<DocumentsRes
   return readJson<DocumentsResponse>(await fetch("/api/documents", { signal }));
 }
 
+export function documentFileUrl(docName: string): string {
+  return `/api/documents/${encodeURIComponent(docName)}/file`;
+}
+
+export async function fetchDocumentText(
+  docName: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const response = await fetch(documentFileUrl(docName), { signal });
+  if (!response.ok) throw new ApiError(response.status, await errorDetail(response));
+  return response.text();
+}
+
 export async function fetchDocumentChunks(
   docName: string,
   limit: number,
