@@ -52,7 +52,7 @@ This file provides guidance to CODEX AGENT when working with code in this reposi
 ### Keep tasks/todo.md current -- every task, every time
 
 `tasks/todo.md` is the live status of the build and must never go stale. It tracks the
-roadmap tasks in [ROADMAP.md](ROADMAP.md) (`T-1.4`, `T-2.1`, ...).
+roadmap tasks in [ROADMAP.md](project-docs/ROADMAP.md) (`T-1.4`, `T-2.1`, ...).
 
 - **Before you start:** confirm the task you were given has an entry. If it does not,
   add one.

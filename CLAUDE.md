@@ -53,7 +53,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Commit Discipline
 
 **Commit after every completed task, and again at the end of every phase.** A task is a
-numbered card in ROADMAP.md (`T-1.4`); a phase is a group of them (`Phase 1`).
+numbered card in `project-docs/ROADMAP.md` (`T-1.4`); a phase is a group of them (`Phase 1`).
 
 - **Commit only once the task's "Done when" is demonstrated.** The commit is the record
   that it passed, so committing unverified work makes the history lie.

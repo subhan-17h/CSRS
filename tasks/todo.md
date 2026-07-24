@@ -1,6 +1,6 @@
 # tasks/todo.md
 
-Active work tracker. Full plan: [ROADMAP.md](../ROADMAP.md).
+Active work tracker. Full plan: [ROADMAP.md](../project-docs/ROADMAP.md).
 
 **Status:** Phases 0, 1, and 2 complete and verified, and the Phase 2 checkpoint passes --
 `CSRS.md` §1-6 is demonstrable against the running app. **This is the submittable state.**

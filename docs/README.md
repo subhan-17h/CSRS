@@ -50,7 +50,7 @@ commits it. If you want it, download it from
 [cisecurity.org/controls](https://www.cisecurity.org/controls) and drop the PDF into
 this directory; it will be picked up like any other document.
 
-**ISO/IEC 27001:2022** — copyrighted and sold by ISO (~£220). `CSRS.md` lists it as an
+**ISO/IEC 27001:2022** — copyrighted and sold by ISO (~£220). `project-docs/CSRS.md` lists it as an
 example standard, but shipping it would be copyright infringement, so it is **excluded**.
 This is a licensing decision, not a technical limitation: if you hold a licensed copy,
 place the PDF in this directory and it works exactly like the others. That is the

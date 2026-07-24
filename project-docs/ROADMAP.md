@@ -15,7 +15,7 @@ A teaching roadmap. Every task states *why it exists* and *what concept it teach
 
 **Rules of engagement:**
 1. **One task at a time.** Each is sized for a single sitting.
-2. **"Done when" is not optional.** If you can't demonstrate it, it isn't done. ([CLAUDE.md](CLAUDE.md): *never mark a task complete without proving it works*.)
+2. **"Done when" is not optional.** If you can't demonstrate it, it isn't done. ([CLAUDE.md](../CLAUDE.md): *never mark a task complete without proving it works*.)
 3. **Every phase ends runnable.** No phase leaves the app broken overnight.
 4. **Phase 3 measures before it optimises.** Build the eval harness first, then change retrieval. Otherwise you're guessing.
 
@@ -525,14 +525,14 @@ The large model buys real rank-1 precision (`exact_id` and `cross_document` MRR 
 
 ## Working conventions
 
-Per [CLAUDE.md](CLAUDE.md):
+Per [CLAUDE.md](../CLAUDE.md):
 - `tasks/todo.md` tracks the active phase with checkable items; mark them off as you go.
 - `tasks/lessons.md` captures any correction, so the same mistake isn't repeated.
 - Nothing is "done" without its **Done when** demonstrated.
 - **Commit after every task, and again at the end of every phase** — one task per commit,
   subject line prefixed with the task id (`feat(T-1.4): ...`). Commit only after the
   "Done when" is demonstrated, so the history records verified work rather than intent.
-  See [CLAUDE.md](CLAUDE.md#commit-discipline).
+  See [CLAUDE.md](../CLAUDE.md#commit-discipline).
 - Prefer the simple change. Most tasks here should touch one or two files.
 
 **If you do only part of this roadmap:** Phases 0–2 give a complete, correct, submittable application. Phase 3 is what makes it good, and its metrics table is what makes that visible to someone else.

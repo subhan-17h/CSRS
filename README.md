@@ -3,7 +3,7 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab)
 ![Ollama](https://img.shields.io/badge/LLM-Ollama%20(local)-000000)
 ![Offline](https://img.shields.io/badge/runtime-100%25%20offline-fb7185)
-![Tests](https://img.shields.io/badge/tests-133%20offline-34d399)
+![Tests](https://img.shields.io/badge/tests-205%20offline-34d399)
 
 Ask questions about cybersecurity standards and get answers grounded in the documents
 themselves, with page-level citations. Everything runs locally: the language models, the
@@ -12,13 +12,14 @@ embeddings, and the vector store. **No cloud API is used or permitted.**
 <img src="assets/architecture.svg" alt="CSRS architecture: the ingest and query pipelines, the Pipeline facade both interfaces call, and the offline boundary enclosing Ollama" width="100%">
 
 ```
-Question → nomic-embed-text → Chroma (cosine) → top-k chunks → llama3.2 → grounded answer
+Question → nomic-embed-text ─┬─→ Chroma (cosine) ─┬─ RRF ─→ top 5 → llama3.2 → grounded answer
+                             └─→ BM25 (bm25s) ────┘
 ```
 
 Built on [Ollama](https://ollama.com), with
 [Docling](https://github.com/docling-project/docling) for layout-aware PDF parsing.
 
-**New here?** [Submission.md](Submission.md) is the component-by-component walkthrough:
+**New here?** [Submission.md](project-docs/Submission.md) is the component-by-component walkthrough:
 what each module does, which task requirement it satisfies, and how the pieces connect.
 
 ### Two interfaces, one pipeline
@@ -41,7 +42,7 @@ web UI was added on top of the finished pipeline; it renders the citations the S
 interface never displayed, which is the main reason it exists.
 
 The reasoning behind each choice — and the measurements that drove it — is in
-[Submission.md](Submission.md). The diagram above is also available as a browsable page
+[Submission.md](project-docs/Submission.md). The diagram above is also available as a browsable page
 with PNG and PDF export: `assets/architecture.html`.
 
 ---
@@ -137,13 +138,14 @@ Expected output ends with:
 Summary:
   Docling: ready
   Ollama: 6 of 6 required models present
-  FlashRank: deferred until T-3.5 selects the reranker model
+  FlashRank: ready
 
 All required model weights are present.
 ```
 
-(The FlashRank line refers to the deferred reranker — see
-[Known limitations](#known-limitations). Nothing needs to be installed for it.)
+(The FlashRank weights are the cross-encoder reranker. It ships disabled — see
+[Known limitations](#known-limitations) — but the weights are fetched here so that turning
+it on never needs the network.)
 
 **This is the only step that needs the internet.** Everything after it is fully offline.
 
@@ -418,7 +420,7 @@ refused, with **zero** false refusals of answerable ones.
 ## Known limitations
 
 Stated plainly, because a system that hides its failure modes is harder to trust than one
-that names them. Measurements and analysis are in [Submission.md](Submission.md).
+that names them. Measurements and analysis are in [Submission.md](project-docs/Submission.md).
 
 **No conversational memory.** Each question is answered independently. This has a concrete,
 reproducible cost: *"Explain the Identify function."* — asked cold — retrieves SP 800-53's
@@ -515,6 +517,7 @@ src/csrs/
   chunking.py     structure-aware splitter, emits hierarchy breadcrumbs
   embeddings.py   the only module that owns the nomic task prefixes
   store.py        Chroma + the content-hash manifest
+  retrieval.py    BM25 index, RRF fusion, reranking, the one retrieve() both UIs reach
   generation.py   prompt assembly, grounding instruction, refusal, token streaming
   pipeline.py     the single facade both UIs talk to
   app.py          Streamlit
@@ -530,6 +533,15 @@ frontend/
 eval/
   golden_set.yaml           48 graded question/answer pairs, five categories
   validate_golden_set.py    asserts every expected answer resolves in the live index
+  metrics.py                Recall@k, MRR, nDCG@k, refusal accuracy — stdlib only
+  run_eval.py               the harness; writes a timestamped JSON per run
+
+project-docs/
+  Submission.md             requirements walkthrough, decisions, and measurements
+  ROADMAP.md                the task breakdown, phase by phase
+  RESEARCH.md               the techniques surveyed before building
+  CSRS.md                   the original task specification
+  OS_REPOS.md               open-source landscape survey
 
 assets/
   architecture.svg          the diagram at the top of this file

@@ -2,7 +2,7 @@
 
 This document explains what I built, which requirement each piece satisfies, and how the
 system actually works — including the reasoning behind each decision and the measurements
-that drove it. [README.md](README.md) is how to run it. This is the walkthrough.
+that drove it. [README.md](../README.md) is how to run it. This is the walkthrough.
 
 ---
 
@@ -96,8 +96,8 @@ and a corpus browser. Both are described in the README.
 | Asked for | Provided |
 |---|---|
 | Complete source code | `src/csrs/` (2696 lines), `frontend/` (4112 lines), `tests/` (205 passing offline) |
-| README with install / setup / adding documents / running | [README.md](README.md) |
-| `requirements.txt` or `pyproject.toml` | [pyproject.toml](pyproject.toml) plus `uv.lock` for byte-reproducible installs |
+| README with install / setup / adding documents / running | [README.md](../README.md) |
+| `requirements.txt` or `pyproject.toml` | [pyproject.toml](../pyproject.toml) plus `uv.lock` for byte-reproducible installs |
 | Sample cybersecurity documents | `docs/samples/` — one PDF and one TXT, committed |
 
 ---
@@ -424,4 +424,4 @@ For the web UI instead: `(cd frontend && npm install && npm run build)` then
 
 The first launch takes about five minutes while the index is built. Every launch after that
 is under a second. Full installation detail, troubleshooting and the document-adding workflow
-are in [README.md](README.md).
+are in [README.md](../README.md).
