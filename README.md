@@ -3,7 +3,7 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab)
 ![Ollama](https://img.shields.io/badge/LLM-Ollama%20(local)-000000)
 ![Offline](https://img.shields.io/badge/runtime-100%25%20offline-fb7185)
-![Tests](https://img.shields.io/badge/tests-231%20offline-34d399)
+![Tests](https://img.shields.io/badge/tests-239%20offline-34d399)
 
 Ask questions about cybersecurity standards and get answers grounded in the documents
 themselves, with page-level citations. Everything runs locally: the language models, the
@@ -342,8 +342,10 @@ Duplicate names are rejected with a clear error rather than silently indexed twi
 
 ## Configuration
 
-Every tunable lives in `src/csrs/config.py` and can be overridden by an environment variable
-or a `.env` file, all prefixed `CSRS_`. Copy `.env.example` to `.env` to start.
+Every production tunable lives in `src/csrs/config.py` and can be overridden by an
+environment variable or a `.env` file, all prefixed `CSRS_`. Copy `.env.example` to `.env`
+to start. `GROQ_API_KEY` is evaluation-only and is ignored unless the developer explicitly
+runs the evaluator with `--judge`.
 
 ```bash
 CSRS_DEFAULT_LLM=qwen2.5:1.5b     # faster, less reliable at staying grounded
@@ -390,33 +392,34 @@ only; the standards under `docs/` remain under their publishers' terms.
 
 ---
 
-## Retrieval quality, measured
+## Answer quality, measured
 
-Retrieval is **hybrid**: dense cosine search and a BM25 keyword index are run in parallel
-and merged by reciprocal rank fusion. Quality is measured against `eval/golden_set.yaml` —
-48 hand-written question/answer pairs across exact control-ID lookup, semantic paraphrase,
-cross-document, out-of-scope (must refuse), and the specification's own example questions.
+The current benchmark is the readable `eval/data/ground_truth.json`: 20 draft questions
+derived from exact evidence in the indexed cybersecurity corpus. The end-to-end evaluator
+compares three independent layers instead of hiding failures in one score:
+
+1. Local answer cosine similarity with `nomic-embed-text:latest`.
+2. Retrieval evidence hit and recall at 5 and 10.
+3. Optional evidence-aware Groq judging with `openai/gpt-oss-120b`.
+
+Run the approved two-model comparison without a cloud judge:
 
 ```bash
-uv run --group eval python eval/run_eval.py --no-generate
+uv run --group eval python -m eval.run --models \
+  llama3.2:latest qwen2.5:1.5b
 ```
 
-Over the 37 answerable pairs:
+Add `--judge` only after setting `GROQ_API_KEY` in the ignored root `.env`. Normal FastAPI,
+Streamlit, indexing, and chat operation never call Groq and remain fully offline.
+The other three installed application models remain available through `--models` for later
+experiments, but are not part of the current comparison.
 
-| configuration | rank-1 | Recall@5 | Recall@10 | MRR | nDCG@10 |
-|---|---|---|---|---|---|
-| dense only | 27/37 | 0.454 | 0.573 | 0.834 | 0.628 |
-| **hybrid — the default** | **29/37** | **0.461** | 0.565 | 0.855 | 0.625 |
-| hybrid + rerank (MiniLM-L-12) | 33/37 | 0.439 | 0.525 | 0.920 | 0.624 |
-
-**Read the first two columns, not the last three.** The golden set resolves a control to
-*all* of its chunks, so Recall@10 and nDCG@10 reward retrieving a whole control family —
-but only 5 chunks ever reach the model. Rank-1 hit rate and Recall@5 are what a user
-experiences. On those, hybrid wins, and its real prize is exact control-ID lookup going
-from 0.896 MRR to a perfect **1.000** — which is what BM25 was added for.
-
-Refusal behaviour is measured on the same set: 8 of 11 out-of-scope questions are correctly
-refused, with **zero** false refusals of answerable ones.
+Each run writes `config.json`, question-level `results.jsonl`, `summary.csv`, `report.md`,
+and `manual_review.json`. The cosine threshold defaults to an uncalibrated provisional
+`0.75`; it is not evidence of factual correctness. The judge is also not a substitute for
+expert review. See [the evaluation plan](docs/EVALUATION_PLAN.md) for the rubric, fixed
+comparison settings, limitations, and deferred work. The [evaluation README](eval/README.md)
+explains the three techniques in plain language and records the final two-model results.
 
 ---
 
@@ -433,13 +436,9 @@ nothing it previously said, and only two turns back are considered. **The Stream
 no history at all**; each question there is independent, so name the standard in the
 question when using it.
 
-**Multi-turn quality is not measured.** The golden set is single-turn, so the eval harness
-cannot score rewriting. Its evidence is a worked example rather than a number — weaker than
-everything else in the table above, and worth saying out loud.
-
-**Refusal detection is exact-match.** A model that refuses *in its own words* rather than
-emitting the configured refusal string is recorded as having answered. This under-reports
-refusals; it never causes a wrong answer.
+**Multi-turn quality is not measured.** The current 20-question benchmark is single-turn,
+so the evaluator cannot score rewriting. Its evidence is a worked example rather than a
+number — weaker than the measured evaluation layers, and worth saying out loud.
 
 **Reranking is built but disabled.** A cross-encoder rerank puts the right chunk first far
 more often — 33 of 37 questions versus 29 — and costs **1.6 s per query** on this hardware,
@@ -508,10 +507,10 @@ uv run ruff check .                                              # lint
 CSRS_OLLAMA_HOST=http://127.0.0.1:9 uv run pytest -q -m "not ollama and not docling"
 uv run pytest -q -m docling                                      # needs Docling weights
 uv run pytest -q -m ollama                                       # needs a live Ollama
-uv run --group eval python eval/validate_golden_set.py           # needs the built index
+uv run --group eval python -m eval.run --limit 1 --models llama3.2:latest
 ```
 
-The offline suite (231 tests) points at a dead port on purpose: it proves nothing silently
+The offline suite (239 tests) points at a dead port on purpose: it proves nothing silently
 reaches the network. Tests needing real models are marked and deselected by default.
 
 ### Project layout
@@ -538,10 +537,13 @@ frontend/
   public/fonts/         woff2 vendored locally so the UI never calls a CDN
 
 eval/
-  golden_set.yaml           48 graded question/answer pairs, five categories
-  validate_golden_set.py    asserts every expected answer resolves in the live index
-  metrics.py                Recall@k, MRR, nDCG@k, refusal accuracy — stdlib only
-  run_eval.py               the harness; writes a timestamped JSON per run
+  data/ground_truth.json    20 readable evidence-grounded draft questions
+  data/corpus_manifest.json exact corpus identity and extraction metadata
+  dataset.py                schema, loading, and corpus-grounding validation
+  metrics.py                cosine similarity and evidence hit/recall
+  judge.py                  opt-in Groq structured judge and cache
+  reporting.py              JSONL, CSV, Markdown, and manual-review exports
+  run.py                    end-to-end comparison CLI
 
 project-docs/
   Submission.md             requirements walkthrough, decisions, and measurements

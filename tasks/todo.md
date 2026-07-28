@@ -1719,3 +1719,35 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
 - Phase 2 tasks get pulled in here once Phase 1's checkpoint passes.
 - Record the Phase 3 baseline metrics the moment T-3.2 runs — everything after is measured against them.
 - Any correction from the user → append the pattern to `tasks/lessons.md`.
+
+---
+
+## Evaluation layer — first approval gate
+
+- [x] **EVAL-1** Audit the current RAG pipeline and create a 20-question, evidence-grounded
+      seed benchmark from the four indexed cybersecurity documents.
+  - Create `docs/EVALUATION_DATASET_AUDIT.md` with verified repository references.
+  - Create `eval/data/corpus_manifest.json` and `eval/data/ground_truth.seed.jsonl`.
+  - Add a reusable seed-dataset validator and demonstrate schema, evidence, uniqueness,
+    manifest, lint, and regression checks.
+  - Stop after presenting the evaluation-policy questionnaire; do not implement the runner,
+    cosine metric, external judge, or reports before the next approval gate.
+  - Review: the seed validator passes all 20 records with source coverage 5/4/7/4;
+    missing-evidence and duplicate-question negative controls fail visibly as intended.
+    The existing 48-item golden set validates, 231 offline tests pass, Ruff is clean, and
+    all Python source decodes as ASCII.
+
+- [x] **EVAL-2** Replace the legacy evaluator with the approved minimal three-layer
+      end-to-end evaluation command.
+  - Use the reviewed 20-question corpus-grounded dataset in readable JSON.
+  - Implement cosine similarity, retrieval evidence hit/recall, and the fixed Groq judge.
+  - Compare the approved `llama3.2:latest` and `qwen2.5:1.5b` models with reproducible
+    generation settings; keep the other installed models selectable for later runs.
+  - Export JSONL, CSV, Markdown, and a manual-review sample; keep all failures visible.
+  - Remove the legacy YAML evaluator and verify the replacement with focused tests,
+    offline regression tests, Ruff, ASCII validation, and smoke evaluation.
+  - Review: all 20 readable QA records validate against the source corpus and live index;
+    the real two-model judged run produced 40 complete rows with no technical errors.
+    `llama3.2:latest` scored 0.897 mean cosine and 60% judge pass versus 0.792 and
+    40% for `qwen2.5:1.5b`; both had 95% evidence hit/recall at 5 and 10. Ruff,
+    239 offline tests, ASCII validation, and `git diff --check` pass.

@@ -95,7 +95,7 @@ and a corpus browser. Both are described in the README.
 
 | Asked for | Provided |
 |---|---|
-| Complete source code | `src/csrs/` (2696 lines), `frontend/` (4112 lines), `tests/` (231 passing offline) |
+| Complete source code | `src/csrs/` (2696 lines), `frontend/` (4112 lines), `tests/` (239 passing offline) |
 | README with install / setup / adding documents / running | [README.md](../README.md) |
 | `requirements.txt` or `pyproject.toml` | [pyproject.toml](../pyproject.toml) plus `uv.lock` for byte-reproducible installs |
 | Sample cybersecurity documents | `docs/samples/` — one PDF and one TXT, committed |
@@ -279,16 +279,16 @@ return byte-identical answers at temperature 0.
 document, page, section breadcrumb, control ID, and cosine score — expandable to the full
 retrieved text.
 
-**The test suite proves the offline claim.** The 231 offline tests run with Ollama pointed at
+**The test suite proves the offline claim.** The 239 offline tests run with Ollama pointed at
 a dead port. If any module silently reached the network, they would fail. That is a stronger
 guarantee than reading the code and concluding nothing does.
 
-**Retrieval is measured, not asserted.** 48 hand-authored question/answer pairs across five
-categories — exact control lookup, semantic paraphrase, cross-document, out-of-scope (must
-refuse), and all five of the specification's own example questions. `eval/run_eval.py` turns
-them into Recall@k, MRR and nDCG@10 and writes a timestamped JSON per run. The metric
-functions are unit-tested against hand-computed cases, because a buggy nDCG will happily
-report improvement that isn't there.
+**Retrieval was measured, not asserted.** The 48-pair harness used during retrieval design
+produced the historical Recall@k, MRR and nDCG@10 results in section 9. It has now been
+replaced operationally by 20 evidence-grounded questions in
+`eval/data/ground_truth.json`. The current `python -m eval.run` evaluator preserves answers
+and retrieved passages and independently reports answer cosine similarity, retrieval
+evidence hit/recall, and an optional evidence-aware Groq judgment.
 
 ---
 
@@ -404,10 +404,10 @@ something that depends on the model's own earlier phrasing rather than on the su
 question, and it will not resolve. Only the last two turns are used, so a reference reaching
 further back is lost.
 
-**Multi-turn quality is not measured.** The golden set is single-turn by construction, so
-`eval/run_eval.py` cannot score rewriting. The evidence for it is a worked example, not a
-metric — which is exactly the weaker form of evidence this project spends section 9 arguing
-against. Building a multi-turn golden set is the honest next step.
+**Multi-turn quality is not measured.** The current 20-question dataset is single-turn by
+construction, so `python -m eval.run` cannot score rewriting. The evidence for rewriting is
+a worked example, not a metric — which is exactly the weaker form of evidence this project
+spends section 9 arguing against. Building a multi-turn dataset is the honest next step.
 
 **Parent–child retrieval is not built.** Chunks are retrieved and passed to the model as-is;
 there is no expansion to a surrounding parent section for context. Answers are grounded in

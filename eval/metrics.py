@@ -1,135 +1,174 @@
-"""Pure relevance and ranking metrics for retrieval evaluation."""
+"""The three small, independent metric layers used by the evaluation command."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
-from collections.abc import Set as AbstractSet
-from dataclasses import dataclass
-from math import log2
+import math
+import re
+import unicodedata
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
-MATCHER_FIELDS: frozenset[str] = frozenset(
-    {"doc_name", "control_id", "page", "section_contains", "text_contains"}
-)
+from csrs.models import RetrievedChunk
+
+ANSWER_SIMILARITY_PREFIX = "clustering: "
+DEFAULT_COSINE_THRESHOLD = 0.75
+EVIDENCE_TOKEN_RECALL_MIN = 0.90
+
+Embedder = Callable[[Sequence[str]], Sequence[Sequence[float]]]
 
 
-def chunk_matches(
-    matcher: Mapping[str, Any],
-    text: str,
-    metadata: Mapping[str, Any],
+class MetricError(ValueError):
+    """A metric input cannot produce a valid score."""
+
+
+def normalize_whitespace(text: str) -> str:
+    """Normalize layout whitespace without changing meaningful answer tokens."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", text)).strip()
+
+
+def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    """Return cosine similarity for two non-empty, equal-length vectors."""
+    if not left or not right:
+        raise MetricError("cosine vectors must not be empty")
+    if len(left) != len(right):
+        raise MetricError(
+            f"cosine vector dimensions differ: {len(left)} != {len(right)}"
+        )
+    if any(not math.isfinite(value) for value in [*left, *right]):
+        raise MetricError("cosine vectors must contain only finite values")
+
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if left_norm == 0.0 or right_norm == 0.0:
+        raise MetricError("cosine vectors must have non-zero norms")
+    dot_product = sum(
+        left_value * right_value
+        for left_value, right_value in zip(left, right, strict=True)
+    )
+    return dot_product / (left_norm * right_norm)
+
+
+def score_answer_similarity(
+    candidate_answer: str,
+    reference_answers: Sequence[str],
+    embedder: Embedder,
+    *,
+    threshold: float = DEFAULT_COSINE_THRESHOLD,
+) -> dict[str, Any]:
+    """Score one answer against all references and retain the best reference."""
+    candidate = normalize_whitespace(candidate_answer)
+    references = [normalize_whitespace(reference) for reference in reference_answers]
+    if not candidate:
+        raise MetricError("candidate answer must not be empty")
+    if not references or any(not reference for reference in references):
+        raise MetricError("reference answers must not be empty")
+    if not -1.0 <= threshold <= 1.0:
+        raise MetricError("cosine threshold must be between -1 and 1")
+
+    prefixed = [
+        f"{ANSWER_SIMILARITY_PREFIX}{text}" for text in [candidate, *references]
+    ]
+    vectors = [list(vector) for vector in embedder(prefixed)]
+    if len(vectors) != len(prefixed):
+        raise MetricError(
+            f"embedding count differs: expected {len(prefixed)}, got {len(vectors)}"
+        )
+
+    candidate_vector = vectors[0]
+    scores = [
+        cosine_similarity(candidate_vector, reference_vector)
+        for reference_vector in vectors[1:]
+    ]
+    selected_index = max(range(len(scores)), key=scores.__getitem__)
+    score = scores[selected_index]
+    return {
+        "score": score,
+        "threshold": threshold,
+        "threshold_is_provisional": True,
+        "passed": score >= threshold,
+        "selected_reference": references[selected_index],
+        "selected_reference_index": selected_index,
+    }
+
+
+def _tokens(text: str) -> set[str]:
+    normalized = unicodedata.normalize("NFKC", text).casefold()
+    return set(re.findall(r"[a-z0-9]+", normalized))
+
+
+def evidence_token_recall(evidence_text: str, chunk_text: str) -> float:
+    """Return the fraction of distinct gold-evidence tokens present in a chunk."""
+    evidence_tokens = _tokens(evidence_text)
+    if not evidence_tokens:
+        raise MetricError("gold evidence must contain at least one alphanumeric token")
+    return len(evidence_tokens & _tokens(chunk_text)) / len(evidence_tokens)
+
+
+def chunk_matches_evidence(
+    evidence: Mapping[str, Any],
+    retrieved: RetrievedChunk,
+    *,
+    minimum_token_recall: float = EVIDENCE_TOKEN_RECALL_MIN,
 ) -> bool:
-    """Return whether a chunk satisfies every field in the matcher."""
-    unknown_fields = set(matcher) - MATCHER_FIELDS
-    if unknown_fields:
-        raise ValueError(f"unsupported matcher fields: {sorted(unknown_fields)}")
+    """Match one indexed chunk to one corpus-grounded evidence record."""
+    if not 0.0 <= minimum_token_recall <= 1.0:
+        raise MetricError("minimum evidence token recall must be between 0 and 1")
 
-    for field in ("doc_name", "control_id", "page"):
-        if field in matcher and metadata.get(field) != matcher[field]:
-            return False
-
-    section = metadata.get("section")
-    if "section_contains" in matcher and (
-        not isinstance(section, str) or matcher["section_contains"] not in section
+    document_path = evidence.get("document_path")
+    evidence_text = evidence.get("text")
+    pdf_page_index = evidence.get("pdf_page_index")
+    if not isinstance(document_path, str) or not document_path:
+        raise MetricError("gold evidence requires document_path")
+    if not isinstance(evidence_text, str) or not evidence_text:
+        raise MetricError("gold evidence requires text")
+    if pdf_page_index is not None and (
+        not isinstance(pdf_page_index, int) or isinstance(pdf_page_index, bool)
     ):
+        raise MetricError("pdf_page_index must be an integer or null")
+
+    chunk = retrieved.chunk
+    if chunk.doc_name != Path(document_path).name:
         return False
-    return "text_contains" not in matcher or matcher["text_contains"] in text
-
-
-def _validate_ranking(
-    relevant_ids: AbstractSet[str],
-    ranked_ids: Sequence[str],
-    k: int | None = None,
-) -> None:
-    if not relevant_ids:
-        raise ValueError("relevant_ids must not be empty")
-    if k is not None and k <= 0:
-        raise ValueError("k must be positive")
-    if len(ranked_ids) != len(set(ranked_ids)):
-        raise ValueError("ranked_ids must not contain duplicates")
-
-
-def recall_at_k(
-    relevant_ids: AbstractSet[str],
-    ranked_ids: Sequence[str],
-    k: int,
-) -> float:
-    """Return the fraction of relevant IDs retrieved in the first k ranks."""
-    _validate_ranking(relevant_ids, ranked_ids, k)
-    hits = sum(chunk_id in relevant_ids for chunk_id in ranked_ids[:k])
-    return hits / len(relevant_ids)
-
-
-def reciprocal_rank(
-    relevant_ids: AbstractSet[str],
-    ranked_ids: Sequence[str],
-) -> float:
-    """Return the reciprocal rank of the first relevant ID."""
-    _validate_ranking(relevant_ids, ranked_ids)
-    for rank, chunk_id in enumerate(ranked_ids, start=1):
-        if chunk_id in relevant_ids:
-            return 1 / rank
-    return 0.0
-
-
-def ndcg_at_k(
-    relevant_ids: AbstractSet[str],
-    ranked_ids: Sequence[str],
-    k: int,
-) -> float:
-    """Return binary normalized discounted cumulative gain at k."""
-    _validate_ranking(relevant_ids, ranked_ids, k)
-    dcg = sum(
-        1 / log2(rank + 1)
-        for rank, chunk_id in enumerate(ranked_ids[:k], start=1)
-        if chunk_id in relevant_ids
+    if pdf_page_index is not None and chunk.page != pdf_page_index + 1:
+        return False
+    return (
+        evidence_token_recall(evidence_text, chunk.text) >= minimum_token_recall
     )
-    ideal_hits = min(len(relevant_ids), k)
-    idcg = sum(1 / log2(rank + 1) for rank in range(1, ideal_hits + 1))
-    return dcg / idcg
 
 
-@dataclass(frozen=True, slots=True)
-class RefusalAccuracy:
-    """Hold refusal counts and rates across answerable and refusal outcomes."""
+def score_retrieval_evidence(
+    evidence_items: Sequence[Mapping[str, Any]],
+    retrieved_chunks: Sequence[RetrievedChunk],
+    *,
+    depths: Sequence[int] = (5, 10),
+) -> dict[str, Any]:
+    """Report evidence hit and recall independently at each requested depth."""
+    if not evidence_items:
+        raise MetricError("retrieval evaluation requires gold evidence")
+    if not depths or any(depth <= 0 for depth in depths):
+        raise MetricError("retrieval depths must be positive")
 
-    must_refuse_total: int
-    correct_refusals: int
-    answerable_total: int
-    false_refusals: int
-    refusal_recall: float | None
-    false_refusal_rate: float | None
-    overall_accuracy: float | None
+    matches = []
+    for evidence_index, evidence in enumerate(evidence_items):
+        matching_ranks = [
+            rank + 1
+            for rank, retrieved in enumerate(retrieved_chunks)
+            if chunk_matches_evidence(evidence, retrieved)
+        ]
+        matches.append(
+            {
+                "evidence_index": evidence_index,
+                "matching_ranks": matching_ranks,
+            }
+        )
 
-
-def refusal_accuracy(outcomes: Iterable[tuple[bool, bool]]) -> RefusalAccuracy:
-    """Return refusal counts and rates for the supplied outcomes."""
-    must_refuse_total = 0
-    correct_refusals = 0
-    answerable_total = 0
-    false_refusals = 0
-
-    for must_refuse, refused in outcomes:
-        if must_refuse:
-            must_refuse_total += 1
-            correct_refusals += refused
-        else:
-            answerable_total += 1
-            false_refusals += refused
-
-    total = must_refuse_total + answerable_total
-    refusal_recall = (
-        correct_refusals / must_refuse_total if must_refuse_total else None
-    )
-    false_refusal_rate = false_refusals / answerable_total if answerable_total else None
-    overall_accuracy = (
-        (correct_refusals + answerable_total - false_refusals) / total if total else None
-    )
-    return RefusalAccuracy(
-        must_refuse_total=must_refuse_total,
-        correct_refusals=correct_refusals,
-        answerable_total=answerable_total,
-        false_refusals=false_refusals,
-        refusal_recall=refusal_recall,
-        false_refusal_rate=false_refusal_rate,
-        overall_accuracy=overall_accuracy,
-    )
+    result: dict[str, Any] = {"matches": matches}
+    for depth in sorted(set(depths)):
+        matched_count = sum(
+            any(rank <= depth for rank in match["matching_ranks"])
+            for match in matches
+        )
+        result[f"evidence_hit_at_{depth}"] = matched_count > 0
+        result[f"evidence_recall_at_{depth}"] = matched_count / len(evidence_items)
+    return result

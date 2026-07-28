@@ -173,3 +173,18 @@ the task requires behavior that native delegation cannot express.
 **Why.** The custom wrapper added roughly 40 lines, another metadata contract, and a
 duck-typed API probe. Native delegation preserves token streaming and correctly forwards
 `send`, `throw`, and `close` while exposing the final `StopIteration.value` directly.
+
+---
+
+## L-8 · Narrow long evaluation runs immediately when the user narrows scope
+
+**Date:** 2026-07-28 · **Trigger:** the five-model evaluation was running when the user
+reduced the required comparison to `llama3.2:latest` and `qwen2.5:1.5b`.
+
+**Rule.** Treat a mid-run scope reduction as an override. Finish only explicitly requested
+in-flight work, stop before retaining out-of-scope rows, and regenerate configuration and
+reports from the completed subset.
+
+**Why.** Paid judge calls and local generation time are real costs. Continuing a previously
+approved larger run after a narrower instruction would waste both and make the final
+configuration misrepresent what the user asked to compare.

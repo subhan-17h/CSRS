@@ -1,8 +1,7 @@
 """Centralised, typed configuration.
 
-Every tunable in the system lives here. Phase 3 involves repeatedly adjusting chunk
-sizes, `top_k` values and thresholds while watching the eval harness; hunting magic
-numbers across modules would waste hours of that.
+Every production tunable in the system lives here. Keeping chunk sizes, retrieval depths,
+and generation settings together prevents configuration drift across the two interfaces.
 
 Values may be overridden from the environment or a `.env` file using the `CSRS_`
 prefix, e.g. `CSRS_CHUNK_SIZE=512`. See `.env.example`.
@@ -77,8 +76,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 60
 
     # --- Retrieval --------------------------------------------------------
-    # Hybrid improves exact-ID rank-1 from 10/12 to 12/12 and Recall@5 from 0.454 to
-    # 0.461. It costs spec-example recall, which T-4.3's query rewriting addresses.
+    # Hybrid combines semantic and exact-term retrieval before selecting generator context.
     retrieval_mode: Literal["dense", "hybrid"] = "hybrid"
     top_k_dense: int = 20
     top_k_bm25: int = 20
@@ -90,8 +88,7 @@ class Settings(BaseSettings):
     rerank_top_n: int = 5
 
     # --- Generation -------------------------------------------------------
-    # Placeholder default. T-4.2 calibrates this against the golden set's
-    # out-of-scope questions; do not trust this number until it has.
+    # Reserved for a future calibrated runtime refusal policy; currently not consumed.
     refusal_threshold: float = 0.3
     refusal_message: str = (
         "I could not find sufficient information in the loaded documents to answer that."

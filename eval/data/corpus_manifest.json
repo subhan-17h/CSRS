@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "document_path": "docs/NIST.SP.1299.pdf",
+      "document_title": "NIST Cybersecurity Framework 2.0: Resource & Overview Guide",
+      "document_version": "NIST SP 1299, February 2024",
+      "sha256": "5db59917d92013f06dfefdc62604230959ee34b93db1fd22de726f83d9345f09",
+      "page_count": 8,
+      "extraction_status": "extracted",
+      "page_numbering_ambiguity": "The PDF has eight physical pages but no printed page identifiers; use pdf_page_index."
+    },
+    {
+      "document_path": "docs/NIST.SP.800-53r5.pdf",
+      "document_title": "Security and Privacy Controls for Information Systems and Organizations",
+      "document_version": "NIST SP 800-53 Revision 5, September 2020; includes updates as of 2020-12-10",
+      "sha256": "fc63bcd61715d0181dd8e85998b1e6201ae3515fc6626102101cab1841e11ec6",
+      "page_count": 492,
+      "extraction_status": "extracted",
+      "page_numbering_ambiguity": "The PDF includes unnumbered cover pages, Roman-numbered preliminary pages, and Arabic-numbered body and appendix pages; printed_page and zero-based pdf_page_index are recorded separately."
+    },
+    {
+      "document_path": "docs/samples/NIST.CSWP.29_CSF-2.0.pdf",
+      "document_title": "The NIST Cybersecurity Framework (CSF) 2.0",
+      "document_version": "NIST CSWP 29, version 2.0, February 26, 2024",
+      "sha256": "3c31f46fee98cac0c4323453e5109291a213b4de7fef8c058af9bf67f717433c",
+      "page_count": 32,
+      "extraction_status": "extracted",
+      "page_numbering_ambiguity": "The cover is unnumbered, preliminary pages use Roman numerals i-iv, and the body uses printed pages 1-27; printed_page and zero-based pdf_page_index are recorded separately."
+    },
+    {
+      "document_path": "docs/samples/OWASP_Top_10_2021.txt",
+      "document_title": "OWASP Top 10:2021",
+      "document_version": "2021 edition, v1.1 released July 13, 2025",
+      "sha256": "5317af85fd9950ead0e9cb9095978220e039a74d70ed5004a86ad45a5868bb81",
+      "page_count": null,
+      "extraction_status": "extracted",
+      "page_numbering_ambiguity": "The corpus source is assembled UTF-8 text and has no PDF or printed page numbering."
+    }
+  ]
+}

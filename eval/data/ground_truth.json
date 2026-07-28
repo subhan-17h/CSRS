@@ -1,0 +1,652 @@
+{
+  "version": 1,
+  "review_status": "draft",
+  "questions": [
+    {
+      "id": "csf-core-functions",
+      "question": "Which six Functions organize cybersecurity outcomes at the highest level of the CSF Core?",
+      "answer": "The six CSF Core Functions are GOVERN, IDENTIFY, PROTECT, DETECT, RESPOND, and RECOVER.",
+      "acceptable_answers": [
+        "Govern, Identify, Protect, Detect, Respond, and Recover."
+      ],
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "GOVERN is a CSF Core Function."
+        },
+        {
+          "id": "claim-2",
+          "text": "IDENTIFY is a CSF Core Function."
+        },
+        {
+          "id": "claim-3",
+          "text": "PROTECT is a CSF Core Function."
+        },
+        {
+          "id": "claim-4",
+          "text": "DETECT is a CSF Core Function."
+        },
+        {
+          "id": "claim-5",
+          "text": "RESPOND is a CSF Core Function."
+        },
+        {
+          "id": "claim-6",
+          "text": "RECOVER is a CSF Core Function."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/NIST.CSWP.29_CSF-2.0.pdf",
+          "section": "2. Introduction to the CSF Core",
+          "printed_page": "3",
+          "pdf_page_index": 7,
+          "text": "The CSF Core Functions — GOVERN, IDENTIFY, PROTECT, DETECT, RESPOND, and RECOVER — organize cybersecurity outcomes at their highest level."
+        }
+      ]
+    },
+    {
+      "id": "csf-current-target-profiles",
+      "question": "How does a CSF Current Profile differ from a Target Profile?",
+      "answer": "A Current Profile specifies the Core outcomes the organization is currently achieving or attempting to achieve and how or to what extent they are achieved. A Target Profile specifies the desired outcomes selected and prioritized for the organization's cybersecurity risk management objectives.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "A Current Profile records Core outcomes currently achieved or attempted."
+        },
+        {
+          "id": "claim-2",
+          "text": "A Current Profile characterizes how or to what extent each outcome is achieved."
+        },
+        {
+          "id": "claim-3",
+          "text": "A Target Profile records desired Core outcomes."
+        },
+        {
+          "id": "claim-4",
+          "text": "Target outcomes are selected and prioritized for cybersecurity risk management objectives."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/NIST.CSWP.29_CSF-2.0.pdf",
+          "section": "Appendix C. Glossary — CSF Current Profile",
+          "printed_page": "26",
+          "pdf_page_index": 30,
+          "text": "A part of an Organizational Profile that specifies the Core outcomes that an organization is currently achieving (or attempting to achieve) and characterizes how or to what extent each outcome is being achieved."
+        },
+        {
+          "document_path": "docs/samples/NIST.CSWP.29_CSF-2.0.pdf",
+          "section": "Appendix C. Glossary — CSF Target Profile",
+          "printed_page": "26",
+          "pdf_page_index": 30,
+          "text": "A part of an Organizational Profile that specifies the desired Core outcomes that an organization has selected and prioritized for achieving its cybersecurity risk management objectives."
+        }
+      ]
+    },
+    {
+      "id": "csf-tier-names",
+      "question": "What are the four CSF Tiers, from Tier 1 through Tier 4?",
+      "answer": "The four Tiers are Partial (Tier 1), Risk Informed (Tier 2), Repeatable (Tier 3), and Adaptive (Tier 4).",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "Tier 1 is Partial."
+        },
+        {
+          "id": "claim-2",
+          "text": "Tier 2 is Risk Informed."
+        },
+        {
+          "id": "claim-3",
+          "text": "Tier 3 is Repeatable."
+        },
+        {
+          "id": "claim-4",
+          "text": "Tier 4 is Adaptive."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/NIST.CSWP.29_CSF-2.0.pdf",
+          "section": "3.2. CSF Tiers",
+          "printed_page": "7",
+          "pdf_page_index": 11,
+          "text": "The Tiers, as shown in Fig. 4 and notionally illustrated in Appendix B, reflect an organization’s practices for managing cybersecurity risk as Partial (Tier 1), Risk Informed (Tier 2), Repeatable (Tier 3), and Adaptive (Tier 4)."
+        }
+      ]
+    },
+    {
+      "id": "csf-informative-reference-definition",
+      "question": "What is a CSF Informative Reference?",
+      "answer": "An Informative Reference is a mapping that indicates a relationship between the CSF Core and standards, guidelines, regulations, or other content.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "An Informative Reference is a mapping."
+        },
+        {
+          "id": "claim-2",
+          "text": "It indicates relationships between the Core and standards, guidelines, regulations, or other content."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/NIST.CSWP.29_CSF-2.0.pdf",
+          "section": "4. Introduction to Online Resources That Supplement the CSF",
+          "printed_page": "9",
+          "pdf_page_index": 13,
+          "text": "Informative References are mappings that indicate relationships between the Core and various standards, guidelines, regulations, and other content."
+        }
+      ]
+    },
+    {
+      "id": "csf-gv-sc-05-contracts",
+      "question": "What outcome does GV.SC-05 describe for requirements that address cybersecurity risks in supply chains?",
+      "answer": "The requirements are established, prioritized, and integrated into contracts and other agreements with suppliers and other relevant third parties.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "Supply-chain cybersecurity requirements are established."
+        },
+        {
+          "id": "claim-2",
+          "text": "Supply-chain cybersecurity requirements are prioritized."
+        },
+        {
+          "id": "claim-3",
+          "text": "Supply-chain cybersecurity requirements are integrated into supplier and relevant third-party contracts or other agreements."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/NIST.CSWP.29_CSF-2.0.pdf",
+          "section": "Appendix A. CSF Core — Cybersecurity Supply Chain Risk Management (GV.SC)",
+          "printed_page": "18",
+          "pdf_page_index": 22,
+          "text": "GV.SC-05: Requirements to address cybersecurity risks in supply chains are established, prioritized, and integrated into contracts and other types of agreements with suppliers and other relevant third parties"
+        }
+      ]
+    },
+    {
+      "id": "sp1299-csf-components",
+      "question": "Which three components comprise CSF 2.0?",
+      "answer": "CSF 2.0 comprises the CSF Core, CSF Organizational Profiles, and CSF Tiers.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "The CSF Core is a component of CSF 2.0."
+        },
+        {
+          "id": "claim-2",
+          "text": "CSF Organizational Profiles are a component of CSF 2.0."
+        },
+        {
+          "id": "claim-3",
+          "text": "CSF Tiers are a component of CSF 2.0."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.1299.pdf",
+          "section": "What Is the CSF 2.0…and Popular Ways to Use It?",
+          "printed_page": null,
+          "pdf_page_index": 1,
+          "text": "CSF Core - A taxonomy of high-level cybersecurity outcomes"
+        },
+        {
+          "document_path": "docs/NIST.SP.1299.pdf",
+          "section": "What Is the CSF 2.0…and Popular Ways to Use It?",
+          "printed_page": null,
+          "pdf_page_index": 1,
+          "text": "CSF Organizational Profiles - A mechanism for describing an organization’s current and/or target cybersecurity posture in terms of the CSF Core’s outcomes."
+        },
+        {
+          "document_path": "docs/NIST.SP.1299.pdf",
+          "section": "What Is the CSF 2.0…and Popular Ways to Use It?",
+          "printed_page": null,
+          "pdf_page_index": 1,
+          "text": "CSF Tiers - Can be applied to CSF Organizational Profiles to characterize the rigor of an organization’s cybersecurity risk governance and management practices."
+        }
+      ]
+    },
+    {
+      "id": "sp1299-practices-modality",
+      "question": "What must organizational cybersecurity practices be, and what should they reflect?",
+      "answer": "The practices must be straightforward and communicated regularly. They should reflect applying risk management to changes in mission or business requirements, threats, and the overall technical landscape.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "The practices must be straightforward."
+        },
+        {
+          "id": "claim-2",
+          "text": "The practices must be communicated regularly."
+        },
+        {
+          "id": "claim-3",
+          "text": "The practices should reflect risk management applied to changes in mission or business requirements."
+        },
+        {
+          "id": "claim-4",
+          "text": "The practices should reflect risk management applied to threats and the overall technical landscape."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.1299.pdf",
+          "section": "GOVERN — Develop and communicate organizational cybersecurity practices",
+          "printed_page": null,
+          "pdf_page_index": 4,
+          "text": "These must be straightforward and communicated regularly. They should reflect the application of risk management to changes in mission or business requirements, threats, and overall technical landscape."
+        }
+      ]
+    },
+    {
+      "id": "sp1299-backup-actions",
+      "question": "What three backup actions does the Resource & Overview Guide recommend under PROTECT?",
+      "answer": "Back up data on agreed schedules or with built-in backup capabilities, keep at least one frequently backed-up data set offline against ransomware, and test that backed-up data can be restored successfully.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "Back up data on agreed schedules or use built-in backup capabilities."
+        },
+        {
+          "id": "claim-2",
+          "text": "Keep at least one frequently backed-up data set offline to protect it against ransomware."
+        },
+        {
+          "id": "claim-3",
+          "text": "Test that backed-up data can be restored successfully."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.1299.pdf",
+          "section": "PROTECT — Conduct regular backups",
+          "printed_page": null,
+          "pdf_page_index": 5,
+          "text": "Back up data at agreed-upon schedules or use built-in backup capabilities; software and cloud solutions can automate this process. Keep at least one frequently backed-up set of data offline to protect it against ransomware. Test to ensure that backed-up data can be successfully restored to systems."
+        }
+      ]
+    },
+    {
+      "id": "sp1299-incident-data-preservation",
+      "question": "What does the RESPOND guidance say to do with incident data?",
+      "answer": "Collect incident data and preserve its integrity and provenance.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "Incident data is collected."
+        },
+        {
+          "id": "claim-2",
+          "text": "The integrity of incident data is preserved."
+        },
+        {
+          "id": "claim-3",
+          "text": "The provenance of incident data is preserved."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.1299.pdf",
+          "section": "RESPOND",
+          "printed_page": null,
+          "pdf_page_index": 6,
+          "text": "Collect incident data and preserve its integrity and provenance."
+        }
+      ]
+    },
+    {
+      "id": "sp80053-ac-7-invalid-logons",
+      "question": "Under AC-7, what must happen when the maximum number of unsuccessful logon attempts is exceeded?",
+      "answer": "The system must automatically take one or more organization-selected actions: lock the account or node for a defined period or until administrator release, delay the next prompt using a defined algorithm, notify the system administrator, or take another organization-defined action.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "The response occurs automatically after the maximum number of unsuccessful attempts is exceeded."
+        },
+        {
+          "id": "claim-2",
+          "text": "Locking the account or node for a defined period or until administrator release is an available action."
+        },
+        {
+          "id": "claim-3",
+          "text": "Delaying the next logon prompt using an organization-defined algorithm is an available action."
+        },
+        {
+          "id": "claim-4",
+          "text": "Notifying the system administrator is an available action."
+        },
+        {
+          "id": "claim-5",
+          "text": "Another organization-defined action may be selected."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "AC-7 Unsuccessful Logon Attempts",
+          "printed_page": "39",
+          "pdf_page_index": 65,
+          "text": "Automatically [Selection (one or more): lock the account or node for an [Assignment: organization-defined time period]; lock the account or node until released by an administrator; delay next logon prompt per [Assignment: organization-defined delay algorithm]; notify system administrator; take other [Assignment: organization-defined action]] when the maximum number of unsuccessful attempts is exceeded."
+        }
+      ]
+    },
+    {
+      "id": "sp80053-at-2-training-timing",
+      "question": "When does AT-2 require security and privacy literacy training for system users?",
+      "answer": "Training is provided as part of initial training for new users, at an organization-defined frequency thereafter, and when required by system changes or organization-defined events.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "New users receive literacy training as part of initial training."
+        },
+        {
+          "id": "claim-2",
+          "text": "Training recurs at an organization-defined frequency."
+        },
+        {
+          "id": "claim-3",
+          "text": "Training occurs when required by system changes."
+        },
+        {
+          "id": "claim-4",
+          "text": "Training occurs following organization-defined events."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "AT-2 Literacy Training and Awareness",
+          "printed_page": "60",
+          "pdf_page_index": 86,
+          "text": "Provide security and privacy literacy training to system users (including managers, senior executives, and contractors): 1. As part of initial training for new users and [Assignment: organization-defined frequency] thereafter; and 2. When required by system changes or following [Assignment: organization-defined events];"
+        }
+      ]
+    },
+    {
+      "id": "sp80053-au-11-record-retention",
+      "question": "Why and for how long does AU-11 require audit records to be retained?",
+      "answer": "Audit records are retained for an organization-defined period consistent with records retention policy, to support after-the-fact incident investigations and meet regulatory and organizational retention requirements.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "The retention period is organization-defined and consistent with records retention policy."
+        },
+        {
+          "id": "claim-2",
+          "text": "Retention supports after-the-fact incident investigations."
+        },
+        {
+          "id": "claim-3",
+          "text": "Retention meets regulatory information-retention requirements."
+        },
+        {
+          "id": "claim-4",
+          "text": "Retention meets organizational information-retention requirements."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "AU-11 Audit Record Retention",
+          "printed_page": "77",
+          "pdf_page_index": 103,
+          "text": "Retain audit records for [Assignment: organization-defined time period consistent with records retention policy] to provide support for after-the-fact investigations of incidents and to meet regulatory and organizational information retention requirements."
+        }
+      ]
+    },
+    {
+      "id": "sp80053-cp-9-backup-information",
+      "question": "Which three categories of information does CP-9 require organizations to back up?",
+      "answer": "CP-9 requires backups of user-level information in designated system components, system-level information in the system, and system documentation including security- and privacy-related documentation.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "User-level information in organization-defined system components is backed up."
+        },
+        {
+          "id": "claim-2",
+          "text": "System-level information in the system is backed up."
+        },
+        {
+          "id": "claim-3",
+          "text": "System documentation, including security- and privacy-related documentation, is backed up."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "CP-9 System Backup",
+          "printed_page": "125",
+          "pdf_page_index": 151,
+          "text": "a. Conduct backups of user-level information contained in [Assignment: organization-defined system components] [Assignment: organization-defined frequency consistent with recovery time and recovery point objectives]; b. Conduct backups of system-level information contained in the system [Assignment: organization-defined frequency consistent with recovery time and recovery point objectives];"
+        },
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "CP-9 System Backup",
+          "printed_page": "126",
+          "pdf_page_index": 152,
+          "text": "c. Conduct backups of system documentation, including security- and privacy-related documentation [Assignment: organization-defined frequency consistent with recovery time and recovery point objectives];"
+        }
+      ]
+    },
+    {
+      "id": "sp80053-ia-5-authenticator-changes",
+      "question": "Which two explicit authenticator changes does IA-5 require before first use or when account membership changes?",
+      "answer": "Default authenticators must be changed before first use, and authenticators for group or role accounts must be changed when membership in those accounts changes.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "Default authenticators are changed before first use."
+        },
+        {
+          "id": "claim-2",
+          "text": "Group or role account authenticators are changed when account membership changes."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "IA-5 Authenticator Management",
+          "printed_page": "138",
+          "pdf_page_index": 164,
+          "text": "e. Changing default authenticators prior to first use;"
+        },
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "IA-5 Authenticator Management",
+          "printed_page": "138",
+          "pdf_page_index": 164,
+          "text": "i. Changing authenticators for group or role accounts when membership to those accounts changes."
+        }
+      ]
+    },
+    {
+      "id": "sp80053-ir-6-incident-reporting",
+      "question": "What two reporting actions does IR-6 require for suspected incidents and incident information?",
+      "answer": "Personnel must report suspected incidents to the organizational incident response capability within an organization-defined period, and incident information must be reported to organization-defined authorities.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "Personnel report suspected incidents to the organizational incident response capability."
+        },
+        {
+          "id": "claim-2",
+          "text": "Suspected incidents are reported within an organization-defined time period."
+        },
+        {
+          "id": "claim-3",
+          "text": "Incident information is reported to organization-defined authorities."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "IR-6 Incident Reporting",
+          "printed_page": "157",
+          "pdf_page_index": 183,
+          "text": "a. Require personnel to report suspected incidents to the organizational incident response capability within [Assignment: organization-defined time period]; and b. Report incident information to [Assignment: organization-defined authorities]."
+        }
+      ]
+    },
+    {
+      "id": "sp80053-si-2-flaw-remediation",
+      "question": "What four actions are required by SI-2 for flaw remediation?",
+      "answer": "Identify, report, and correct system flaws; test related software and firmware updates for effectiveness and side effects before installation; install security-relevant updates within an organization-defined period; and incorporate flaw remediation into configuration management.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "System flaws are identified, reported, and corrected."
+        },
+        {
+          "id": "claim-2",
+          "text": "Related software and firmware updates are tested for effectiveness and potential side effects before installation."
+        },
+        {
+          "id": "claim-3",
+          "text": "Security-relevant updates are installed within an organization-defined period after release."
+        },
+        {
+          "id": "claim-4",
+          "text": "Flaw remediation is incorporated into organizational configuration management."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/NIST.SP.800-53r5.pdf",
+          "section": "SI-2 Flaw Remediation",
+          "printed_page": "333",
+          "pdf_page_index": 359,
+          "text": "a. Identify, report, and correct system flaws; b. Test software and firmware updates related to flaw remediation for effectiveness and potential side effects before installation; c. Install security-relevant software and firmware updates within [Assignment: organization-defined time period] of the release of the updates; and d. Incorporate flaw remediation into the organizational configuration management process."
+        }
+      ]
+    },
+    {
+      "id": "owasp-a01-cwe-incidence",
+      "question": "For OWASP A01:2021 Broken Access Control, how many CWEs were mapped and what average application incidence rate was reported?",
+      "answer": "A01:2021 mapped 34 CWEs and reported an average incidence rate of 3.81% of tested applications.",
+      "acceptable_answers": [
+        "34 CWEs and 3.81%."
+      ],
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "A01:2021 mapped 34 CWEs."
+        },
+        {
+          "id": "claim-2",
+          "text": "A01:2021 reported an average incidence rate of 3.81%."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/OWASP_Top_10_2021.txt",
+          "section": "What's changed in the Top 10 for 2021 — A01:2021 Broken Access Control",
+          "printed_page": null,
+          "pdf_page_index": null,
+          "text": "the contributed data indicates that on average, 3.81% of applications tested had one or more Common Weakness Enumerations (CWEs) with more than 318k occurrences of CWEs in this risk category. The 34 CWEs mapped to Broken Access Control had more occurrences in applications than any other category."
+        }
+      ]
+    },
+    {
+      "id": "owasp-a01-deny-default",
+      "question": "What default access-control policy does OWASP recommend for resources that are not public?",
+      "answer": "OWASP recommends denying access by default for every resource except public resources.",
+      "acceptable_answers": [
+        "Except for public resources, deny by default."
+      ],
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "Non-public resources are denied by default."
+        },
+        {
+          "id": "claim-2",
+          "text": "Public resources are the stated exception."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/OWASP_Top_10_2021.txt",
+          "section": "A01:2021 Broken Access Control — How to Prevent",
+          "printed_page": null,
+          "pdf_page_index": null,
+          "text": "Except for public resources, deny by default."
+        }
+      ]
+    },
+    {
+      "id": "owasp-a03-preferred-injection-defense",
+      "question": "What is OWASP's preferred option for preventing injection?",
+      "answer": "Use a safe API that avoids the interpreter, provides a parameterized interface, or migrates to an Object Relational Mapping tool.",
+      "acceptable_answers": [
+        "Use a safe API, parameterized interface, or ORM so data remains separate from commands and queries."
+      ],
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "The preferred option is a safe API."
+        },
+        {
+          "id": "claim-2",
+          "text": "The safe API avoids the interpreter, provides a parameterized interface, or uses ORM tooling."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/OWASP_Top_10_2021.txt",
+          "section": "A03:2021 Injection — How to Prevent",
+          "printed_page": null,
+          "pdf_page_index": null,
+          "text": "The preferred option is to use a safe API, which avoids using the interpreter entirely, provides a parameterized interface, or migrates to Object Relational Mapping Tools (ORMs)."
+        }
+      ]
+    },
+    {
+      "id": "owasp-a10-ssrf-allowlist",
+      "question": "For application-layer SSRF defense, what should be positively allow-listed, and which two filtering approaches should not be treated as the mitigation?",
+      "answer": "Positively allow-list the URL schema, port, and destination. Do not rely on a deny list or a regular expression as the SSRF mitigation.",
+      "claims": [
+        {
+          "id": "claim-1",
+          "text": "The URL schema is enforced with a positive allow list."
+        },
+        {
+          "id": "claim-2",
+          "text": "The port is enforced with a positive allow list."
+        },
+        {
+          "id": "claim-3",
+          "text": "The destination is enforced with a positive allow list."
+        },
+        {
+          "id": "claim-4",
+          "text": "A deny list is not the recommended SSRF mitigation."
+        },
+        {
+          "id": "claim-5",
+          "text": "A regular expression is not the recommended SSRF mitigation."
+        }
+      ],
+      "evidence": [
+        {
+          "document_path": "docs/samples/OWASP_Top_10_2021.txt",
+          "section": "A10:2021 Server-Side Request Forgery — How to Prevent, Application layer",
+          "printed_page": null,
+          "pdf_page_index": null,
+          "text": "Enforce the URL schema, port, and destination with a positive allow list"
+        },
+        {
+          "document_path": "docs/samples/OWASP_Top_10_2021.txt",
+          "section": "A10:2021 Server-Side Request Forgery — How to Prevent, Application layer",
+          "printed_page": null,
+          "pdf_page_index": null,
+          "text": "Do not mitigate SSRF via the use of a deny list or regular expression."
+        }
+      ]
+    }
+  ]
+}

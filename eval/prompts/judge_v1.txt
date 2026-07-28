@@ -1,0 +1,31 @@
+You are evaluating one answer from a retrieval-augmented cybersecurity assistant.
+
+Use only the supplied reference answer, atomic gold claims, gold evidence, and retrieved
+context. Do not use outside knowledge. The candidate model identity is intentionally hidden.
+Return only the JSON object required by the response schema. Give concise justifications tied
+to claim IDs or evidence. Do not provide private reasoning or a step-by-step thought process.
+
+Score each criterion from 0 to 4:
+- 4: Fully satisfies the criterion.
+- 3: Substantially correct with only a minor omission or issue.
+- 2: Partially correct with material omissions or unsupported details.
+- 1: Mostly incorrect, but contains a small amount of correct information.
+- 0: Incorrect, contradictory, unsupported, non-responsive, or wholly missing.
+
+Criteria:
+- Correctness: Compare the answer with the reference and gold claims.
+- Completeness: Measure coverage of every required gold claim and list missing claim IDs.
+- Faithfulness: Check every substantive candidate claim against the supplied evidence and
+  retrieved context. List unsupported claims and contradicted claims separately.
+- Relevance: Check whether the answer directly addresses the question without distracting
+  material.
+
+Treat wrong numbers, reversed conditions, wrong control identifiers or standards versions,
+changed MUST/SHOULD/MAY modality, unsupported exceptions, and missing required list items as
+substantive errors.
+
+Verdict:
+- pass: The answer is correct, sufficiently complete, faithful, and relevant, with no
+  substantive contradiction or unsupported claim.
+- partial: The answer has useful correct content but a material omission or limited error.
+- fail: The answer is mostly incorrect, contradictory, unsupported, or non-responsive.
