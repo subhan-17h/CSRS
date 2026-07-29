@@ -1,207 +1,132 @@
-# Minimal Three-Layer RAG Evaluation Plan
+# CSF-Only Three-Metric RAG Evaluation Plan
 
-## Purpose and approved scope
+## Purpose and scope
 
-Version one replaces the legacy 48-question retrieval harness with one end-to-end evaluator
-over the 20 evidence-grounded, human-readable questions in
-`eval/data/ground_truth.json`. The completed comparison uses two approved Ollama generators
-without an aggregate score:
+The evaluator measures end-to-end answers to 50 single-turn questions grounded only in
+`docs/samples/NIST.CSWP.29_CSF-2.0.pdf`. It compares all five installed Ollama answer
+models under identical generation and retrieval settings:
 
-- Answer cosine similarity with local `nomic-embed-text:latest`.
-- Evidence hit and recall at 5 and 10.
-- Optional Groq LLM judging with `openai/gpt-oss-120b`.
+- `llama3.2:latest`
+- `qwen2.5:1.5b`
+- `gemma2:2b`
+- `phi4-mini:latest`
+- `gemma4:e2b`
 
-Production indexing, FastAPI, Streamlit, and chat remain fully local. Groq is reachable only
-from an explicit developer evaluation command.
+The three reported metrics are answer cosine similarity, raw BERTScore, and an optional
+Groq LLM judgment. They remain independent; there is no aggregate score or overall pass.
+Production indexing, FastAPI, Streamlit, and chat remain local. Only an explicit
+evaluation command with `--judge` calls Groq.
 
-## Verified architecture
+## Dataset contract
 
-- `Pipeline.index()` builds the recursive PDF/TXT corpus, Chroma vectors, and BM25 index.
-- Query rewriting is skipped for standalone questions. With history, the selected candidate
-  generator also rewrites, so generation-model changes can affect retrieval.
-- Hybrid retrieval combines 20 dense and 20 BM25 candidates through RRF with `k=60`; the
-  production generator normally receives five chunks.
-- Document embeddings use `search_document:` and retrieval queries use `search_query:`.
-  Those asymmetric APIs are not reused for answer similarity.
-- Retrieved chunks retain rank, dense score, RRF score, and source metadata, but not raw
-  BM25 score. The evaluator can preserve generator context without changing public APIs.
-- All four corpus sources have usable text. Live Ollama inventory confirms the five
-  candidate tags and `nomic-embed-text:latest`; exact digests are in the dataset audit.
+`eval/data/ground_truth.json` is readable, versioned JSON. Each record contains a stable
+ID, question, reference answer, optional acceptable alternatives, atomic required claims,
+and exact evidence with source path, section, printed page, PDF page index, and text.
 
-## Approved decisions
+The 50 records use these fixed topic quotas:
 
-- Keep exactly 20 answerable, single-turn questions with `draft` review status. Do not add
-  unanswerable questions or expand the dataset before human review.
-- Use end-to-end comparison only. Fixed-context generation and conversational rewrite
-  evaluation are deferred.
-- Compare `llama3.2:latest` and `qwen2.5:1.5b` without tag substitution. Keep the other
-  three installed application models selectable for later runs.
-- Retrieve ten chunks, pass the first five to generation, and report evidence hit and recall
-  at both depths.
-- Embed the candidate and every accepted reference with the same symmetric `clustering:`
-  prefix. Keep the maximum cosine score and selected reference. Use `0.75` only as a
-  configurable, explicitly uncalibrated provisional threshold.
-- Make Groq judging opt-in. Judge correctness, completeness, faithfulness, and relevance on
-  a 0-4 rubric; also retain missing claims, unsupported claims, contradictions, and the
-  `pass | partial | fail` verdict.
-- Give the judge the question, candidate and reference answers, atomic claims, gold
-  evidence, and the five chunks actually supplied to generation. Hide candidate-model
-  identity and never request private reasoning.
-- Use one cached judge call per answer, strict structured output, and one controlled repair
-  attempt. Fail visibly after invalid output.
-- Fix model-comparison settings at temperature `0`, seed `42` where supported,
-  `num_ctx=8192`, `num_predict=512`, no custom stop sequence, and consistent disabled
-  thinking where supported.
-- Export JSONL diagnostic records, a CSV model summary, a Markdown report, captured
-  configuration, and a deterministic manual-review sample.
+| Topic | Questions |
+|---|---:|
+| Overview and applicability | 6 |
+| Core and Functions | 8 |
+| Profiles and Tiers | 8 |
+| Resources and integration | 6 |
+| Appendix A outcomes | 18 |
+| Glossary | 4 |
 
-## Dataset and result contracts
+Appendix A contains three questions for each of GOVERN, IDENTIFY, PROTECT, DETECT,
+RESPOND, and RECOVER. Across all topics, 30 questions are direct, 15 require multiple
+claims, and 5 compare or synthesize evidence. The records remain `draft` because exact
+evidence validation is not a substitute for human cybersecurity review.
 
-The readable JSON dataset centralizes document titles and versions in
-`eval/data/corpus_manifest.json`. Each question keeps only its stable ID, question, answer,
-optional accepted alternatives, atomic claims, and exact evidence path/page/section/text.
-Validation rejects duplicate IDs or questions, empty claims or evidence, invalid source
-locations, and evidence that cannot be traced to the corpus.
+Validation rejects a dataset unless it contains exactly 50 unique questions, matches the
+one-document corpus manifest and live index, uses valid pages, traces every evidence span
+to the PDF, and covers every claim with evidence tokens represented in indexed chunks.
 
-Conceptually, each question has this minimal shape:
+## Fixed evaluation configuration
 
-```json
-{
-  "id": "stable-id",
-  "question": "Question text",
-  "answer": "Reference answer",
-  "acceptable_answers": [],
-  "claims": [{"id": "claim-1", "text": "Atomic required fact"}],
-  "evidence": [{
-    "document_path": "docs/source.pdf",
-    "section": "Exact section or null",
-    "printed_page": "Printed label or null",
-    "pdf_page_index": 0,
-    "text": "Exact supporting passage"
-  }]
-}
-```
+Each answer model uses temperature `0`, seed `42` where supported, `num_ctx=8192`,
+`num_predict=512`, thinking disabled, and no custom stop sequence. Retrieval returns ten
+chunks and the first five are supplied to generation and the judge.
 
-Each question-model result retains the run and dataset IDs, exact candidate tag and digest,
-fixed generation settings, rewritten query, ten ranked chunks, the five generator chunks,
-generated and reference answers, rewrite/retrieval/generation/judge/total latency, all three
-metric layers, raw validated judgment, and visible errors.
+Cosine similarity embeds the candidate and accepted references with local
+`nomic-embed-text:latest` using the symmetric `clustering:` task prefix. The evaluator
+retains the highest reference score and applies the fixed `>= 0.75` pass threshold.
 
-## Command and outputs
+BERTScore uses `bert-score==0.3.13` with the pinned
+`FacebookAI/roberta-large` snapshot
+`722cf37b1afa9454edce342e7895e588b6ff1d59`, layer 17, CPU, no IDF, and no baseline
+rescaling. It retains precision, recall, and F1 from the accepted reference with the
+highest F1 and applies the fixed `F1 >= 0.85` pass threshold. The model is downloaded
+once by the warm-model command and reused from the local Hugging Face cache.
 
-The primary interface is:
+The Groq judge uses `openai/gpt-oss-120b`, temperature `0`, low reasoning effort,
+hidden reasoning, a versioned prompt, and strict JSON. It receives the question,
+candidate and reference answers, atomic claims, gold evidence, and the five chunks
+supplied to generation. Candidate-model identity is hidden.
 
-```bash
-uv run --group eval python -m eval.run --models \
-  llama3.2:latest qwen2.5:1.5b
-```
+The fixed judge rubric scores correctness, completeness, faithfulness, and relevance
+from 0 to 4 and records a `pass | partial | fail` verdict, missing claim IDs, unsupported
+claims, and contradictions. One invalid structured response gets one repair request.
+Transient transport, rate-limit, and server errors use bounded retries.
 
-`--judge` explicitly enables Groq. The command also supports dataset/model selection,
-question limits, cosine threshold, output directory, cache bypass, and resume. A run writes
-`config.json`, `results.jsonl`, `summary.csv`, `report.md`, and `manual_review.json`.
-Errors remain attached to their question result rather than becoming success-shaped scores.
+## Result and resume contracts
 
-## Judge and metric policy
+Each question-model row records schema/run/dataset identity, exact model tag and digest,
+generation settings, rewritten query, ten retrieved chunks, the generated and reference
+answers, gold claims and evidence, phase latency, the three metric objects, and visible
+errors.
 
-Cosine similarity measures semantic agreement, not factual correctness. It preserves
-negation, numbers, control identifiers, versions, and modality. Empty answers, malformed
-vectors, and zero-norm vectors are errors.
+Resume identity includes the dataset hash, model digests, thresholds, generation,
+retrieval, BERTScore, and judge configuration. A row is complete only when it contains a
+generated answer plus cosine, BERTScore, and a valid judgment when judging is enabled.
+Incomplete rows are replaced atomically on resume. Version-one runs are not resumable
+under the version-two contract.
 
-Evidence matching uses source basename, physical page where present, and at least 90%
-normalized evidence-token coverage. Answer cosine similarity is never used as retrieval
-relevance.
+Successful judge cache identity covers all judgment inputs and fixed request settings.
+The final comparison bypasses that cache so all 250 judgments are fresh.
 
-The Groq judge uses environment variable `GROQ_API_KEY`, model
-`openai/gpt-oss-120b`, temperature `0`, low reasoning effort, a versioned prompt, and strict
-JSON validation. Cache identity includes question ID, answer hash, context hash, judge
-model, prompt version, and prompt hash. Reports keep the raw structured judgment, provider,
-model, prompt version, and prompt hash without logging credentials.
+Each timestamped run writes:
 
-The fixed judge rubric is:
+- `config.json`
+- `results.jsonl`
+- `results.csv`
+- `summary.csv`
+- `report.md`
+- `manual_review.json`
 
-- `4`: fully satisfies the criterion.
-- `3`: substantially correct with only a minor omission or issue.
-- `2`: partially correct with material omissions or unsupported details.
-- `1`: mostly incorrect with a small amount of correct information.
-- `0`: incorrect, contradictory, unsupported, or non-responsive.
+Once the acceptance gate passes, the tracked `eval/final/` directory will contain only
+the completed run's detailed CSV, five-row summary CSV, and Markdown report. The detailed
+CSV omits bulky retrieved chunks and raw judge JSON but retains answer text, component
+scores, judge explanations and issue lists, latency, and errors.
 
-Correctness is measured against the reference and claims; completeness is required-claim
-coverage; faithfulness is support from gold evidence and supplied context; relevance is
-responsiveness to the question. Incorrect numbers, conditions, control IDs, versions,
-modality, exceptions, and missing list items are substantive errors. The response records
-0-4 criterion scores, concise evidence-based justifications, missing claim IDs, unsupported
-and contradicted claims, and `pass | partial | fail`.
+## Reporting policy and limitations
 
-Per-model reports include question count; cosine mean, median, and provisional-threshold
-rate; judge criterion averages and verdict rates; evidence hit and recall at 5 and 10;
-generation-latency mean and median; failures; dataset/config versions; and a question-level
-error table. No weighted aggregate is emitted.
+Per-model reports include question and successful-answer counts; cosine mean, median,
+and pass rate; BERTScore precision, recall, and F1 means plus F1 median and pass rate;
+judge criterion means and verdict rates; generation latency; and technical failures.
 
-## Implementation phases
+Cosine and BERTScore measure semantic agreement, not factual correctness. They can miss
+incorrect numbers, negation, modality, exceptions, or required list items. The LLM judge
+is a consistent rubric-based aid, not an expert. Raw structured judgments and a
+deterministic manual-review sample remain available in the ignored run directory.
 
-### Phase 1: replace data and legacy code
+The benchmark is answerable and single-turn. It does not measure refusal behavior,
+unanswerable questions, conversational rewriting, fixed-context generation, pairwise
+ranking, or threshold calibration. End-to-end results combine retrieval and generation
+effects.
 
-- **Goal:** establish one readable, corpus-grounded benchmark and remove the obsolete
-  operational harness.
-- **Scope/files:** replace legacy evaluator files under `eval/`, add
-  `eval/data/ground_truth.json`, retain the corpus manifest, and update operational docs.
-- **Deliverable:** the 20-question JSON loads through the compact schema; no current command
-  references deleted YAML or scripts.
-- **Verification/completion:** validate JSON, duplicates, manifest hashes/page counts, and
-  every evidence span against the corpus and indexed metadata.
+## Acceptance criteria
 
-### Phase 2: implement metrics and optional judge
+The evaluation is complete only when:
 
-- **Goal:** produce three independent, auditable evaluation layers.
-- **Scope/files:** dataset loader, metric functions, Groq judge/cache, and one versioned
-  judge prompt under `eval/`; add Groq only to the evaluation dependency group.
-- **Deliverable:** cosine result with selected reference, evidence metrics at 5/10, and
-  opt-in validated judge output.
-- **Verification/completion:** focused unit tests cover normal cases, empty/zero vectors,
-  multiple references, source/page evidence mismatches, invalid judge output, repair, and
-  stable cache keys without a paid API call.
-
-### Phase 3: implement end-to-end running and reports
-
-- **Goal:** compare the two approved local generators fairly and preserve failure provenance.
-- **Scope/files:** orchestration and reporting modules under `eval/`.
-- **Deliverable:** the primary CLI and five output artifacts, with resumable cached work and
-  phase latency.
-- **Verification/completion:** a one-question unjudged smoke run preserves ten retrieved
-  chunks, five generator chunks, an answer, metrics, configuration, and reports.
-
-### Phase 4: integration verification
-
-- **Goal:** prove evaluation is isolated from the production offline path.
-- **Scope/files:** focused evaluation tests and concise current documentation.
-- **Deliverable:** mocked judge coverage, production regression evidence, and reproducible
-  commands.
-- **Verification/completion:** one judged smoke after the user supplies a key, then the full
-  comparison; existing offline tests, Ruff, ASCII-only Python, and `git diff --check` pass.
-
-## Rejected and deferred alternatives
-
-- No weighted overall score, deterministic answer-check layer, MRR, nDCG, refusal metric,
-  generated inline-citation requirement, repeated judging, or pairwise model ranking.
-- No dashboard, database, generic provider abstraction, distributed workers, evaluation
-  framework, CI integration, or production refactor.
-- No fixed-context mode, multi-turn benchmark, unanswerable set, or calibrated pass
-  threshold in version one.
-- No automatic model downloads or model substitutions.
-
-## Acceptance criteria and known limitations
-
-- Version one is complete when all 20 questions validate against actual corpus evidence; both
-  exact candidate tags run the same prompt/settings; results preserve answers,
-  chunks, timings, metrics, judge audit data, and errors; JSONL/CSV/Markdown/manual review
-  exports are generated; and production code never imports or calls Groq.
-- The questions remain `draft` until a person reviews their claims and evidence. Review
-  roughly 30-50 representative generated answers before calibrating cosine or judge pass
-  thresholds.
-- Cosine similarity tolerates paraphrase but does not prove factual correctness, complete
-  claim coverage, correct numbers, negation, or modality.
-- The LLM judge can be inconsistent or biased and is not expert human review. Candidate
-  names are hidden, one rubric/prompt is fixed, raw judgments are retained, and a manually
-  reviewed subset is required for calibration.
-- End-to-end results combine retrieval and generation effects. The single-turn dataset does
-  not exercise the model-coupled conversational rewriter.
+1. The filesystem, corpus manifest, Chroma, and BM25 contain one 32-page CSF document
+   and 209 chunks.
+2. All 50 questions validate against the PDF and live index.
+3. All five exact Ollama tags run the same fixed configuration.
+4. The final judged run contains exactly 250 technically complete rows with all three
+   metrics and no pipeline or API errors.
+5. The tracked detailed CSV has 250 rows, the summary CSV has five rows, and the
+   Markdown report identifies the same completed run and thresholds.
+6. Focused tests, offline regression tests, Ruff, Python ASCII validation, and
+   `git diff --check` pass.

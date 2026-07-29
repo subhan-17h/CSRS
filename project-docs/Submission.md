@@ -19,7 +19,7 @@ question -> nomic-embed-text -> Chroma (cosine) ---\
 question -> BM25 (bm25s) --------------------------/
 ```
 
-Currently indexed: **4 documents, 2506 chunks, 532 pages.**
+Currently indexed: **1 document, 209 chunks, 32 pages.**
 
 ---
 
@@ -33,7 +33,7 @@ Every row maps a line from [CSRS.md](CSRS.md) to the code that satisfies it.
 |---|---|---|
 | Accept PDF and TXT | `loaders/__init__.py:29` | `get_parser()` routes `.pdf` to Docling (or pypdf) and `.txt` to `TextParser` |
 | Auto-load every document from `docs/` | `loaders/__init__.py:37` | `iter_document_paths()` walks `docs/` recursively with `rglob`, including subfolders |
-| Support multiple documents | `pipeline.py:124` | The index loop runs over every discovered file; 4 are indexed today |
+| Support multiple documents | `pipeline.py:124` | The index loop runs over every discovered file; the current corpus intentionally contains one |
 | Detect new documents, no code change | `pipeline.py:125-131` | Each file's SHA-256 is compared against `chroma_db/manifest.json`. A new file has no manifest entry, so it is parsed and indexed |
 | "Restart & Reload Documents" button | `app.py:122`, `api/app.py:508` | Streamlit button; React button posting to `POST /api/index/reload` |
 | Extensible to new standards | — | Drop a `.pdf` or `.txt` into `docs/`, press reload. No configuration, no restart |
@@ -222,13 +222,10 @@ environment variable or a `.env` file.
 
 | Document | Format | Pages | Chunks | Ships in repo? |
 |---|---|---:|---:|---|
-| NIST SP 800-53 Rev. 5 | PDF | 492 | 2119 | No — fetched by `scripts/fetch_docs.py` |
 | NIST CSF 2.0 | PDF | 32 | 209 | **Yes** — `docs/samples/`, public domain |
-| OWASP Top 10 2021 | TXT | — | 147 | **Yes** — `docs/samples/`, CC BY 4.0 |
-| NIST SP 1299 | PDF | 8 | 31 | No — fetched by script |
 
-One PDF and one TXT are committed so a fresh clone is queryable immediately and both parsing
-paths are exercised without any download.
+The production and evaluation corpus is deliberately restricted to this one committed,
+public-domain source. The generic loaders still accept additional PDF and TXT documents.
 
 **Two standards named in the specification are deliberately absent.** ISO/IEC 27001 is
 copyrighted and sold by ISO; CIS Controls v8.1 requires registration and restricts
@@ -285,10 +282,10 @@ guarantee than reading the code and concluding nothing does.
 
 **Retrieval was measured, not asserted.** The 48-pair harness used during retrieval design
 produced the historical Recall@k, MRR and nDCG@10 results in section 9. It has now been
-replaced operationally by 20 evidence-grounded questions in
+replaced operationally by 50 evidence-grounded questions in
 `eval/data/ground_truth.json`. The current `python -m eval.run` evaluator preserves answers
-and retrieved passages and independently reports answer cosine similarity, retrieval
-evidence hit/recall, and an optional evidence-aware Groq judgment.
+and retrieved passages and independently reports answer cosine similarity, raw
+RoBERTa-large BERTScore, and an optional evidence-aware Groq judgment.
 
 ---
 
@@ -363,9 +360,10 @@ failure classes and need more than one number, which is why the gate was never b
 ### The documented failure was fixed twice, and the second fix was the smaller one
 
 *"Explain the Identify function."* is the specification's example question 2 of 5. It was
-this project's headline failure: bare "Identify" collides lexically with `DE-IDENTIFICATION`
-and `IDENTIFICATION AND AUTHENTICATION`, and SP 800-53 is 2119 of the corpus's 2506 chunks,
-so it dominated the candidate pool. Measured live on the shipped system:
+this project's headline failure in the earlier four-document corpus: bare "Identify"
+collides lexically with `DE-IDENTIFICATION` and `IDENTIFICATION AND AUTHENTICATION`, and
+SP 800-53 contributed 2119 of 2506 chunks, so it dominated the candidate pool. That
+historical baseline measured:
 
 | configuration | what it retrieves | answer |
 |---|---|---|
@@ -404,7 +402,7 @@ something that depends on the model's own earlier phrasing rather than on the su
 question, and it will not resolve. Only the last two turns are used, so a reference reaching
 further back is lost.
 
-**Multi-turn quality is not measured.** The current 20-question dataset is single-turn by
+**Multi-turn quality is not measured.** The current 50-question dataset is single-turn by
 construction, so `python -m eval.run` cannot score rewriting. The evidence for rewriting is
 a worked example, not a metric — which is exactly the weaker form of evidence this project
 spends section 9 arguing against. Building a multi-turn dataset is the honest next step.

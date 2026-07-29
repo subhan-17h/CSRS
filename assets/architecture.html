@@ -196,7 +196,7 @@
           <button class="toolbar-toggle" onclick="this.parentElement.classList.toggle('expanded')" title="Export options" aria-label="Export options">⋯</button>
         </div>
       </div>
-      <p class="subtitle">Fully offline retrieval-augmented generation over cybersecurity standards. 4 documents, 2506 chunks, 532 pages.</p>
+      <p class="subtitle">Fully offline retrieval-augmented generation over NIST CSF 2.0. 1 document, 209 chunks, 32 pages.</p>
     </div>
 
     <!-- Main Diagram -->
@@ -317,7 +317,7 @@
         <text x="1045" y="348" fill="white" font-size="11" font-weight="600" text-anchor="middle">Chroma + BM25</text>
         <text x="1045" y="365" fill="#94a3b8" font-size="8" text-anchor="middle">chroma_db/ bm25_index/</text>
         <text x="1045" y="378" fill="#94a3b8" font-size="8" text-anchor="middle">rebuilt together on index</text>
-        <text x="1045" y="390" fill="#a78bfa" font-size="8" text-anchor="middle">4 docs, 2506 chunks</text>
+        <text x="1045" y="390" fill="#a78bfa" font-size="8" text-anchor="middle">1 doc, 209 chunks</text>
 
         <!-- = QUERY LANE = -->
         <text x="66" y="446" fill="#22d3ee" font-size="10" font-weight="700">QUERY  -  Pipeline.ask() / ask_stream()</text>
@@ -367,11 +367,11 @@
         <text x="100" y="626" fill="#94a3b8" font-size="9">Embedding (mandatory):  nomic-embed-text  |  274 MB  |  768 dimensions</text>
         <text x="100" y="644" fill="#94a3b8" font-size="9">Answer models:  llama3.2 2.0 GB (default)  |  qwen2.5:1.5b  |  gemma2:2b  |  phi4-mini  |  gemma4:e2b   - all five selectable in both UIs</text>
 
-        <text x="80" y="690" fill="#64748b" font-size="9">Cold index 316 s for 532 pages  |  unchanged reload 0.057 s with zero embedding calls  |  answers stream token by token over NDJSON</text>
+        <text x="80" y="690" fill="#64748b" font-size="9">CSF-only index: 32 pages, 209 chunks  |  unchanged reload makes zero embedding calls  |  answers stream token by token over NDJSON</text>
         <text x="80" y="708" fill="#64748b" font-size="9">Add a standard by dropping a .pdf or .txt into docs/ and pressing Restart and Reload Documents - no code change, no restart</text>
 
         <!-- = OFFLINE PROOF = -->
-        <text x="34" y="752" fill="#fb7185" font-size="9">Proven, not asserted:  231 offline tests pass with Ollama pointed at a dead port - no module silently reaches the network.</text>
+        <text x="34" y="752" fill="#fb7185" font-size="9">Proven, not asserted: the offline regression suite passes with Ollama pointed at a dead port - no module silently reaches the network.</text>
         <text x="34" y="772" fill="#fb7185" font-size="9">Web fonts are vendored as local .woff2 files. There is no cloud LLM client anywhere in src/.</text>
 
         <!-- ============================================================
@@ -427,7 +427,7 @@
         <ul>
           <li>&bull; A follow-up is rewritten into a standalone query before retrieval; skipped entirely when there is no history</li>
           <li>&bull; nomic-embed-text with the search_query: task prefix</li>
-          <li>&bull; Hybrid retrieval: dense cosine and BM25 fused by RRF (k=60), top 5 of 2506 chunks</li>
+          <li>&bull; Hybrid retrieval: dense cosine and BM25 fused by RRF (k=60), top 5 of 209 chunks</li>
           <li>&bull; RRF fuses ranks, not scores, because cosine and BM25 are on incomparable scales</li>
           <li>&bull; The prompt contains the retrieved chunks and nothing else about the corpus</li>
           <li>&bull; A grounding instruction closes the prompt; refusal is detected by exact match</li>
@@ -452,7 +452,7 @@
 
     <!-- Footer -->
     <p class="footer">
-      CSRS &bull; src/csrs/pipeline.py is the single facade &bull; NIST SP 800-53r5, NIST CSF 2.0, OWASP Top 10 2021, NIST SP 1299
+      CSRS &bull; src/csrs/pipeline.py is the single facade &bull; NIST CSF 2.0
     </p>
   </div>
 

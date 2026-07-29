@@ -175,3 +175,96 @@ conditional questions, one exception/prohibition question, one comparison, and t
 guidance/outcome questions. Each record contains atomic required claims and exact extracted
 evidence. The SP 1299 modality record keeps `must` and `should` as separate required claims.
 Every record remains `draft` pending human review.
+
+## EVAL-3 addendum — verified 2026-07-29
+
+This addendum records the version-two CSF-only state. The 2026-07-28 sections above remain
+the historical pre-replacement and version-one audit snapshot; they are not current
+operational instructions.
+
+### Corpus and live index
+
+The supported corpus, `eval/data/corpus_manifest.json`, and live index now contain only
+`docs/samples/NIST.CSWP.29_CSF-2.0.pdf`. Its identity is:
+
+- Title: *The NIST Cybersecurity Framework (CSF) 2.0*
+- Version: NIST CSWP 29, version 2.0, February 26, 2024
+- SHA-256: `3c31f46fee98cac0c4323453e5109291a213b4de7fef8c058af9bf67f717433c`
+- Pages: 32, with non-empty extracted text on every page
+- Live index: 209 chunks for the same source hash and page count
+
+The cover is unnumbered, preliminary pages use Roman numerals i–iv, and the body uses
+printed pages 1–27. Dataset evidence therefore records the printed page separately from
+the zero-based PDF page index.
+
+### Dataset v2
+
+`eval/data/ground_truth.json` is a version-two, `draft` dataset containing 50 entirely
+new CSF-only questions. Its enforced topic quotas are:
+
+| Topic | Questions |
+|---|---:|
+| Overview and applicability | 6 |
+| Core and Functions | 8 |
+| Profiles and Tiers | 8 |
+| Resources and integration | 6 |
+| Appendix A outcomes | 18 |
+| Glossary | 4 |
+
+The Appendix A group contains three questions for each of GOVERN, IDENTIFY, PROTECT,
+DETECT, RESPOND, and RECOVER. The complete set contains 30 direct questions, 15
+multi-claim questions, and 5 comparison or synthesis questions.
+
+Each question stores a stable ID, topic, question type, question text, primary reference
+answer, optional acceptable answers, one or more atomic claims, and one or more exact
+evidence records. Each evidence record stores the CSF source path, section, printed page,
+zero-based PDF page index, and source text.
+
+The validator requires exactly 50 unique and non-near-duplicate questions, the fixed
+topic/type/Function quotas, CSF-only evidence, valid sections and pages, exact normalized
+evidence spans in the PDF, corpus-manifest/filesystem/live-index identity, and evidence
+tokens represented in indexed chunks. These checks are mechanical; semantic claim
+support remains `draft` pending human review.
+
+### Evaluation contract
+
+All five configured Ollama generators are defaults:
+
+- `llama3.2:latest`
+- `qwen2.5:1.5b`
+- `gemma2:2b`
+- `phi4-mini:latest`
+- `gemma4:e2b`
+
+Every model uses temperature `0`, seed `42`, context size `8192`, maximum output
+`512` tokens, disabled thinking, and no custom stop sequence. Retrieval returns ten
+chunks and supplies the first five to generation and the judge.
+
+The version-two result contract contains exactly three independent metric objects:
+
+1. Cosine similarity from local `nomic-embed-text:latest` embeddings with the symmetric
+   `clustering:` prefix and fixed pass threshold `>= 0.75`.
+2. Raw BERTScore precision, recall, and F1 from the pinned
+   `FacebookAI/roberta-large` revision
+   `722cf37b1afa9454edce342e7895e588b6ff1d59`, layer 17, CPU, no IDF, and no baseline
+   rescaling. The pass threshold is `F1 >= 0.85`.
+3. An optional Groq `openai/gpt-oss-120b` judge at temperature `0`, scoring correctness,
+   completeness, faithfulness, and relevance from 0 to 4 and returning a structured
+   verdict and diagnostics.
+
+Accepted alternative references are scored independently; cosine retains the highest
+similarity and BERTScore retains the full precision/recall/F1 tuple associated with the
+highest F1. Retrieval evidence hit/recall is no longer a reported metric. Gold evidence
+and retrieved chunks remain in row-level records for judge grounding and diagnostics.
+The three metrics are reported independently, with no combined score or overall pass.
+
+Incomplete or failed question-model rows are replaced atomically on resume. A judged row
+is technically complete only when it contains a generated answer, all three metric
+objects, and no errors. Version-one configurations are incompatible with v2 resume.
+
+### Final comparison status
+
+The final 50-question by five-model judged comparison is pending. No aggregate scores are
+recorded in this addendum until all 250 rows satisfy the technical-completeness contract.
+The completed run will publish a detailed CSV, five-row summary CSV, and Markdown report
+under `eval/final/`.

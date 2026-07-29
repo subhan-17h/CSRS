@@ -70,9 +70,9 @@ uv run csrs-api                                      # http://127.0.0.1:8000
 uv run streamlit run src/csrs/app.py                 # http://localhost:8501
 ```
 
-> **The first launch takes about five minutes** and the page will look idle while it works.
-> That is the one-time document index being built — 492 pages of SP 800-53 through a layout
-> model. Every launch after that reuses it and starts in well under a second. See
+> **The first launch takes longer than later starts** while the 32-page CSF PDF is parsed
+> through a layout model and indexed. Every launch after that reuses the content-hashed
+> index and starts in well under a second. See
 > [Why the first run is slow](#why-the-first-run-is-slow).
 
 ---
@@ -285,24 +285,23 @@ python3 -c "import json;m=json.load(open('chroma_db/manifest.json'));print(len(m
 For the shipped index, it prints:
 
 ```text
-4 2506
+1 209
 ```
 
 ### Try these
 
-Measured against the shipped corpus on a warm index:
+Useful questions for the shipped CSF-only corpus include:
 
-| Question | Result |
-|---|---|
-| *What are the functions of the NIST Cybersecurity Framework?* | answered in 1.7 s — CSF 2.0 p.2 @ 0.8049 |
-| *How is Incident Response handled?* | answered in 4.1 s — SP 1299 p.7 @ 0.8164 |
-| *What are the requirements for Asset Management?* | answered in 3.4 s — CSF 2.0 p.23 @ 0.7744 |
-| *What does AC-2 require for account management?* | answered — SP 800-53 p.46 @ 0.8056, control `AC-2` |
-| *What does ISO 27001 require for access control?* | **refuses — and that is correct** |
+- *What are the six Functions of the NIST Cybersecurity Framework?*
+- *How do Current and Target Profiles differ?*
+- *What do the four CSF Tiers characterize?*
+- *Which outcomes belong to the GOVERN Function?*
+- *What does ISO 27001 require for access control?* — this should refuse.
 
 **On that last one:** ISO 27001 is not freely redistributable, so it is not in the shipped
-corpus. Refusing is the system working — it declines rather than answering from the NIST
-documents it *does* have. Add your own copy to `docs/`, reload, and the question answers.
+corpus. Refusing is the system working — it declines rather than answering from the CSF
+document it *does* have. Add your own licensed copy to `docs/`, reload, and the question
+answers.
 
 Ask something plainly outside the documents — *What is the best recipe for chocolate chip
 cookies?* — and it refuses too, while still showing which passages it retrieved and judged
@@ -366,15 +365,15 @@ fail loudly.
 
 ## What ships, and what doesn't
 
-Two standards are committed in `docs/samples/`, so a fresh clone is queryable with no
-download at all — one PDF and one TXT, so both parsing paths are exercised immediately:
+One standard is committed in `docs/samples/`, so a fresh clone is queryable with no
+download at all:
 
 | File | Licence |
 |---|---|
 | `NIST.CSWP.29_CSF-2.0.pdf` | US Government work — public domain |
-| `OWASP_Top_10_2021.txt` | CC BY 4.0 © OWASP Foundation |
 
-`scripts/fetch_docs.py` adds **NIST SP 800-53 Rev. 5** (492 pages) and **NIST SP 1299**.
+`scripts/fetch_docs.py` verifies this committed sample by default and refreshes the same
+path from NIST when called with `--force`.
 
 Two of the standards named in the task specification are **deliberately absent**:
 
@@ -394,32 +393,30 @@ only; the standards under `docs/` remain under their publishers' terms.
 
 ## Answer quality, measured
 
-The current benchmark is the readable `eval/data/ground_truth.json`: 20 draft questions
-derived from exact evidence in the indexed cybersecurity corpus. The end-to-end evaluator
-compares three independent layers instead of hiding failures in one score:
+The current benchmark is the readable `eval/data/ground_truth.json`: 50 draft questions
+derived from exact evidence in NIST CSF 2.0. The end-to-end evaluator compares three
+independent layers instead of hiding failures in one score:
 
 1. Local answer cosine similarity with `nomic-embed-text:latest`.
-2. Retrieval evidence hit and recall at 5 and 10.
+2. Raw English RoBERTa-large BERTScore precision, recall, and F1.
 3. Optional evidence-aware Groq judging with `openai/gpt-oss-120b`.
 
-Run the approved two-model comparison without a cloud judge:
+Run the default five-model comparison without a cloud judge:
 
 ```bash
-uv run --group eval python -m eval.run --models \
-  llama3.2:latest qwen2.5:1.5b
+uv run --group eval python -m eval.run
 ```
 
 Add `--judge` only after setting `GROQ_API_KEY` in the ignored root `.env`. Normal FastAPI,
 Streamlit, indexing, and chat operation never call Groq and remain fully offline.
-The other three installed application models remain available through `--models` for later
-experiments, but are not part of the current comparison.
 
-Each run writes `config.json`, question-level `results.jsonl`, `summary.csv`, `report.md`,
-and `manual_review.json`. The cosine threshold defaults to an uncalibrated provisional
-`0.75`; it is not evidence of factual correctness. The judge is also not a substitute for
-expert review. See [the evaluation plan](docs/EVALUATION_PLAN.md) for the rubric, fixed
-comparison settings, limitations, and deferred work. The [evaluation README](eval/README.md)
-explains the three techniques in plain language and records the final two-model results.
+Each run writes `config.json`, question-level `results.jsonl` and `results.csv`,
+`summary.csv`, `report.md`, and `manual_review.json`. Cosine uses a fixed `0.75` pass
+threshold; BERTScore uses raw F1 `0.85`. Neither proves factual correctness, and the judge
+is not a substitute for expert review. See [the evaluation plan](docs/EVALUATION_PLAN.md)
+for the rubric, fixed comparison settings, limitations, and deferred work. The
+[evaluation README](eval/README.md) explains the three techniques and links the final
+five-model results.
 
 ---
 
@@ -436,7 +433,7 @@ nothing it previously said, and only two turns back are considered. **The Stream
 no history at all**; each question there is independent, so name the standard in the
 question when using it.
 
-**Multi-turn quality is not measured.** The current 20-question benchmark is single-turn,
+**Multi-turn quality is not measured.** The current 50-question benchmark is single-turn,
 so the evaluator cannot score rewriting. Its evidence is a worked example rather than a
 number — weaker than the measured evaluation layers, and worth saying out loud.
 
@@ -480,8 +477,9 @@ process.
 ## Why the first run is slow
 
 PDFs are parsed by **Docling**, which runs a real document-layout model over every page
-rather than scraping the text layer. That costs about **2 pages/second** — the full corpus
-indexes in roughly **five minutes** (measured: 316 s for 4 documents and 2506 chunks).
+rather than scraping the text layer. The shipped corpus is now one 32-page document that
+produces 209 chunks, so its first index is much smaller than the earlier four-document
+stress corpus.
 
 It buys structural correctness that regex heuristics could not deliver. Running headers and
 footers are classified as furniture and dropped by construction; tables come out as real
@@ -537,13 +535,14 @@ frontend/
   public/fonts/         woff2 vendored locally so the UI never calls a CDN
 
 eval/
-  data/ground_truth.json    20 readable evidence-grounded draft questions
+  data/ground_truth.json    50 readable evidence-grounded draft questions
   data/corpus_manifest.json exact corpus identity and extraction metadata
   dataset.py                schema, loading, and corpus-grounding validation
-  metrics.py                cosine similarity and evidence hit/recall
+  metrics.py                cosine similarity and raw BERTScore P/R/F1
   judge.py                  opt-in Groq structured judge and cache
-  reporting.py              JSONL, CSV, Markdown, and manual-review exports
+  reporting.py              JSONL, detailed/summary CSV, Markdown, and review exports
   run.py                    end-to-end comparison CLI
+  final/                    tracked outputs created after the 250-row acceptance gate
 
 project-docs/
   Submission.md             requirements walkthrough, decisions, and measurements

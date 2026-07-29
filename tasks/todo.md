@@ -1751,3 +1751,19 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
     `llama3.2:latest` scored 0.897 mean cosine and 60% judge pass versus 0.792 and
     40% for `qwen2.5:1.5b`; both had 95% evidence hit/recall at 5 and 10. Ruff,
     239 offline tests, ASCII validation, and `git diff --check` pass.
+
+- [ ] **EVAL-3** Replace the four-document benchmark with a CSF-only, 50-question,
+      five-model evaluation using cosine similarity, BERTScore, and the Groq judge.
+  - Reduce the durable production corpus, fetch workflow, evaluation manifest, and live
+    Chroma/BM25 index to `docs/samples/NIST.CSWP.29_CSF-2.0.pdf`.
+  - Replace the dataset with 50 entirely new, evidence-grounded questions using the
+    approved topic and question-type quotas.
+  - Add raw RoBERTa-large BERTScore precision/recall/F1 with a fixed 0.85 F1 threshold;
+    retain cosine threshold 0.75 and the fixed temperature-zero GPT-OSS judge.
+  - Make all five installed Ollama models the default comparison, preserve resumable
+    failure visibility, and publish complete 250-row CSV plus summary CSV and Markdown.
+  - Update current documentation and architecture counts while preserving historical
+    roadmap, task-review, and research records.
+  - Done when the one-document index and 50-question dataset validate, all 250 final rows
+    contain all three metrics without technical errors, required checks pass, and the
+    intended tracked change set is staged for review.
