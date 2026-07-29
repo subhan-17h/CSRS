@@ -28,6 +28,11 @@ This file provides guidance to CODEX AGENT when working with code in this reposi
 - Ask yourself: "Would a staff engineer approve this?"
 - Run tests, check logs, demonstrate correctness
 
+### 4.1 Commit Completed Subtasks
+- Commit each completed, verified subtask separately instead of accumulating one final commit
+- Keep every commit focused on one coherent concern and include its verification evidence
+- Never include unrelated or pre-existing user files in a subtask commit
+
 ### 5. Demand Elegance (Balanced)
 - For non-trivial changes: pause and ask "is there a more elegant way?"
 - If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
@@ -68,8 +73,6 @@ roadmap tasks in [ROADMAP.md](project-docs/ROADMAP.md) (`T-1.4`, `T-2.1`, ...).
 
 - **ASCII only in Python source.** No em dashes, smart quotes or unicode arrows; use
   `->`. Markdown files may use non-ASCII.
-- **Never run `git commit`.** Claude reviews every change and owns the commit. Leaving
-  changes unstaged or staged is fine; committing is not.
 - **Never add attribution or tooling trailers** to any message or file.
 - Line length 100. Ruff lint rules `E`, `F`, `I`, `UP`, `B`; `uv run ruff check .` must
   pass clean before you report done.
