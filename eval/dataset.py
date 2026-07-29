@@ -28,6 +28,43 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATASET = Path(__file__).with_name("data") / "ground_truth.json"
 DEFAULT_MANIFEST = Path(__file__).with_name("data") / "corpus_manifest.json"
 NEAR_DUPLICATE_THRESHOLD = 0.90
+CSF_DOCUMENT_PATH = "docs/samples/NIST.CSWP.29_CSF-2.0.pdf"
+CSF_SECTIONS = {
+    "Abstract",
+    "Audience",
+    "Preface",
+    "1. Cybersecurity Framework (CSF) Overview",
+    "2. Introduction to the CSF Core",
+    "3.1. CSF Profiles",
+    "3.2. CSF Tiers",
+    "4. Introduction to Online Resources That Supplement the CSF",
+    "5.1. Improving Risk Management Communication",
+    "5.2. Improving Integration with Other Risk Management Programs",
+    "Appendix A. CSF Core",
+    "Appendix B. CSF Tiers",
+    "Appendix C. Glossary",
+}
+EXPECTED_TOPIC_COUNTS = {
+    "overview_applicability": 6,
+    "core_functions": 8,
+    "profiles_tiers": 8,
+    "resources_integration": 6,
+    "appendix_a": 18,
+    "glossary": 4,
+}
+EXPECTED_QUESTION_TYPE_COUNTS = {
+    "direct": 30,
+    "multi_claim": 15,
+    "comparison_synthesis": 5,
+}
+EXPECTED_APPENDIX_FUNCTION_COUNTS = {
+    "govern": 3,
+    "identify": 3,
+    "protect": 3,
+    "detect": 3,
+    "respond": 3,
+    "recover": 3,
+}
 
 
 class DatasetValidationError(Exception):
@@ -75,6 +112,15 @@ class Question(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
+    topic: Literal[
+        "overview_applicability",
+        "core_functions",
+        "profiles_tiers",
+        "resources_integration",
+        "appendix_a",
+        "glossary",
+    ]
+    question_type: Literal["direct", "multi_claim", "comparison_synthesis"]
     question: str
     answer: str
     acceptable_answers: list[str] = Field(default_factory=list)
@@ -129,6 +175,12 @@ class Question(BaseModel):
         ]
         if len(evidence_keys) != len(set(evidence_keys)):
             raise ValueError("evidence entries must be unique within a question")
+        if self.question_type == "direct" and len(self.claims) != 1:
+            raise ValueError("direct questions must contain exactly one atomic claim")
+        if self.question_type != "direct" and len(self.claims) < 2:
+            raise ValueError(
+                "multi-claim and comparison questions must contain at least two claims"
+            )
         return self
 
     @property
@@ -142,9 +194,60 @@ class GroundTruthDataset(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: Literal[1]
+    version: Literal[2]
     review_status: Literal["draft"]
-    questions: list[Question] = Field(min_length=1)
+    questions: list[Question] = Field(min_length=50, max_length=50)
+
+    @model_validator(mode="after")
+    def benchmark_contract(self) -> GroundTruthDataset:
+        """Enforce the approved CSF-only benchmark coverage contract."""
+        topic_counts = Counter(question.topic for question in self.questions)
+        if topic_counts != EXPECTED_TOPIC_COUNTS:
+            raise ValueError(
+                f"topic counts must be {EXPECTED_TOPIC_COUNTS}, got {dict(topic_counts)}"
+            )
+
+        type_counts = Counter(question.question_type for question in self.questions)
+        if type_counts != EXPECTED_QUESTION_TYPE_COUNTS:
+            raise ValueError(
+                "question type counts must be "
+                f"{EXPECTED_QUESTION_TYPE_COUNTS}, got {dict(type_counts)}"
+            )
+
+        appendix_counts: Counter[str] = Counter()
+        for question in self.questions:
+            evidence_sources = {item.document_path for item in question.evidence}
+            if evidence_sources != {CSF_DOCUMENT_PATH}:
+                raise ValueError(
+                    f"{question.id}: evidence must use only {CSF_DOCUMENT_PATH}"
+                )
+            invalid_sections = {
+                item.section
+                for item in question.evidence
+                if item.section not in CSF_SECTIONS
+            }
+            if invalid_sections:
+                raise ValueError(
+                    f"{question.id}: evidence has invalid CSF sections: "
+                    f"{sorted(str(section) for section in invalid_sections)}"
+                )
+            if question.topic != "appendix_a":
+                continue
+            match = re.fullmatch(
+                r"appendix-a-(govern|identify|protect|detect|respond|recover)-.+",
+                question.id,
+            )
+            if match is None:
+                raise ValueError(
+                    f"{question.id}: Appendix A ID must identify its CSF Function"
+                )
+            appendix_counts[match.group(1)] += 1
+        if appendix_counts != EXPECTED_APPENDIX_FUNCTION_COUNTS:
+            raise ValueError(
+                "Appendix A Function counts must be "
+                f"{EXPECTED_APPENDIX_FUNCTION_COUNTS}, got {dict(appendix_counts)}"
+            )
+        return self
 
 
 class ManifestEntry(BaseModel):
@@ -180,8 +283,8 @@ class CorpusManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: Literal[1]
-    documents: list[ManifestEntry] = Field(min_length=1)
+    version: Literal[2]
+    documents: list[ManifestEntry] = Field(min_length=1, max_length=1)
 
     @field_validator("documents")
     @classmethod
@@ -189,6 +292,8 @@ class CorpusManifest(BaseModel):
         paths = [document.document_path for document in documents]
         if len(paths) != len(set(paths)):
             raise ValueError("document paths must be unique")
+        if paths != [CSF_DOCUMENT_PATH]:
+            raise ValueError(f"manifest must contain only {CSF_DOCUMENT_PATH}")
         return documents
 
 
@@ -206,8 +311,45 @@ def normalized_question(question: str) -> str:
 
 def lexical_tokens(text: str) -> set[str]:
     """Return case-insensitive alphanumeric tokens for extraction-aware matching."""
+    return set(lexical_token_sequence(text))
+
+
+def lexical_token_sequence(text: str) -> list[str]:
+    """Return ordered tokens so PDF word splits can be reconciled with the index."""
     normalized = unicodedata.normalize("NFKC", text).casefold()
-    return set(re.findall(r"[a-z0-9]+", normalized))
+    return re.findall(r"[a-z0-9]+", normalized)
+
+
+def missing_index_tokens(evidence_text: str, indexed_text: str) -> set[str]:
+    """Find missing terms while tolerating adjacent PDF/index word joins.
+
+    PDF extraction and Docling can disagree about whether one lexical word is
+    separated or joined (for example, ``high-level`` versus ``highlevel`` or
+    ``T he`` versus ``The``). Only exact one-token or adjacent-two-token forms
+    are accepted; unrelated absent terms remain visible.
+    """
+    evidence_tokens = lexical_token_sequence(evidence_text)
+    indexed_tokens = lexical_token_sequence(indexed_text)
+    indexed_terms = set(indexed_tokens)
+    indexed_joined_pairs = {
+        left + right
+        for left, right in zip(indexed_tokens, indexed_tokens[1:], strict=False)
+    }
+    covered = [
+        token in indexed_terms or token in indexed_joined_pairs
+        for token in evidence_tokens
+    ]
+    for position, (left, right) in enumerate(
+        zip(evidence_tokens, evidence_tokens[1:], strict=False)
+    ):
+        if left + right in indexed_terms:
+            covered[position] = True
+            covered[position + 1] = True
+    return {
+        token
+        for token, is_covered in zip(evidence_tokens, covered, strict=True)
+        if not is_covered
+    }
 
 
 def file_sha256(path: Path) -> str:
@@ -453,7 +595,7 @@ def verify_index_mapping(questions: list[Question]) -> None:
                         f"{question.id}: no indexed chunk maps to {doc_name} "
                         f"physical page {physical_page}"
                     )
-                missing = lexical_tokens(evidence.text) - lexical_tokens(indexed_text)
+                missing = missing_index_tokens(evidence.text, indexed_text)
                 if missing:
                     raise DatasetValidationError(
                         f"{question.id}: indexed page is missing evidence tokens: "
