@@ -24,9 +24,7 @@ SOFTWARE.
 
 This licence covers the source code of this project only.
 
-The cybersecurity standards under `docs/` are third-party works published under
-their own terms and are not licensed by this project. Two are committed here:
-`NIST.CSWP.29_CSF-2.0.pdf` is a US Government work in the public domain, and
-`OWASP_Top_10_2021.txt` is CC BY 4.0, copyright the OWASP Foundation. The
-remaining standards are fetched at setup rather than redistributed. See
-`docs/README.md` for the full position.
+The cybersecurity standard under `docs/` is a third-party work published under
+its own terms and is not licensed by this project. `NIST.CSWP.29_CSF-2.0.pdf`
+is a US Government work in the public domain. See `docs/README.md` for the full
+position.

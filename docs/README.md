@@ -10,37 +10,27 @@ queryable. No code change is required to add a standard.
 python scripts/fetch_docs.py       # stdlib only; works before `uv sync`
 ```
 
-Most of this directory is **not** committed. The standards are downloaded on demand,
-because some are large and some are not ours to redistribute.
+The shipped corpus is intentionally one committed public-domain document.
 
 ## What ships in the repo — `docs/samples/`
 
-Two standards are committed so a fresh clone is queryable with **no download at all**,
-one per supported format, so both the PDF and TXT paths are exercised immediately.
+One standard is committed so a fresh clone is queryable with **no download at all**.
 
 | File | Format | Licence | Why this one |
 |---|---|---|---|
 | `samples/NIST.CSWP.29_CSF-2.0.pdf` | PDF | US Government work — **public domain** (17 U.S.C. 105) | The spec's headline example standard; answers its example questions about the Framework Functions. Exercises PDF parsing. |
-| `samples/OWASP_Top_10_2021.txt` | TXT | **CC BY 4.0** © OWASP Foundation | A *different* standard, so nothing is indexed twice. Exercises the TXT path, which is all Phase 1 supports. |
 
-Deliberately two different standards rather than one standard in two formats: shipping
-CSF 2.0 as both a PDF and a TXT would index the same content twice and produce
-duplicated chunks and duplicated citations.
+The loaders remain extensible to PDF and TXT documents, but the current production and
+evaluation corpus is deliberately restricted to this single CSF source.
 
 ## What the fetch script downloads
 
 | Standard | File | Source | Licence |
 |---|---|---|---|
-| NIST SP 800-53 Rev. 5 | `NIST.SP.800-53r5.pdf` | [nvlpubs.nist.gov](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf) | US Government work — **public domain** |
-| NIST SP 1299 (CSF 2.0 Quick-Start Guide) | `NIST.SP.1299.pdf` | [nvlpubs.nist.gov](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.1299.pdf) | US Government work — **public domain** |
+| NIST CSF 2.0 | `samples/NIST.CSWP.29_CSF-2.0.pdf` | [nvlpubs.nist.gov](https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf) | US Government work — **public domain** |
 
-The script also knows how to fetch CSF 2.0 and the OWASP Top 10, but **skips both when it
-finds them already committed in `docs/samples/`** — again, so no standard is ever indexed
-twice. Use `--force` to re-download everything regardless.
-
-The OWASP Top 10 is published as MkDocs markdown rather than a PDF, so the script
-assembles the official English sources into a single TXT in reading order. The content
-is unmodified; a provenance and attribution header is prepended, as CC BY 4.0 requires.
+The command skips the committed sample by default. `--force` atomically refreshes that
+same path, so it never creates a duplicate document in `docs/`.
 
 ## What is deliberately *not* here
 
@@ -56,8 +46,7 @@ This is a licensing decision, not a technical limitation: if you hold a licensed
 place the PDF in this directory and it works exactly like the others. That is the
 extensibility requirement doing its job.
 
-## A note on file sizes
+## A note on indexing
 
-`NIST.SP.800-53r5.pdf` is 492 pages and is the corpus's stress test — dense control
-tables, heavy cross-referencing. Expect the first index of it to take a while; after
-that, content-hash caching means unchanged files are skipped on reload.
+The retained CSF source is 32 pages and currently produces 209 chunks. Content-hash
+caching skips it on unchanged reloads.
