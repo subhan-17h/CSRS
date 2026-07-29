@@ -6,13 +6,13 @@
       "id": "overview-any-organization",
       "topic": "overview_applicability",
       "question_type": "direct",
-      "question": "Which kinds of organizations can use the CSF's high-level outcome taxonomy?",
-      "answer": "Any organization can use it, regardless of size, sector, or maturity.",
+      "question": "Does an organization's size limit whether it can use the CSF's high-level outcome taxonomy?",
+      "answer": "No. Organizations of any size can use the taxonomy.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "The CSF outcome taxonomy can be used by any organization regardless of size, sector, or maturity."
+          "text": "The CSF outcome taxonomy can be used by organizations of any size."
         }
       ],
       "evidence": [
@@ -52,13 +52,13 @@
       "id": "overview-primary-audience",
       "topic": "overview_applicability",
       "question_type": "direct",
-      "question": "Who does CSF 2.0 identify as its primary audience?",
-      "answer": "Its primary audience is individuals responsible for developing and leading cybersecurity programs.",
+      "question": "The CSF's primary audience is responsible for developing what kind of programs?",
+      "answer": "Cybersecurity programs.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "Individuals responsible for developing and leading cybersecurity programs are the primary audience."
+          "text": "The primary audience is responsible for developing cybersecurity programs."
         }
       ],
       "evidence": [
@@ -75,13 +75,13 @@
       "id": "overview-adoption-paths",
       "topic": "overview_applicability",
       "question_type": "direct",
-      "question": "How may organizations adopt the CSF in relation to government policy?",
-      "answer": "They may adopt it voluntarily or through governmental policies and mandates.",
+      "question": "Can a government mandate drive CSF adoption?",
+      "answer": "Yes. The CSF may be adopted through a government mandate.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "The CSF may be adopted voluntarily or through governmental policies and mandates."
+          "text": "A governmental mandate can drive CSF adoption."
         }
       ],
       "evidence": [
@@ -172,13 +172,13 @@
       "id": "core-outcome-hierarchy",
       "topic": "core_functions",
       "question_type": "direct",
-      "question": "In what hierarchical order does the CSF Core arrange cybersecurity outcomes?",
-      "answer": "It arranges outcomes by Function, then Category, and finally Subcategory.",
+      "question": "What is the highest-level organizing element for cybersecurity outcomes in the CSF Core?",
+      "answer": "A Function.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "The CSF Core arranges outcomes by Function, then Category, and finally Subcategory."
+          "text": "A Function is the highest-level organizing element for CSF Core outcomes."
         }
       ],
       "evidence": [
@@ -195,13 +195,13 @@
       "id": "core-order-meaning",
       "topic": "core_functions",
       "question_type": "direct",
-      "question": "What does the ordering and size of Core elements imply about their sequence or importance?",
-      "answer": "Nothing; their order and size do not imply sequence or importance.",
+      "question": "Does the ordering of CSF Core elements imply the sequence for achieving them?",
+      "answer": "No. Their ordering does not imply an achievement sequence.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "The order and size of Functions, Categories, and Subcategories do not imply sequence or importance."
+          "text": "The ordering of CSF Core elements does not imply an achievement sequence."
         }
       ],
       "evidence": [
@@ -241,13 +241,13 @@
       "id": "core-protect-purpose",
       "topic": "core_functions",
       "question_type": "direct",
-      "question": "After assets and risks are identified and prioritized, what capability does PROTECT support?",
-      "answer": "It supports securing assets to prevent or reduce the likelihood and impact of adverse cybersecurity events.",
+      "question": "After assets and risks are identified and prioritized, what does PROTECT help an organization secure?",
+      "answer": "Its assets.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "PROTECT supports securing assets to prevent or lower the likelihood and impact of adverse cybersecurity events."
+          "text": "PROTECT supports the ability to secure prioritized assets."
         }
       ],
       "evidence": [
@@ -264,13 +264,13 @@
       "id": "core-detect-downstream-support",
       "topic": "core_functions",
       "question_type": "direct",
-      "question": "Which later incident activities are supported by the DETECT Function?",
-      "answer": "DETECT supports successful incident response and recovery activities.",
+      "question": "Besides incident response, which later activity does the DETECT Function support?",
+      "answer": "Incident recovery.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "DETECT supports successful incident response and recovery activities."
+          "text": "DETECT supports successful incident recovery activities."
         }
       ],
       "evidence": [
@@ -372,13 +372,13 @@
       "id": "profiles-organizational-purpose",
       "topic": "profiles_tiers",
       "question_type": "direct",
-      "question": "What organizational considerations are used to tailor outcomes through an Organizational Profile?",
-      "answer": "The Profile considers mission objectives, stakeholder expectations, the threat landscape, and requirements.",
+      "question": "Does an Organizational Profile consider the organization's threat landscape?",
+      "answer": "Yes. The threat landscape is one of its considerations.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "Organizational Profiles tailor Core outcomes by considering mission objectives, stakeholder expectations, the threat landscape, and requirements."
+          "text": "Organizational Profiles consider an organization's threat landscape."
         }
       ],
       "evidence": [
@@ -418,13 +418,13 @@
       "id": "profiles-scope-flexibility",
       "topic": "profiles_tiers",
       "question_type": "direct",
-      "question": "How narrowly or broadly may an organization scope an Organizational Profile?",
-      "answer": "It may create any number of Profiles, scoped from the whole organization down to a system or a specific threat and incident use case.",
+      "question": "How many Organizational Profiles may an organization create?",
+      "answer": "Any number.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "An organization may create multiple Organizational Profiles with different scopes, including organization-wide, system-specific, or threat-specific scopes."
+          "text": "An organization can have as many Organizational Profiles as desired."
         }
       ],
       "evidence": [
@@ -598,13 +598,13 @@
       "id": "resources-online-update-advantage",
       "topic": "resources_integration",
       "question_type": "direct",
-      "question": "Why can supplemental online CSF resources change more frequently than the main document?",
-      "answer": "Because they are hosted online, while the main document is updated infrequently to provide stability.",
+      "question": "What property lets supplemental CSF resources be updated more frequently?",
+      "answer": "They are hosted online.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "Online resources can be updated more frequently because the main document changes infrequently to provide stability."
+          "text": "Being hosted online lets supplemental resources be updated more frequently."
         }
       ],
       "evidence": [
@@ -621,13 +621,13 @@
       "id": "resources-implementation-example-status",
       "topic": "resources_integration",
       "question_type": "direct",
-      "question": "Are Implementation Examples a mandatory baseline of actions?",
-      "answer": "No. They are not comprehensive and do not represent a baseline of required actions.",
+      "question": "Do Implementation Examples represent a baseline of required actions?",
+      "answer": "No. They do not represent a required-action baseline.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "Implementation Examples are neither comprehensive nor a baseline of required cybersecurity actions."
+          "text": "Implementation Examples do not represent a baseline of required cybersecurity actions."
         }
       ],
       "evidence": [
@@ -748,13 +748,13 @@
       "id": "appendix-a-govern-risk-appetite",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "What does outcome GV.RM-02 require for risk appetite and risk tolerance statements?",
-      "answer": "They must be established, communicated, and maintained.",
+      "question": "What ongoing action does GV.RM-02 require for risk appetite statements?",
+      "answer": "Risk appetite statements must be maintained.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "GV.RM-02 requires risk appetite and risk tolerance statements to be established, communicated, and maintained."
+          "text": "GV.RM-02 requires risk appetite statements to be maintained."
         }
       ],
       "evidence": [
@@ -771,13 +771,13 @@
       "id": "appendix-a-govern-policy-change",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "Which changes must outcome GV.PO-02 cause cybersecurity policy to reflect?",
-      "answer": "Changes in requirements, threats, technology, and the organizational mission.",
+      "question": "Which technology-related change must cybersecurity policy reflect under GV.PO-02?",
+      "answer": "Changes in technology.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "GV.PO-02 requires policy updates to reflect changes in requirements, threats, technology, and organizational mission."
+          "text": "GV.PO-02 requires cybersecurity policy to reflect changes in technology."
         }
       ],
       "evidence": [
@@ -825,13 +825,13 @@
       "id": "appendix-a-identify-asset-priority",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "What factors does ID.AM-05 use to prioritize assets?",
-      "answer": "Classification, criticality, resources, and impact on the mission.",
+      "question": "Which importance-related factor does ID.AM-05 use to prioritize assets?",
+      "answer": "Criticality.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "ID.AM-05 prioritizes assets based on classification, criticality, resources, and mission impact."
+          "text": "ID.AM-05 uses criticality to prioritize assets."
         }
       ],
       "evidence": [
@@ -848,13 +848,13 @@
       "id": "appendix-a-identify-disclosure-process",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "What process does ID.RA-08 establish for vulnerability disclosures?",
-      "answer": "A process for receiving, analyzing, and responding to vulnerability disclosures.",
+      "question": "What must ID.RA-08 processes be able to receive?",
+      "answer": "Vulnerability disclosures.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "ID.RA-08 establishes processes to receive, analyze, and respond to vulnerability disclosures."
+          "text": "ID.RA-08 establishes processes for receiving vulnerability disclosures."
         }
       ],
       "evidence": [
@@ -902,13 +902,13 @@
       "id": "appendix-a-protect-access-policy",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "Which access-control principles must PR.AA-05 incorporate?",
-      "answer": "Least privilege and separation of duties.",
+      "question": "Which privilege-minimization principle must PR.AA-05 incorporate?",
+      "answer": "Least privilege.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "PR.AA-05 incorporates least privilege and separation of duties."
+          "text": "PR.AA-05 incorporates the principle of least privilege."
         }
       ],
       "evidence": [
@@ -925,13 +925,13 @@
       "id": "appendix-a-protect-backup-treatment",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "What four treatments does PR.DS-11 specify for data backups?",
-      "answer": "Backups are created, protected, maintained, and tested.",
+      "question": "Which verification-oriented treatment does PR.DS-11 require for data backups?",
+      "answer": "Backups must be tested.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "PR.DS-11 requires data backups to be created, protected, maintained, and tested."
+          "text": "PR.DS-11 requires data backups to be tested."
         }
       ],
       "evidence": [
@@ -979,13 +979,13 @@
       "id": "appendix-a-detect-provider-monitoring",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "What must DE.CM-06 monitor?",
-      "answer": "External service provider activities and services.",
+      "question": "Whose activities must DE.CM-06 monitor?",
+      "answer": "External service providers' activities.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "DE.CM-06 monitors external service provider activities and services for potentially adverse events."
+          "text": "DE.CM-06 monitors external service provider activities."
         }
       ],
       "evidence": [
@@ -1059,13 +1059,13 @@
       "id": "appendix-a-respond-report-triage",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "What handling does RS.MA-02 require for incident reports?",
-      "answer": "Incident reports must be triaged and validated.",
+      "question": "What initial handling action does RS.MA-02 require for incident reports?",
+      "answer": "They must be triaged.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "RS.MA-02 requires incident reports to be triaged and validated."
+          "text": "RS.MA-02 requires incident reports to be triaged."
         }
       ],
       "evidence": [
@@ -1132,13 +1132,13 @@
       "id": "appendix-a-recover-restoration-assets",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "What must RC.RP-03 verify before restoration assets are used?",
-      "answer": "It must verify the integrity of backups and other restoration assets.",
+      "question": "Which property of restoration assets must RC.RP-03 verify before use?",
+      "answer": "Their integrity.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "RC.RP-03 verifies the integrity of backups and other restoration assets before use."
+          "text": "RC.RP-03 verifies the integrity of restoration assets before use."
         }
       ],
       "evidence": [
@@ -1155,13 +1155,13 @@
       "id": "appendix-a-recover-public-updates",
       "topic": "appendix_a",
       "question_type": "direct",
-      "question": "How does RC.CO-04 require public incident-recovery updates to be shared?",
-      "answer": "Using approved methods and messaging.",
+      "question": "What kind of methods must RC.CO-04 use to share public recovery updates?",
+      "answer": "Approved methods.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "RC.CO-04 shares public incident recovery updates using approved methods and messaging."
+          "text": "RC.CO-04 uses approved methods to share public recovery updates."
         }
       ],
       "evidence": [
@@ -1205,13 +1205,13 @@
       "id": "glossary-category-meaning",
       "topic": "glossary",
       "question_type": "direct",
-      "question": "How does the glossary define a CSF Category?",
-      "answer": "A group of related cybersecurity outcomes that collectively comprise a CSF Function.",
+      "question": "What CSF Core element do the outcomes in a Category collectively comprise?",
+      "answer": "A CSF Function.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "A CSF Category is a group of related cybersecurity outcomes that collectively comprise a CSF Function."
+          "text": "The outcomes in a CSF Category collectively comprise a CSF Function."
         }
       ],
       "evidence": [
@@ -1228,13 +1228,13 @@
       "id": "glossary-example-meaning",
       "topic": "glossary",
       "question_type": "direct",
-      "question": "What three qualities characterize a CSF Implementation Example in the glossary?",
-      "answer": "It is concise, action-oriented, and notional.",
+      "question": "Does the glossary characterize a CSF Implementation Example as actual or notional?",
+      "answer": "Notional.",
       "acceptable_answers": [],
       "claims": [
         {
           "id": "claim-1",
-          "text": "A CSF Implementation Example is concise, action-oriented, and notional."
+          "text": "A CSF Implementation Example is notional."
         }
       ],
       "evidence": [
