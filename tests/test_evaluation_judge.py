@@ -12,7 +12,9 @@ from judge import (
     MAX_COMPLETION_TOKENS,
     MODEL,
     PROMPT_VERSION,
+    QUOTA_ERROR_MESSAGE,
     GroqJudge,
+    JudgeQuotaError,
     JudgeRequestError,
     JudgeResponseError,
     load_judge_settings,
@@ -322,6 +324,18 @@ class TransientError(RuntimeError):
         self.response = SimpleNamespace(headers=headers)
 
 
+class DailyTokenQuotaError(RuntimeError):
+    def __init__(self) -> None:
+        sensitive = (
+            "TPD tokens per day exceeded for org_sensitive; "
+            "see https://billing.example/private"
+        )
+        super().__init__(sensitive)
+        self.status_code = 429
+        self.body = {"error": {"message": sensitive}}
+        self.response = SimpleNamespace(headers={}, text=sensitive)
+
+
 def test_transient_judge_failures_retry_with_retry_after(tmp_path: Path) -> None:
     delays: list[float] = []
     client = FakeClient(
@@ -350,6 +364,24 @@ def test_transient_judge_failure_stops_after_five_attempts(tmp_path: Path) -> No
 
     assert len(client.chat.completions.calls) == 5
     assert delays == [1.0, 2.0, 4.0, 8.0]
+
+
+def test_daily_token_quota_error_is_typed_and_sanitized_after_budget(
+    tmp_path: Path,
+) -> None:
+    delays: list[float] = []
+    client = FakeClient([DailyTokenQuotaError() for _ in range(5)])
+    judge = GroqJudge(client, cache_dir=tmp_path, sleep=delays.append)
+
+    with pytest.raises(JudgeQuotaError) as raised:
+        judge.judge(**judge_kwargs())
+
+    assert str(raised.value) == QUOTA_ERROR_MESSAGE
+    assert "org_sensitive" not in str(raised.value)
+    assert "billing.example" not in str(raised.value)
+    assert len(client.chat.completions.calls) == 5
+    assert delays == [1.0, 2.0, 4.0, 8.0]
+    assert list(tmp_path.glob("*.json")) == []
 
 
 def test_initial_and_structured_repair_share_five_attempt_budget(tmp_path: Path) -> None:

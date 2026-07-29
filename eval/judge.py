@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -28,6 +29,9 @@ INCLUDE_REASONING = False
 MAX_REQUEST_ATTEMPTS = 5
 MAX_RETRY_DELAY_SECONDS = 60.0
 SDK_MAX_RETRIES = 0
+QUOTA_ERROR_MESSAGE = (
+    "Groq judge daily token quota was exhausted; resume this run after the quota resets"
+)
 
 
 class JudgeError(Exception):
@@ -46,12 +50,17 @@ class JudgeRequestError(JudgeError):
     """Groq could not complete the judgment request."""
 
 
+class JudgeQuotaError(JudgeRequestError):
+    """Groq's daily token quota prevented further judge evaluation."""
+
+
 @dataclass
 class _RequestBudget:
     """Shared transport-call budget across initial and repair requests."""
 
     attempts: int = 0
     transient_failures: int = 0
+    daily_quota_seen: bool = False
 
 
 class GroqJudgeSettings(BaseSettings):
@@ -397,7 +406,13 @@ class GroqJudge:
             except Exception as error:
                 if not self._is_transient_error(error):
                     raise JudgeRequestError(f"Groq judge request failed: {error}") from error
+                budget.daily_quota_seen = (
+                    budget.daily_quota_seen
+                    or self._is_daily_token_quota_error(error)
+                )
                 if budget.attempts == MAX_REQUEST_ATTEMPTS:
+                    if budget.daily_quota_seen:
+                        raise JudgeQuotaError(QUOTA_ERROR_MESSAGE) from error
                     raise JudgeRequestError(
                         f"Groq judge request failed after {MAX_REQUEST_ATTEMPTS} "
                         f"total attempts: {error}"
@@ -434,6 +449,27 @@ class GroqJudge:
         return isinstance(status_code, int) and (
             status_code == 429 or status_code >= 500
         )
+
+    @staticmethod
+    def _is_daily_token_quota_error(error: Exception) -> bool:
+        if getattr(error, "status_code", None) != 429:
+            return False
+        response = getattr(error, "response", None)
+        values = [
+            str(error),
+            str(getattr(error, "body", "")),
+            str(getattr(response, "text", "")),
+        ]
+        details = " ".join(values).casefold()
+        return any(
+            marker in details
+            for marker in (
+                "tokens per day",
+                "tokens_per_day",
+                "daily token",
+                "daily_tokens",
+            )
+        ) or re.search(r"\btpd\b", details) is not None
 
     @staticmethod
     def _retry_delay(error: Exception, attempt: int) -> float:

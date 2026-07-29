@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import sys
@@ -32,6 +33,7 @@ from eval.dataset import (
 from eval.judge import (
     MAX_REQUEST_ATTEMPTS,
     MAX_RETRY_DELAY_SECONDS,
+    QUOTA_ERROR_MESSAGE,
     SDK_MAX_RETRIES,
     TEMPERATURE,
     GroqJudge,
@@ -541,6 +543,154 @@ def _result_is_complete(
     )
 
 
+def _result_can_retry_judge(result: dict[str, Any]) -> bool:
+    """Return whether only the persisted judge stage needs another attempt."""
+    if result.get("schema_version") != 2:
+        return False
+    required_text = (
+        "question_id",
+        "question",
+        "reference_answer",
+    )
+    if any(
+        not isinstance(result.get(field), str) or not result[field].strip()
+        for field in required_text
+    ):
+        return False
+    answer = result.get("generated_answer")
+    if not isinstance(answer, str) or not answer.strip():
+        return False
+    reference_answers = result.get("reference_answers")
+    if (
+        not isinstance(reference_answers, list)
+        or not reference_answers
+        or any(
+            not isinstance(reference, str) or not reference.strip()
+            for reference in reference_answers
+        )
+    ):
+        return False
+    if not isinstance(result.get("gold_claims"), list) or not result["gold_claims"]:
+        return False
+    if not isinstance(result.get("gold_evidence"), list) or not result["gold_evidence"]:
+        return False
+    retrieved_chunks = result.get("retrieved_chunks")
+    if not isinstance(retrieved_chunks, list) or any(
+        not isinstance(chunk, dict) for chunk in retrieved_chunks
+    ):
+        return False
+    required_chunk_fields = {
+        "id",
+        "rank",
+        "document",
+        "section",
+        "physical_page",
+        "text",
+    }
+    if any(
+        chunk.get("used_for_generation")
+        and not required_chunk_fields.issubset(chunk)
+        for chunk in retrieved_chunks
+    ):
+        return False
+    metrics = result.get("metrics")
+    if not isinstance(metrics, dict) or set(metrics) != {
+        "cosine_similarity",
+        "bertscore",
+        "llm_judge",
+    }:
+        return False
+    cosine = metrics["cosine_similarity"]
+    bertscore = metrics["bertscore"]
+    if not isinstance(cosine, dict) or not {
+        "score",
+        "threshold",
+        "passed",
+    }.issubset(cosine):
+        return False
+    if not isinstance(bertscore, dict) or not {
+        "precision",
+        "recall",
+        "f1",
+        "threshold",
+        "passed",
+    }.issubset(bertscore):
+        return False
+    if isinstance(metrics["llm_judge"], dict) and metrics["llm_judge"]:
+        return False
+    errors = result.get("errors")
+    return isinstance(errors, list) and all(
+        isinstance(error, dict) and error.get("stage") == "judge"
+        for error in errors
+    )
+
+
+def _result_has_judge_quota_error(result: dict[str, Any]) -> bool:
+    errors = result.get("errors")
+    return isinstance(errors, list) and any(
+        isinstance(error, dict)
+        and error.get("stage") == "judge"
+        and error.get("type") == "JudgeQuotaError"
+        for error in errors
+    )
+
+
+def _retry_judge_for_result(
+    result: dict[str, Any],
+    judge: GroqJudge,
+) -> dict[str, Any]:
+    """Retry only the judge using the complete payload persisted in a v2 row."""
+    if not _result_can_retry_judge(result):
+        raise EvaluationRunError("result is not eligible for a judge-only retry")
+
+    updated = copy.deepcopy(result)
+    updated["errors"] = [
+        error for error in updated["errors"] if error.get("stage") != "judge"
+    ]
+    judge_started = time.perf_counter()
+    try:
+        updated["metrics"]["llm_judge"] = judge.evaluate(
+            question_id=updated["question_id"],
+            question=updated["question"],
+            candidate_answer=updated["generated_answer"],
+            reference_answer=updated["reference_answer"],
+            reference_answers=updated["reference_answers"],
+            gold_claims=updated["gold_claims"],
+            gold_evidence=updated["gold_evidence"],
+            retrieved_context=_judge_context(updated["retrieved_chunks"]),
+        )
+    except (JudgeError, OSError, ValueError) as error:
+        updated["errors"].append(_error("judge", error))
+
+    judge_latency = (time.perf_counter() - judge_started) * 1000
+    latencies = updated.get("latency_ms")
+    if not isinstance(latencies, dict):
+        latencies = {}
+        updated["latency_ms"] = latencies
+    previous_judge = latencies.get("judge")
+    previous_total = latencies.get("total")
+    latencies["judge"] = judge_latency
+    if (
+        isinstance(previous_total, (int, float))
+        and not isinstance(previous_total, bool)
+        and isinstance(previous_judge, (int, float))
+        and not isinstance(previous_judge, bool)
+    ):
+        latencies["total"] = max(float(previous_total) - float(previous_judge), 0.0)
+        latencies["total"] += judge_latency
+    else:
+        stage_latencies = [
+            latencies.get(stage) for stage in ("rewrite", "retrieval", "generation")
+        ]
+        numeric_stage_latencies = [
+            float(value)
+            for value in stage_latencies
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+        ]
+        latencies["total"] = sum(numeric_stage_latencies) + judge_latency
+    return updated
+
+
 def _write_results_atomically(
     path: Path,
     results: Sequence[dict[str, Any]],
@@ -573,6 +723,22 @@ def _upsert_result(
     results[:] = updated
 
 
+def _stop_after_quota_if_needed(
+    *,
+    result: dict[str, Any],
+    run_dir: Path,
+    config: dict[str, Any],
+    results: Sequence[dict[str, Any]],
+) -> None:
+    """Refresh partial artifacts, then stop a run whose daily quota is exhausted."""
+    if not _result_has_judge_quota_error(result):
+        return
+    write_reports(run_dir, config, results)
+    raise EvaluationRunError(
+        f"{QUOTA_ERROR_MESSAGE}; partial results were saved"
+    )
+
+
 def run_evaluation(args: argparse.Namespace) -> Path:
     """Validate inputs, run missing rows, and derive all report artifacts."""
     if args.limit is not None and args.limit <= 0:
@@ -590,8 +756,6 @@ def run_evaluation(args: argparse.Namespace) -> Path:
     client = ollama.Client(host=settings.ollama_host)
     inventory = _model_inventory(client)
     _validate_models(args.models, inventory)
-    bert_scorer = build_bertscore_scorer(local_files_only=True)
-
     store = ChunkStore()
     indexed_chunk_count = store.count()
     if indexed_chunk_count == 0:
@@ -655,18 +819,44 @@ def run_evaluation(args: argparse.Namespace) -> Path:
         if _result_is_complete(result, judge_enabled=args.judge)
     }
 
-    sparse_index = (
-        Pipeline().sparse_index() if settings.retrieval_mode == "hybrid" else None
-    )
-
     total_rows = len(args.models) * len(questions)
     processed = len(completed)
+    bert_scorer: BertScorer | None = None
+    sparse_index: Any = None
+    existing_by_key = {_result_key(result): result for result in existing_results}
     for model in args.models:
         for question in questions:
-            if (model, question.id) in completed:
+            key = (model, question.id)
+            if key in completed:
                 continue
             processed += 1
+            existing = existing_by_key.get(key)
+            if (
+                judge is not None
+                and existing is not None
+                and _result_can_retry_judge(existing)
+            ):
+                print(
+                    f"[{processed}/{total_rows}] {model} / {question.id} "
+                    "(judge retry)",
+                    flush=True,
+                )
+                result = _retry_judge_for_result(existing, judge)
+                _upsert_result(results_path, existing_results, result)
+                existing_by_key[key] = result
+                _stop_after_quota_if_needed(
+                    result=result,
+                    run_dir=run_dir,
+                    config=config,
+                    results=existing_results,
+                )
+                continue
+
             print(f"[{processed}/{total_rows}] {model} / {question.id}", flush=True)
+            if bert_scorer is None:
+                bert_scorer = build_bertscore_scorer(local_files_only=True)
+            if sparse_index is None and settings.retrieval_mode == "hybrid":
+                sparse_index = Pipeline().sparse_index()
             result = evaluate_question(
                 client=client,
                 store=store,
@@ -682,6 +872,13 @@ def run_evaluation(args: argparse.Namespace) -> Path:
                 bert_scorer=bert_scorer,
             )
             _upsert_result(results_path, existing_results, result)
+            existing_by_key[key] = result
+            _stop_after_quota_if_needed(
+                result=result,
+                run_dir=run_dir,
+                config=config,
+                results=existing_results,
+            )
 
     write_reports(run_dir, config, existing_results)
     return run_dir

@@ -1764,6 +1764,9 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
     failure visibility, and publish complete 250-row CSV plus summary CSV and Markdown.
   - Update current documentation and architecture counts while preserving historical
     roadmap, task-review, and research records.
+  - Live-run note: the no-cache run at `eval/results/20260729T074749Z` is safely
+    resumable, but Groq's 200,000-token rolling daily limit interrupted fresh judgments;
+    do not publish partial aggregates.
   - Done when the one-document index and 50-question dataset validate, all 250 final rows
     contain all three metrics without technical errors, required checks pass, and the
     intended tracked change set is staged for review.

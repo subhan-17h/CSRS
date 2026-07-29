@@ -188,3 +188,21 @@ reports from the completed subset.
 **Why.** Paid judge calls and local generation time are real costs. Continuing a previously
 approved larger run after a narrower instruction would waste both and make the final
 configuration misrepresent what the user asked to compare.
+
+---
+
+## L-9 · Apply an approved workflow override immediately and visibly
+
+**Date:** 2026-07-29 · **Trigger:** the user had removed the repository's no-commit rule
+and explicitly requested commits along subtasks, but work initially continued without
+creating those commits.
+
+**Rule.** When the user explicitly changes a repository workflow constraint, update the
+authoritative instruction file first, then apply the new workflow at the next verified
+boundary. Do not keep following the superseded rule or defer the visible behavior until
+the final handoff.
+
+**Why.** A workflow override is part of the requested deliverable, not merely permission.
+Delaying the commits made completed subtasks look untracked and forced the user to repeat
+the instruction. Focused commits also make long evaluation work recoverable and reviewable
+before an external service blocks the final run.

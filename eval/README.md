@@ -103,6 +103,12 @@ Use `--models` to select a subset, `--cosine-threshold` or `--bert-threshold` fo
 explicit experimental threshold, and `--resume eval/results/<run-id>` to retry incomplete
 rows with the same v2 configuration. Version-one runs cannot be resumed.
 
+On a judged v2 resume, a row that already has its answer, cosine score, and BERTScore
+reuses that work and retries only the missing judgment. If Groq's daily token quota
+remains exhausted after the bounded retry budget, the runner atomically saves the row,
+refreshes the partial reports, and stops before the next pair. Run the same resume command
+after quota capacity returns; do not publish the partial aggregates.
+
 ## Outputs
 
 Each ignored timestamped run under `eval/results/` writes:
