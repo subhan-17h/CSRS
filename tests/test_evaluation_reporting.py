@@ -189,6 +189,25 @@ def test_detailed_csv_flattens_audit_fields_without_raw_context(tmp_path) -> Non
     assert "must not appear in CSV" not in path.read_text(encoding="utf-8")
 
 
+def test_detailed_csv_strips_per_line_trailing_whitespace_and_uses_lf(tmp_path) -> None:
+    path = tmp_path / "results.csv"
+    result = _result("model-a", "q1")
+    result["generated_answer"] = "First line  \nSecond line\t \n\nThird line "
+    result["metrics"]["llm_judge"]["judgment"]["correctness"][
+        "justification"
+    ] = "Line one \nLine two\t"
+
+    write_results_csv(path, [result])
+
+    raw = path.read_bytes()
+    assert b"\r\n" not in raw
+    assert all(line == line.rstrip() for line in raw.decode("utf-8").splitlines())
+    with path.open(encoding="utf-8", newline="") as source:
+        row = next(csv.DictReader(source))
+    assert row["generated_answer"] == "First line\nSecond line\n\nThird line"
+    assert row["judge_correctness_justification"] == "Line one\nLine two"
+
+
 def test_reports_include_independent_metrics_config_and_manual_review(tmp_path) -> None:
     results = [_result("model-a", "q1"), _result("model-b", "q2")]
     config = {
@@ -312,6 +331,8 @@ def test_reports_include_independent_metrics_config_and_manual_review(tmp_path) 
     assert "evidence_hit" not in summary_csv
     with (tmp_path / "results.csv").open(encoding="utf-8", newline="") as source:
         assert len(list(csv.DictReader(source))) == 2
+    assert b"\r\n" not in (tmp_path / "results.csv").read_bytes()
+    assert b"\r\n" not in (tmp_path / "summary.csv").read_bytes()
     review = json.loads((tmp_path / "manual_review.json").read_text())
     assert review["sample_size"] == 2
     assert review["records"][0]["human_correctness"] is None

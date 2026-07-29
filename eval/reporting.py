@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import random
+import re
 import statistics
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
@@ -68,6 +69,7 @@ RESULT_CSV_FIELDS = [
     "total_latency_ms",
     "errors",
 ]
+TRAILING_CSV_WHITESPACE = re.compile(r"[^\S\r\n]+(?=\r\n|\r|\n|$)")
 
 
 def read_results(path: Path) -> list[dict[str, Any]]:
@@ -233,15 +235,29 @@ def write_summary_csv(path: Path, summaries: Sequence[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = list(summaries[0]) if summaries else ["candidate_model"]
     with path.open("w", encoding="utf-8", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer = csv.DictWriter(
+            output,
+            fieldnames=fieldnames,
+            lineterminator="\n",
+        )
         writer.writeheader()
-        writer.writerows(summaries)
+        writer.writerows(_clean_csv_row(summary) for summary in summaries)
 
 
 def _json_cell(value: Any) -> str:
     if value is None:
         return ""
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _clean_csv_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Strip trailing whitespace from each physical line in every string cell."""
+    return {
+        key: TRAILING_CSV_WHITESPACE.sub("", value)
+        if isinstance(value, str)
+        else value
+        for key, value in row.items()
+    }
 
 
 def _criterion_field(
@@ -340,9 +356,15 @@ def write_results_csv(
     """Write audit-ready question-level results without retrieved or raw judge data."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=RESULT_CSV_FIELDS)
+        writer = csv.DictWriter(
+            output,
+            fieldnames=RESULT_CSV_FIELDS,
+            lineterminator="\n",
+        )
         writer.writeheader()
-        writer.writerows(_flatten_result(result) for result in results)
+        writer.writerows(
+            _clean_csv_row(_flatten_result(result)) for result in results
+        )
 
 
 def _format_number(value: Any) -> str:
