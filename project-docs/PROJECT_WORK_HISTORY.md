@@ -3,9 +3,9 @@
 ## Overview
 
 I built CSRS, a local retrieval-augmented generation system for cybersecurity standards,
-between July 21 and July 29, 2026. The repository has a linear history of 85 commits by
-`subhan-17h`, with no merges. Across those commits, Git records 38,741 insertions and 7,705
-deletions.
+between July 21 and July 29, 2026. This snapshot covers the product-work history from
+`603d1a0` through `ef4736b`: 85 linear commits by `subhan-17h`, with no merges. Across
+those commits, Git records 38,741 text-line insertions and 7,705 deletions.
 
 The project grew from a Python walking skeleton into a page-aware document pipeline with
 hybrid retrieval, grounded Ollama generation, Streamlit and React interfaces, and a
@@ -94,11 +94,74 @@ published a complete 250-row run with no technical errors.
 | Interfaces | Streamlit for the required UI; FastAPI and React for streaming chat and corpus browsing. |
 | Evaluation | Legacy retrieval checks evolved into EVAL-2 and then the CSF-only, three-metric EVAL-3 benchmark. |
 
+## Verified current implementation
+
+- **Ingestion and indexing:** the PDF [loaders](../src/csrs/loaders/) preserve page
+  boundaries, with Docling as the default parser. [Chunking](../src/csrs/chunking.py)
+  propagates recognized headings and control identifiers. Content-hash indexing stores
+  embeddings in Chroma and keeps the persisted BM25 index synchronized.
+- **Retrieval and generation:** the [pipeline](../src/csrs/pipeline.py) can rewrite a
+  follow-up using the last two turns, combine dense and BM25 rankings with reciprocal-rank
+  fusion, optionally rerank, and send the top evidence to a local Ollama model. FlashRank
+  is implemented but disabled by default.
+- **Interfaces:** [Streamlit](../src/csrs/app.py) provides the required local interface.
+  The [FastAPI service](../src/csrs/api/app.py) and [React frontend](../frontend/src/)
+  add streamed answers, source cards, settings, conversation history, corpus browsing,
+  and original-document viewing.
+- **Operating boundary:** production ingestion, retrieval, and generation run locally
+  after model warming. Groq is used only by the opt-in evaluation judge.
+
+The verification snapshot passed the 50-question dataset validator, 269 offline tests
+(2 deselected), Ruff, and the frontend production build. The final CSV contains 250 rows,
+50 per model, with all three metrics and no technical errors.
+
+## Evaluation outcome
+
+The final [EVAL-3 report](../eval/final/report.md) contains 250 complete question-model
+rows with no technical errors. Each answer was scored independently by cosine similarity
+(pass threshold 0.75), raw RoBERTa-large BERTScore F1 (pass threshold 0.85), and the
+temperature-zero `openai/gpt-oss-120b` judge.
+
+| Model | Mean cosine | Cosine pass | Mean BERTScore F1 | BERTScore pass | Judge pass |
+|---|---:|---:|---:|---:|---:|
+| `gemma2:2b` | 0.848 | 82% | 0.910 | 100% | 90% |
+| `gemma4:e2b` | 0.840 | 76% | 0.905 | 98% | 82% |
+| `llama3.2:latest` | 0.817 | 74% | 0.887 | 96% | 76% |
+| `phi4-mini:latest` | 0.802 | 64% | 0.878 | 86% | 50% |
+| `qwen2.5:1.5b` | 0.785 | 48% | 0.883 | 90% | 44% |
+
+`gemma2:2b` led all three measures in this run. The metrics remain separate; the project
+does not combine them into an overall score.
+
+## Important corrections and lessons
+
+- Repeated PDF-cleaning heuristics led to adopting Docling rather than adding more rules.
+- The initial retrieval target rewarded repeated chunks from one control. Re-baselining
+  on rank-one relevance and Recall@5 made hybrid retrieval measurable and defensible.
+- Candidate-pool size and generation-context size are different; only the final top
+  evidence should consume the LLM context window.
+- EVAL-2 proved the end-to-end method, while EVAL-3 replaced it with the final
+  one-document, 50-question, five-model benchmark.
+- Verification against the running system repeatedly corrected documentation that source
+  inspection alone had made look complete.
+
+## Current limitations
+
+- The benchmark contains answerable, single-turn CSF questions and remains marked `draft`
+  until its semantic claims receive human review. It does not test unanswerable questions,
+  multi-document generalization, calibrated thresholds, or fixed retrieval context, so
+  end-to-end scores combine retrieval and generation effects.
+- Conversation rewriting is shallow, absent from Streamlit, and not evaluated.
+- Sources identify retrieved pages and sections; they are not inline claim-level
+  citations. Refusal detection still relies on a fixed response string.
+- Parent-child expansion and a confidence-gated refusal threshold were planned but not
+  implemented. The optional reranker ships disabled.
+
 ## Complete commit ledger
 
-The ledger below accounts for every commit in the canonical history. Diff totals above are
-computed from these commits; unreachable rewrite, amend, and stash objects are not separate
-delivered changes.
+The ledger below accounts for every product-work commit through `ef4736b`. Diff totals
+above are computed from these commits; unreachable rewrite, amend, and stash objects are
+not separate delivered changes.
 
 | Date | Commit | Subject | Verified effect |
 |---|---|---|---|
@@ -185,5 +248,5 @@ delivered changes.
 | 2026-07-29 | [`21eb47c`](https://github.com/subhan-17h/CSRS/commit/21eb47c5d883f0fc0b1846e6a50615bb2bc726c7) | feat(EVAL-3): publish detailed v2 evaluation reports | Added detailed CSV and Markdown report generation. |
 | 2026-07-29 | [`2d67afe`](https://github.com/subhan-17h/CSRS/commit/2d67afecb9b71b730071cea67d839e037c0e1b28) | docs(EVAL-3): describe CSF-only v2 evaluation | Updated documentation for the CSF-only evaluator. |
 | 2026-07-29 | [`6737c84`](https://github.com/subhan-17h/CSRS/commit/6737c84d54f44686f35b3722d4c37399a4658781) | fix(EVAL-3): resume safely across judge quota windows | Added quota-aware retries and atomic resume replacement. |
-| 2026-07-29 | [`b15c007`](https://github.com/subhan-17h/CSRS/commit/b15c0079b58b12e379592b217c6e33e3d232315a) | fix(EVAL-3): normalize detailed CSV line formatting | Normalized multiline fields in detailed CSV output. |
+| 2026-07-29 | [`b15c007`](https://github.com/subhan-17h/CSRS/commit/b15c0079b58b12e379592b217c6e33e3d232315a) | fix(EVAL-3): normalize detailed CSV line formatting | Normalized line endings and removed trailing whitespace. |
 | 2026-07-29 | [`ef4736b`](https://github.com/subhan-17h/CSRS/commit/ef4736bd4af733da536a393daa949861c3ed7770) | feat(EVAL-3): publish final five-model evaluation | Published the complete 250-row evaluation. |
