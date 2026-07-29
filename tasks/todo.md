@@ -1752,7 +1752,7 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
     40% for `qwen2.5:1.5b`; both had 95% evidence hit/recall at 5 and 10. Ruff,
     239 offline tests, ASCII validation, and `git diff --check` pass.
 
-- [ ] **EVAL-3** Replace the four-document benchmark with a CSF-only, 50-question,
+- [x] **EVAL-3** Replace the four-document benchmark with a CSF-only, 50-question,
       five-model evaluation using cosine similarity, BERTScore, and the Groq judge.
   - Reduce the durable production corpus, fetch workflow, evaluation manifest, and live
     Chroma/BM25 index to `docs/samples/NIST.CSWP.29_CSF-2.0.pdf`.
@@ -1764,9 +1764,16 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
     failure visibility, and publish complete 250-row CSV plus summary CSV and Markdown.
   - Update current documentation and architecture counts while preserving historical
     roadmap, task-review, and research records.
-  - Live-run note: the no-cache run at `eval/results/20260729T074749Z` is safely
-    resumable, but Groq's 200,000-token rolling daily limit interrupted fresh judgments;
-    do not publish partial aggregates.
+  - Live-run note: Groq's 200,000-token daily limits required quota-safe resumes across
+    multiple user-authorized credentials. The final no-cache run retained the same judge
+    model, prompt, temperature, rubric, and request policy throughout.
   - Done when the one-document index and 50-question dataset validate, all 250 final rows
     contain all three metrics without technical errors, required checks pass, and the
     intended tracked change set is staged for review.
+  - Review: run `20260729T074749Z` contains 250 unique rows, 50 per model, with cosine,
+    BERTScore, and uncached GPT-OSS judgments present and zero technical errors.
+    `gemma2:2b` led mean cosine (0.848), mean BERTScore F1 (0.910), and judge pass rate
+    (90%); the other model aggregates are published under `eval/final/`. Dataset
+    validation, Ruff, 269 offline tests, tracked-Python ASCII validation,
+    `git diff --check`, exact final-artifact hash comparison, and live application health
+    at one 32-page document and 209 chunks all pass.

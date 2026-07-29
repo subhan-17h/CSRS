@@ -264,7 +264,48 @@ objects, and no errors. Version-one configurations are incompatible with v2 resu
 
 ### Final comparison status
 
-The final 50-question by five-model judged comparison is pending. No aggregate scores are
-recorded in this addendum until all 250 rows satisfy the technical-completeness contract.
-The completed run will publish a detailed CSV, five-row summary CSV, and Markdown report
-under `eval/final/`.
+Run `20260729T074749Z` completed the final 50-question by five-model comparison. All 250
+question-model rows contain a generated answer, cosine similarity, BERTScore, and an LLM
+judgment; each model has 50 rows and no technical errors. The tables reproduce the
+generated report at three-decimal precision; the published summary CSV retains the exact
+aggregates.
+
+| Model | Rows | Cosine mean | Cosine median | Cosine pass | BERT P | BERT R | BERT F1 | BERT F1 median | BERT pass |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `gemma2:2b` | 50 | 0.848 | 0.864 | 82% | 0.890 | 0.932 | 0.910 | 0.904 | 100% |
+| `gemma4:e2b` | 50 | 0.840 | 0.853 | 76% | 0.880 | 0.933 | 0.905 | 0.901 | 98% |
+| `llama3.2:latest` | 50 | 0.817 | 0.848 | 74% | 0.856 | 0.921 | 0.887 | 0.884 | 96% |
+| `phi4-mini:latest` | 50 | 0.802 | 0.802 | 64% | 0.850 | 0.909 | 0.878 | 0.874 | 86% |
+| `qwen2.5:1.5b` | 50 | 0.785 | 0.742 | 48% | 0.864 | 0.904 | 0.883 | 0.873 | 90% |
+
+| Model | Correct | Complete | Faithful | Relevant | Judge pass | Partial | Fail |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `gemma2:2b` | 3.680 | 3.680 | 3.680 | 3.820 | 90% | 4% | 6% |
+| `gemma4:e2b` | 3.440 | 3.500 | 3.600 | 3.560 | 82% | 8% | 10% |
+| `llama3.2:latest` | 3.200 | 3.200 | 3.340 | 3.420 | 76% | 10% | 14% |
+| `phi4-mini:latest` | 2.420 | 2.460 | 2.500 | 2.880 | 50% | 14% | 36% |
+| `qwen2.5:1.5b` | 2.040 | 2.000 | 2.180 | 2.400 | 44% | 10% | 46% |
+
+| Model | Rewrite mean ms | Retrieval mean ms | Generation mean ms | Judge mean ms | Total mean ms | Total median ms | Errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `gemma2:2b` | 0.018 | 168.321 | 2445.811 | 13607.658 | 16881.981 | 15476.825 | 0 |
+| `gemma4:e2b` | 0.023 | 254.767 | 3293.657 | 11149.725 | 15864.783 | 15589.294 | 0 |
+| `llama3.2:latest` | 0.016 | 177.714 | 3338.343 | 11446.828 | 15529.731 | 15536.840 | 0 |
+| `phi4-mini:latest` | 0.043 | 235.092 | 4246.583 | 9056.066 | 14976.813 | 15121.344 | 0 |
+| `qwen2.5:1.5b` | 0.021 | 343.347 | 1772.124 | 16143.447 | 19934.264 | 14984.969 | 0 |
+
+Judgment collection resumed across multiple user-authorized Groq credentials and quota
+windows. Provider, judge model, temperature, prompt, request policy, rubric, and no-cache
+settings remained fixed. Credentials and organization identifiers are not retained in
+the run artifacts; this audit makes no claim that the accounts or service tiers were
+equivalent. Quota scheduling affected when judge calls ran, not their evaluation
+contract. Per-row latency excludes time between quota windows.
+
+The three metrics remain independent, so the table does not define a combined score or
+overall pass. `gemma2:2b` recorded the highest mean cosine, mean BERTScore F1, and judge
+pass rate in this run. That observation is limited to this `draft`, answerable,
+single-turn, CSF-only benchmark: cosine and BERTScore measure reference similarity, the
+judge is not expert review, and end-to-end scores combine retrieval and generation.
+Threshold calibration, unanswerable behavior, conversation, and broader-corpus
+generalization were not evaluated. The detailed CSV, five-row summary CSV, and Markdown
+report are published under `eval/final/`.

@@ -126,9 +126,49 @@ separately under `eval/final/` as `results.csv`, `summary.csv`, and `report.md`.
 
 ## Final results
 
-**Pending final run.** This section will be updated only after all 250 question-model
-rows contain cosine similarity, BERTScore, and LLM-judge results with no technical
-errors. No scores are reported before that acceptance condition is demonstrated.
+Run `20260729T074749Z` completed all 250 question-model rows: 50 questions for each of
+the five models, with all three metrics present and zero technical errors. The tables
+below reproduce `report.md` at three-decimal precision; `summary.csv` retains the exact
+aggregates.
+
+| Model | Rows | Cosine mean | Cosine median | Cosine pass | BERT P | BERT R | BERT F1 | BERT F1 median | BERT pass |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `gemma2:2b` | 50 | 0.848 | 0.864 | 82% | 0.890 | 0.932 | 0.910 | 0.904 | 100% |
+| `gemma4:e2b` | 50 | 0.840 | 0.853 | 76% | 0.880 | 0.933 | 0.905 | 0.901 | 98% |
+| `llama3.2:latest` | 50 | 0.817 | 0.848 | 74% | 0.856 | 0.921 | 0.887 | 0.884 | 96% |
+| `phi4-mini:latest` | 50 | 0.802 | 0.802 | 64% | 0.850 | 0.909 | 0.878 | 0.874 | 86% |
+| `qwen2.5:1.5b` | 50 | 0.785 | 0.742 | 48% | 0.864 | 0.904 | 0.883 | 0.873 | 90% |
+
+| Model | Correct | Complete | Faithful | Relevant | Judge pass | Partial | Fail |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `gemma2:2b` | 3.680 | 3.680 | 3.680 | 3.820 | 90% | 4% | 6% |
+| `gemma4:e2b` | 3.440 | 3.500 | 3.600 | 3.560 | 82% | 8% | 10% |
+| `llama3.2:latest` | 3.200 | 3.200 | 3.340 | 3.420 | 76% | 10% | 14% |
+| `phi4-mini:latest` | 2.420 | 2.460 | 2.500 | 2.880 | 50% | 14% | 36% |
+| `qwen2.5:1.5b` | 2.040 | 2.000 | 2.180 | 2.400 | 44% | 10% | 46% |
+
+| Model | Rewrite mean ms | Retrieval mean ms | Generation mean ms | Judge mean ms | Total mean ms | Total median ms | Errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `gemma2:2b` | 0.018 | 168.321 | 2445.811 | 13607.658 | 16881.981 | 15476.825 | 0 |
+| `gemma4:e2b` | 0.023 | 254.767 | 3293.657 | 11149.725 | 15864.783 | 15589.294 | 0 |
+| `llama3.2:latest` | 0.016 | 177.714 | 3338.343 | 11446.828 | 15529.731 | 15536.840 | 0 |
+| `phi4-mini:latest` | 0.043 | 235.092 | 4246.583 | 9056.066 | 14976.813 | 15121.344 | 0 |
+| `qwen2.5:1.5b` | 0.021 | 343.347 | 1772.124 | 16143.447 | 19934.264 | 14984.969 | 0 |
+
+Judgment collection resumed across multiple user-authorized Groq credentials and quota
+windows. The provider, judge model `openai/gpt-oss-120b`, temperature `0`, prompt,
+request policy, rubric, candidate models and digests, retrieval and generation settings,
+and no-cache policy remained fixed. Credentials and organization identifiers are not
+retained in the run artifacts; no account or service-tier equivalence is claimed. Quota
+scheduling changed when judge calls ran, not the evaluation contract. Reported latencies
+are per-row stage timings and do not include time between quota windows.
+
+These are independent measurements, not a combined ranking. `gemma2:2b` had the highest
+mean cosine, mean BERTScore F1, and judge pass rate in this run, but cosine and BERTScore
+remain reference-similarity measures, and the LLM judge remains a review aid. The dataset
+is still `draft`, contains only answerable single-turn CSF 2.0 questions, and measures
+retrieval and generation together. Threshold calibration, unanswerable behavior,
+conversation, and broader-corpus generalization remain outside this comparison.
 
 ## Limitations
 

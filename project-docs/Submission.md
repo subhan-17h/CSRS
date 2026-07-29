@@ -260,9 +260,10 @@ against the nearest enclosing control.
 context; the citation shows the real passage.
 
 **Reloading is nearly free.** Files are fingerprinted by a SHA-256 of their bytes, checked
-*before* the parser runs. A cold build is 316 s; an unchanged reload is 0.057 s with zero
-embedding calls. Bytes are hashed rather than modification time, so a `git checkout` — which
-rewrites timestamps constantly — does not trigger a five-minute rebuild.
+*before* the parser runs. The earlier four-document stress corpus took 316 s to build; an
+unchanged reload took 0.057 s with zero embedding calls. The current one-document corpus is
+smaller. Bytes are hashed rather than modification time, so a `git checkout` — which
+rewrites timestamps constantly — does not trigger a rebuild.
 
 **One facade, and neither UI crosses it.** No interface imports Chroma, Ollama or the
 manifest. That single rule is what made a second interface possible without touching a line
@@ -276,7 +277,7 @@ return byte-identical answers at temperature 0.
 document, page, section breadcrumb, control ID, and cosine score — expandable to the full
 retrieved text.
 
-**The test suite proves the offline claim.** The 239 offline tests run with Ollama pointed at
+**The test suite proves the offline claim.** The 269 offline tests run with Ollama pointed at
 a dead port. If any module silently reached the network, they would fail. That is a stronger
 guarantee than reading the code and concluding nothing does.
 
@@ -286,6 +287,24 @@ replaced operationally by 50 evidence-grounded questions in
 `eval/data/ground_truth.json`. The current `python -m eval.run` evaluator preserves answers
 and retrieved passages and independently reports answer cosine similarity, raw
 RoBERTa-large BERTScore, and an optional evidence-aware Groq judgment.
+
+**The final CSF-only comparison completed 250 rows with zero technical errors.** Each of
+the five models answered the same 50 draft questions under the same retrieval, prompt, and
+generation settings:
+
+| Model | Mean cosine / pass | Mean BERT F1 / pass | Judge pass |
+|---|---:|---:|---:|
+| `gemma2:2b` | 0.848 / 82% | 0.910 / 100% | 90% |
+| `gemma4:e2b` | 0.840 / 76% | 0.905 / 98% | 82% |
+| `llama3.2:latest` | 0.817 / 74% | 0.887 / 96% | 76% |
+| `phi4-mini:latest` | 0.802 / 64% | 0.878 / 86% | 50% |
+| `qwen2.5:1.5b` | 0.785 / 48% | 0.883 / 90% | 44% |
+
+These are three independent measurements, not one composite ranking. The detailed
+question-level CSV, exact aggregate CSV, and methodology report are published under
+`eval/final/`. Judgment calls spanned multiple user-authorized Groq credential/quota
+windows, while the provider, model, temperature, prompt, request policy, rubric, and
+no-cache setting remained fixed; account and service-tier equivalence is not claimed.
 
 ---
 

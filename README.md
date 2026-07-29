@@ -418,6 +418,21 @@ for the rubric, fixed comparison settings, limitations, and deferred work. The
 [evaluation README](eval/README.md) explains the three techniques and links the final
 five-model results.
 
+The completed 250-row judged run had zero technical errors:
+
+| Model | Mean cosine / pass | Mean BERT F1 / pass | Judge pass |
+|---|---:|---:|---:|
+| `gemma2:2b` | 0.848 / 82% | 0.910 / 100% | 90% |
+| `gemma4:e2b` | 0.840 / 76% | 0.905 / 98% | 82% |
+| `llama3.2:latest` | 0.817 / 74% | 0.887 / 96% | 76% |
+| `phi4-mini:latest` | 0.802 / 64% | 0.878 / 86% | 50% |
+| `qwen2.5:1.5b` | 0.785 / 48% | 0.883 / 90% | 44% |
+
+The metrics remain independent; this table does not define a combined score. Exact
+question-level results are in [`eval/final/results.csv`](eval/final/results.csv), with
+aggregates in [`eval/final/summary.csv`](eval/final/summary.csv) and methodology in
+[`eval/final/report.md`](eval/final/report.md).
+
 ---
 
 ## Known limitations
