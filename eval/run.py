@@ -20,19 +20,37 @@ from csrs.generation import build_prompt, rewrite_query
 from csrs.models import RetrievedChunk
 from csrs.pipeline import Pipeline
 from csrs.retrieval import retrieve
-from csrs.store import ChunkStore
-from eval.dataset import DEFAULT_DATASET, Question, validate_dataset
+from csrs.store import ChunkStore, ManifestRecord, load_manifest
+from eval.dataset import (
+    DEFAULT_DATASET,
+    DEFAULT_MANIFEST,
+    CorpusManifest,
+    Question,
+    load_corpus_manifest,
+    validate_dataset,
+)
+from eval.judge import (
+    MAX_REQUEST_ATTEMPTS,
+    MAX_RETRY_DELAY_SECONDS,
+    SDK_MAX_RETRIES,
+    TEMPERATURE,
+    GroqJudge,
+    JudgeError,
+)
 from eval.judge import MODEL as JUDGE_MODEL
 from eval.judge import PROVIDER as JUDGE_PROVIDER
-from eval.judge import GroqJudge, JudgeError
 from eval.metrics import (
+    DEFAULT_BERTSCORE_THRESHOLD,
     DEFAULT_COSINE_THRESHOLD,
+    BertScorer,
     MetricError,
+    bertscore_config,
+    build_bertscore_scorer,
     chunk_matches_evidence,
     score_answer_similarity,
-    score_retrieval_evidence,
+    score_bert_similarity,
 )
-from eval.reporting import append_result, read_results, write_reports
+from eval.reporting import read_results, write_reports
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "eval" / "results"
@@ -44,7 +62,7 @@ CANDIDATE_MODELS = (
     "phi4-mini:latest",
     "gemma4:e2b",
 )
-DEFAULT_MODELS = CANDIDATE_MODELS[:2]
+DEFAULT_MODELS = CANDIDATE_MODELS
 RETRIEVAL_LIMIT = 10
 CONTEXT_LIMIT = 5
 GENERATION_CONFIG = {
@@ -216,6 +234,7 @@ def _empty_result(
     model_digest: str,
 ) -> dict[str, Any]:
     return {
+        "schema_version": 2,
         "run_id": run_id,
         "dataset_version": dataset_version,
         "question_id": question.id,
@@ -239,7 +258,7 @@ def _empty_result(
         },
         "metrics": {
             "cosine_similarity": None,
-            "retrieval_evidence": None,
+            "bertscore": None,
             "llm_judge": None,
         },
         "errors": [],
@@ -258,6 +277,8 @@ def evaluate_question(
     model: str,
     model_digest: str,
     cosine_threshold: float,
+    bert_threshold: float,
+    bert_scorer: BertScorer,
 ) -> dict[str, Any]:
     """Evaluate one question-model pair while retaining every stage failure."""
     result = _empty_result(
@@ -285,11 +306,6 @@ def evaluate_question(
         chunks = _retrieve(rewritten_query, store, sparse_index)
         evidence = result["gold_evidence"]
         result["retrieved_chunks"] = _serialized_chunks(chunks, evidence)
-        result["metrics"]["retrieval_evidence"] = score_retrieval_evidence(
-            evidence,
-            chunks,
-            depths=(5, 10),
-        )
     except Exception as error:
         result["errors"].append(_error("retrieval", error))
         result["latency_ms"]["retrieval"] = (
@@ -327,6 +343,16 @@ def evaluate_question(
     except Exception as error:
         result["errors"].append(_error("cosine_similarity", error))
 
+    try:
+        result["metrics"]["bertscore"] = score_bert_similarity(
+            answer,
+            question.reference_answers,
+            bert_scorer,
+            threshold=bert_threshold,
+        )
+    except Exception as error:
+        result["errors"].append(_error("bertscore", error))
+
     if judge is not None:
         judge_started = time.perf_counter()
         try:
@@ -335,6 +361,7 @@ def evaluate_question(
                 question=question.question,
                 candidate_answer=answer,
                 reference_answer=question.answer,
+                reference_answers=question.reference_answers,
                 gold_claims=result["gold_claims"],
                 gold_evidence=result["gold_evidence"],
                 retrieved_context=_judge_context(result["retrieved_chunks"]),
@@ -351,26 +378,89 @@ def _new_run_id() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _build_corpus_identity(
+    *,
+    manifest_path: Path,
+    manifest: CorpusManifest,
+    live_index_manifest: dict[str, ManifestRecord],
+    indexed_chunk_count: int,
+) -> dict[str, Any]:
+    """Combine verified source identity with the live index chunk counts."""
+    expected_index_identities = {
+        Path(document.document_path).relative_to("docs").as_posix()
+        for document in manifest.documents
+    }
+    if set(live_index_manifest) != expected_index_identities:
+        raise EvaluationRunError(
+            "live index manifest does not exactly match the evaluation corpus"
+        )
+
+    documents = []
+    for document in manifest.documents:
+        index_identity = Path(document.document_path).relative_to("docs").as_posix()
+        index_record = live_index_manifest.get(index_identity)
+        if index_record is None:
+            raise EvaluationRunError(
+                f"live index is missing corpus document: {document.document_path}"
+            )
+        if (
+            index_record["hash"] != document.sha256
+            or index_record["page_count"] != document.page_count
+        ):
+            raise EvaluationRunError(
+                f"live index identity is stale for: {document.document_path}"
+            )
+        documents.append(
+            {
+                "document_path": document.document_path,
+                "sha256": document.sha256,
+                "page_count": document.page_count,
+                "indexed_chunk_count": index_record["chunk_count"],
+            }
+        )
+
+    manifest_chunk_count = sum(
+        int(document["indexed_chunk_count"]) for document in documents
+    )
+    if manifest_chunk_count != indexed_chunk_count:
+        raise EvaluationRunError(
+            "live index chunk count differs from its manifest: "
+            f"{indexed_chunk_count} != {manifest_chunk_count}"
+        )
+    return {
+        "manifest_path": manifest_path.resolve().relative_to(PROJECT_ROOT).as_posix(),
+        "manifest_hash": _sha256_file(manifest_path),
+        "manifest_version": manifest.version,
+        "document_count": len(documents),
+        "indexed_chunk_count": indexed_chunk_count,
+        "documents": documents,
+    }
+
+
 def _build_config(
     *,
     run_id: str,
     dataset_path: Path,
     dataset_version: int,
+    dataset_review_status: str,
+    corpus_identity: dict[str, Any],
     models: Sequence[str],
     inventory: dict[str, str],
     limit: int | None,
     judge_enabled: bool,
     cosine_threshold: float,
+    bert_threshold: float,
     no_cache: bool,
 ) -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "created_at": datetime.now(UTC).isoformat(),
         "dataset_path": dataset_path.resolve().relative_to(PROJECT_ROOT).as_posix(),
         "dataset_hash": _sha256_file(dataset_path),
         "dataset_version": dataset_version,
-        "dataset_review_status": "draft",
+        "dataset_review_status": dataset_review_status,
+        "corpus_identity": corpus_identity,
         "models": list(models),
         "model_digests": {model: inventory[model] for model in models},
         "embedding_model": EMBEDDING_MODEL,
@@ -389,9 +479,21 @@ def _build_config(
         "judge_enabled": judge_enabled,
         "judge_provider": JUDGE_PROVIDER if judge_enabled else None,
         "judge_model": JUDGE_MODEL if judge_enabled else None,
+        "judge_temperature": TEMPERATURE if judge_enabled else None,
+        "judge_request_policy": (
+            {
+                "max_total_attempts": MAX_REQUEST_ATTEMPTS,
+                "sdk_max_retries": SDK_MAX_RETRIES,
+                "max_retry_delay_seconds": MAX_RETRY_DELAY_SECONDS,
+            }
+            if judge_enabled
+            else None
+        ),
         "judge_cache_bypassed": no_cache,
+        "metrics": ["cosine_similarity", "bertscore", "llm_judge"],
         "cosine_threshold": cosine_threshold,
-        "cosine_threshold_is_provisional": True,
+        "bert_threshold": bert_threshold,
+        "bertscore_config": bertscore_config(),
     }
 
 
@@ -407,12 +509,78 @@ def _resume_config_matches(
     }
 
 
+def _result_key(result: dict[str, Any]) -> tuple[str, str]:
+    return str(result.get("candidate_model")), str(result.get("question_id"))
+
+
+def _result_is_complete(
+    result: dict[str, Any],
+    *,
+    judge_enabled: bool,
+) -> bool:
+    if result.get("schema_version") != 2:
+        return False
+    answer = result.get("generated_answer")
+    if not isinstance(answer, str) or not answer.strip():
+        return False
+    if result.get("errors"):
+        return False
+    metrics = result.get("metrics")
+    if not isinstance(metrics, dict) or set(metrics) != {
+        "cosine_similarity",
+        "bertscore",
+        "llm_judge",
+    }:
+        return False
+    required_metrics = ["cosine_similarity", "bertscore"]
+    if judge_enabled:
+        required_metrics.append("llm_judge")
+    return all(
+        isinstance(metrics[name], dict) and bool(metrics[name])
+        for name in required_metrics
+    )
+
+
+def _write_results_atomically(
+    path: Path,
+    results: Sequence[dict[str, Any]],
+) -> None:
+    """Replace the JSONL snapshot atomically after every completed attempt."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(".tmp")
+    temporary_path.write_text(
+        "".join(
+            json.dumps(result, ensure_ascii=False, sort_keys=True) + "\n"
+            for result in results
+        ),
+        encoding="utf-8",
+    )
+    temporary_path.replace(path)
+
+
+def _upsert_result(
+    path: Path,
+    results: list[dict[str, Any]],
+    result: dict[str, Any],
+) -> None:
+    """Replace an earlier row for the same pair instead of duplicating it."""
+    key = _result_key(result)
+    updated = [
+        existing for existing in results if _result_key(existing) != key
+    ]
+    updated.append(result)
+    _write_results_atomically(path, updated)
+    results[:] = updated
+
+
 def run_evaluation(args: argparse.Namespace) -> Path:
     """Validate inputs, run missing rows, and derive all report artifacts."""
     if args.limit is not None and args.limit <= 0:
         raise EvaluationRunError("--limit must be greater than zero")
     if not -1.0 <= args.cosine_threshold <= 1.0:
         raise EvaluationRunError("--cosine-threshold must be between -1 and 1")
+    if not 0.0 <= args.bert_threshold <= 1.0:
+        raise EvaluationRunError("--bert-threshold must be between 0 and 1")
 
     dataset = validate_dataset(args.dataset)
     questions = dataset.questions[: args.limit]
@@ -422,6 +590,19 @@ def run_evaluation(args: argparse.Namespace) -> Path:
     client = ollama.Client(host=settings.ollama_host)
     inventory = _model_inventory(client)
     _validate_models(args.models, inventory)
+    bert_scorer = build_bertscore_scorer(local_files_only=True)
+
+    store = ChunkStore()
+    indexed_chunk_count = store.count()
+    if indexed_chunk_count == 0:
+        raise EvaluationRunError("the Chroma index is empty; index the corpus first")
+    corpus_manifest = load_corpus_manifest(DEFAULT_MANIFEST)
+    corpus_identity = _build_corpus_identity(
+        manifest_path=DEFAULT_MANIFEST,
+        manifest=corpus_manifest,
+        live_index_manifest=load_manifest(settings.manifest_path),
+        indexed_chunk_count=indexed_chunk_count,
+    )
 
     judge = GroqJudge(no_cache=args.no_cache) if args.judge else None
     run_id = _new_run_id()
@@ -429,11 +610,14 @@ def run_evaluation(args: argparse.Namespace) -> Path:
         run_id=run_id,
         dataset_path=args.dataset,
         dataset_version=dataset.version,
+        dataset_review_status=dataset.review_status,
+        corpus_identity=corpus_identity,
         models=args.models,
         inventory=inventory,
         limit=args.limit,
         judge_enabled=args.judge,
         cosine_threshold=args.cosine_threshold,
+        bert_threshold=args.bert_threshold,
         no_cache=args.no_cache,
     )
 
@@ -444,6 +628,8 @@ def run_evaluation(args: argparse.Namespace) -> Path:
             saved_config = json.loads(config_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
             raise EvaluationRunError(f"could not load resume config: {error}") from error
+        if saved_config.get("schema_version") != 2:
+            raise EvaluationRunError("resume requires a schema version 2 run")
         requested_config["run_id"] = saved_config.get("run_id")
         requested_config["created_at"] = saved_config.get("created_at")
         if not _resume_config_matches(saved_config, requested_config):
@@ -464,19 +650,17 @@ def run_evaluation(args: argparse.Namespace) -> Path:
     results_path = run_dir / "results.jsonl"
     existing_results = read_results(results_path)
     completed = {
-        (str(result.get("candidate_model")), str(result.get("question_id")))
+        _result_key(result)
         for result in existing_results
+        if _result_is_complete(result, judge_enabled=args.judge)
     }
 
-    store = ChunkStore()
-    if store.count() == 0:
-        raise EvaluationRunError("the Chroma index is empty; index the corpus first")
     sparse_index = (
         Pipeline().sparse_index() if settings.retrieval_mode == "hybrid" else None
     )
 
     total_rows = len(args.models) * len(questions)
-    processed = len(existing_results)
+    processed = len(completed)
     for model in args.models:
         for question in questions:
             if (model, question.id) in completed:
@@ -494,11 +678,12 @@ def run_evaluation(args: argparse.Namespace) -> Path:
                 model=model,
                 model_digest=inventory[model],
                 cosine_threshold=args.cosine_threshold,
+                bert_threshold=args.bert_threshold,
+                bert_scorer=bert_scorer,
             )
-            append_result(results_path, result)
+            _upsert_result(results_path, existing_results, result)
 
-    results = read_results(results_path)
-    write_reports(run_dir, config, results)
+    write_reports(run_dir, config, existing_results)
     return run_dir
 
 
@@ -518,6 +703,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--cosine-threshold",
         type=float,
         default=DEFAULT_COSINE_THRESHOLD,
+    )
+    parser.add_argument(
+        "--bert-threshold",
+        type=float,
+        default=DEFAULT_BERTSCORE_THRESHOLD,
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-cache", action="store_true")

@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -17,6 +22,12 @@ PROMPT_VERSION = "judge_v1"
 PROVIDER = "groq"
 MODEL = "openai/gpt-oss-120b"
 MAX_COMPLETION_TOKENS = 1_200
+TEMPERATURE = 0
+REASONING_EFFORT = "low"
+INCLUDE_REASONING = False
+MAX_REQUEST_ATTEMPTS = 5
+MAX_RETRY_DELAY_SECONDS = 60.0
+SDK_MAX_RETRIES = 0
 
 
 class JudgeError(Exception):
@@ -29,6 +40,18 @@ class JudgeConfigurationError(JudgeError):
 
 class JudgeResponseError(JudgeError):
     """Groq returned output that did not satisfy the judgment schema."""
+
+
+class JudgeRequestError(JudgeError):
+    """Groq could not complete the judgment request."""
+
+
+@dataclass
+class _RequestBudget:
+    """Shared transport-call budget across initial and repair requests."""
+
+    attempts: int = 0
+    transient_failures: int = 0
 
 
 class GroqJudgeSettings(BaseSettings):
@@ -82,7 +105,7 @@ class CachedJudgeRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     provider: Literal["groq"]
     model: Literal["openai/gpt-oss-120b"]
     prompt_version: Literal["judge_v1"]
@@ -121,11 +144,16 @@ def _canonical_json(value: object) -> str:
 def make_cache_key(
     *,
     question_id: str,
+    question: str,
     candidate_answer: str,
+    reference_answer: str,
+    reference_answers: list[str],
+    gold_claims: list[dict[str, object]],
+    gold_evidence: list[dict[str, object]],
     retrieved_context: list[dict[str, object]],
     prompt_hash: str,
 ) -> str:
-    """Build a stable key from the answer, actual context, and judge contract."""
+    """Build a stable key from every rubric input and request setting."""
     if not question_id.strip():
         raise ValueError("question_id must not be empty")
     if not candidate_answer.strip():
@@ -133,11 +161,25 @@ def make_cache_key(
 
     key_data = {
         "question_id": question_id,
-        "candidate_answer_hash": _sha256_text(candidate_answer),
-        "retrieved_context_hash": _sha256_text(_canonical_json(retrieved_context)),
+        "question": question,
+        "candidate_answer": candidate_answer,
+        "reference_answer": reference_answer,
+        "reference_answers": reference_answers,
+        "gold_claims": gold_claims,
+        "gold_evidence": gold_evidence,
+        "retrieved_context": retrieved_context,
+        "provider": PROVIDER,
         "judge_model": MODEL,
         "prompt_version": PROMPT_VERSION,
         "prompt_hash": prompt_hash,
+        "temperature": TEMPERATURE,
+        "reasoning_effort": REASONING_EFFORT,
+        "include_reasoning": INCLUDE_REASONING,
+        "max_completion_tokens": MAX_COMPLETION_TOKENS,
+        "sdk_max_retries": SDK_MAX_RETRIES,
+        "max_request_attempts": MAX_REQUEST_ATTEMPTS,
+        "max_retry_delay_seconds": MAX_RETRY_DELAY_SECONDS,
+        "response_schema": JudgeJudgment.model_json_schema(),
     }
     return _sha256_text(_canonical_json(key_data))
 
@@ -160,10 +202,12 @@ class GroqJudge:
         cache_dir: Path = DEFAULT_CACHE_DIR,
         prompt_path: Path = PROMPT_PATH,
         env_file: Path | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._client = client if client is not None else self._client_from_env(env_file)
         self._no_cache = no_cache
         self._cache_dir = cache_dir
+        self._sleep = sleep
         try:
             self._system_prompt = prompt_path.read_text(encoding="utf-8").strip()
         except (OSError, UnicodeError) as error:
@@ -202,7 +246,10 @@ class GroqJudge:
             raise JudgeConfigurationError(
                 "Groq evaluation dependency is missing; install the eval dependency group"
             ) from error
-        return Groq(api_key=settings.api_key.get_secret_value())
+        return Groq(
+            api_key=settings.api_key.get_secret_value(),
+            max_retries=SDK_MAX_RETRIES,
+        )
 
     def evaluate(
         self,
@@ -210,6 +257,7 @@ class GroqJudge:
         question: str,
         candidate_answer: str,
         reference_answer: str,
+        reference_answers: list[str],
         gold_claims: list[dict[str, object]],
         gold_evidence: list[dict[str, object]],
         retrieved_context: list[dict[str, object]],
@@ -220,6 +268,7 @@ class GroqJudge:
             question=question,
             candidate_answer=candidate_answer,
             reference_answer=reference_answer,
+            reference_answers=reference_answers,
             gold_claims=gold_claims,
             gold_evidence=gold_evidence,
             retrieved_context=retrieved_context,
@@ -235,6 +284,7 @@ class GroqJudge:
         question: str,
         candidate_answer: str,
         reference_answer: str,
+        reference_answers: list[str],
         gold_claims: list[dict[str, object]],
         gold_evidence: list[dict[str, object]],
         retrieved_context: list[dict[str, object]],
@@ -245,13 +295,19 @@ class GroqJudge:
             question=question,
             candidate_answer=candidate_answer,
             reference_answer=reference_answer,
+            reference_answers=reference_answers,
             gold_claims=gold_claims,
             gold_evidence=gold_evidence,
             retrieved_context=retrieved_context,
         )
         cache_key = make_cache_key(
             question_id=question_id,
+            question=question,
             candidate_answer=candidate_answer,
+            reference_answer=reference_answer,
+            reference_answers=reference_answers,
+            gold_claims=gold_claims,
+            gold_evidence=gold_evidence,
             retrieved_context=retrieved_context,
             prompt_hash=self.prompt_hash,
         )
@@ -265,6 +321,7 @@ class GroqJudge:
             "question": question,
             "candidate_answer": candidate_answer,
             "reference_answer": reference_answer,
+            "reference_answers": reference_answers,
             "gold_claims": gold_claims,
             "gold_evidence": gold_evidence,
             "retrieved_context": retrieved_context,
@@ -273,7 +330,8 @@ class GroqJudge:
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": _canonical_json(payload)},
         ]
-        raw_response = self._request(messages)
+        request_budget = _RequestBudget()
+        raw_response = self._request(messages, request_budget)
         try:
             judgment = self._parse_judgment(raw_response)
         except JudgeResponseError as first_error:
@@ -288,7 +346,7 @@ class GroqJudge:
                     ),
                 },
             ]
-            repaired_response = self._request(repair_messages)
+            repaired_response = self._request(repair_messages, request_budget)
             try:
                 judgment = self._parse_judgment(repaired_response)
             except JudgeResponseError as second_error:
@@ -299,7 +357,7 @@ class GroqJudge:
             raw_response = repaired_response
 
         record = CachedJudgeRecord(
-            schema_version=1,
+            schema_version=2,
             provider=PROVIDER,
             model=MODEL,
             prompt_version=PROMPT_VERSION,
@@ -312,23 +370,49 @@ class GroqJudge:
             self._write_cache(record)
         return self._result_from_record(record, cached=False)
 
-    def _request(self, messages: list[dict[str, str]]) -> str:
-        response = self._client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            temperature=0,
-            reasoning_effort="low",
-            include_reasoning=False,
-            max_completion_tokens=MAX_COMPLETION_TOKENS,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "rag_answer_judgment",
-                    "strict": True,
-                    "schema": JudgeJudgment.model_json_schema(),
-                },
-            },
-        )
+    def _request(
+        self,
+        messages: list[dict[str, str]],
+        budget: _RequestBudget,
+    ) -> str:
+        while budget.attempts < MAX_REQUEST_ATTEMPTS:
+            budget.attempts += 1
+            try:
+                response = self._client.chat.completions.create(
+                    model=MODEL,
+                    messages=messages,
+                    temperature=TEMPERATURE,
+                    reasoning_effort=REASONING_EFFORT,
+                    include_reasoning=INCLUDE_REASONING,
+                    max_completion_tokens=MAX_COMPLETION_TOKENS,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "rag_answer_judgment",
+                            "strict": True,
+                            "schema": JudgeJudgment.model_json_schema(),
+                        },
+                    },
+                )
+            except Exception as error:
+                if not self._is_transient_error(error):
+                    raise JudgeRequestError(f"Groq judge request failed: {error}") from error
+                if budget.attempts == MAX_REQUEST_ATTEMPTS:
+                    raise JudgeRequestError(
+                        f"Groq judge request failed after {MAX_REQUEST_ATTEMPTS} "
+                        f"total attempts: {error}"
+                    ) from error
+                delay = self._retry_delay(error, budget.transient_failures)
+                budget.transient_failures += 1
+                self._sleep(delay)
+                continue
+            break
+        else:
+            raise JudgeRequestError(
+                f"Groq judge exhausted {MAX_REQUEST_ATTEMPTS} total attempts "
+                "before structured-output repair"
+            )
+
         try:
             content = response.choices[0].message.content
         except (AttributeError, IndexError, TypeError) as error:
@@ -338,6 +422,39 @@ class GroqJudge:
         if not isinstance(content, str) or not content.strip():
             raise JudgeResponseError("Groq judge response content was empty")
         return content
+
+    @staticmethod
+    def _is_transient_error(error: Exception) -> bool:
+        if isinstance(error, OSError):
+            return True
+        error_types = {error_type.__name__ for error_type in type(error).__mro__}
+        if error_types & {"APIConnectionError", "APITimeoutError"}:
+            return True
+        status_code = getattr(error, "status_code", None)
+        return isinstance(status_code, int) and (
+            status_code == 429 or status_code >= 500
+        )
+
+    @staticmethod
+    def _retry_delay(error: Exception, attempt: int) -> float:
+        response = getattr(error, "response", None)
+        headers = getattr(response, "headers", None)
+        if headers is None:
+            headers = getattr(error, "headers", None)
+        retry_after = headers.get("Retry-After") if headers is not None else None
+        if retry_after is not None:
+            try:
+                delay = float(retry_after)
+            except (TypeError, ValueError):
+                try:
+                    retry_at = parsedate_to_datetime(str(retry_after))
+                    if retry_at.tzinfo is None:
+                        retry_at = retry_at.replace(tzinfo=UTC)
+                    delay = (retry_at - datetime.now(UTC)).total_seconds()
+                except (TypeError, ValueError, OverflowError):
+                    delay = 2**attempt
+            return min(max(delay, 0.0), MAX_RETRY_DELAY_SECONDS)
+        return min(float(2**attempt), MAX_RETRY_DELAY_SECONDS)
 
     @staticmethod
     def _parse_judgment(raw_response: str) -> JudgeJudgment:
@@ -352,6 +469,7 @@ class GroqJudge:
         question: str,
         candidate_answer: str,
         reference_answer: str,
+        reference_answers: list[str],
         gold_claims: list[dict[str, object]],
         gold_evidence: list[dict[str, object]],
         retrieved_context: list[dict[str, object]],
@@ -362,12 +480,15 @@ class GroqJudge:
             raise ValueError("candidate_answer must not be empty")
         if not reference_answer.strip():
             raise ValueError("reference_answer must not be empty")
+        if not reference_answers or any(not answer.strip() for answer in reference_answers):
+            raise ValueError("reference_answers must not be empty")
         if not gold_claims:
             raise ValueError("gold_claims must not be empty")
         if not gold_evidence:
             raise ValueError("gold_evidence must not be empty")
         _canonical_json(gold_claims)
         _canonical_json(gold_evidence)
+        _canonical_json(reference_answers)
         _canonical_json(retrieved_context)
 
     def _read_cache(self, cache_key: str) -> CachedJudgeRecord | None:

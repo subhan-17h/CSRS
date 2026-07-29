@@ -6,16 +6,41 @@ import math
 import re
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
+from importlib.metadata import version
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from csrs.models import RetrievedChunk
 
 ANSWER_SIMILARITY_PREFIX = "clustering: "
 DEFAULT_COSINE_THRESHOLD = 0.75
+DEFAULT_BERTSCORE_THRESHOLD = 0.85
 EVIDENCE_TOKEN_RECALL_MIN = 0.90
+BERTSCORE_MODEL = "FacebookAI/roberta-large"
+BERTSCORE_MODEL_REVISION = "722cf37b1afa9454edce342e7895e588b6ff1d59"
+BERTSCORE_NUM_LAYERS = 17
+BERTSCORE_DEVICE = "cpu"
+BERTSCORE_SNAPSHOT_FILES = (
+    "config.json",
+    "merges.txt",
+    "model.safetensors",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.json",
+)
 
 Embedder = Callable[[Sequence[str]], Sequence[Sequence[float]]]
+
+
+class BertScorer(Protocol):
+    """Minimum scorer interface used by the evaluation runtime."""
+
+    def score(
+        self,
+        cands: Sequence[str],
+        refs: Sequence[str],
+    ) -> tuple[Any, Any, Any]:
+        """Return per-pair precision, recall, and F1 tensors."""
 
 
 class MetricError(ValueError):
@@ -85,8 +110,141 @@ def score_answer_similarity(
     return {
         "score": score,
         "threshold": threshold,
-        "threshold_is_provisional": True,
         "passed": score >= threshold,
+        "selected_reference": references[selected_index],
+        "selected_reference_index": selected_index,
+    }
+
+
+def bertscore_config() -> dict[str, Any]:
+    """Return the fixed, auditable BERTScore contract."""
+    try:
+        from bert_score.utils import get_hash
+    except ImportError as error:
+        raise MetricError(
+            "BERTScore is unavailable; install the eval dependency group"
+        ) from error
+
+    return {
+        "package": "bert-score",
+        "package_version": version("bert-score"),
+        "model": BERTSCORE_MODEL,
+        "model_revision": BERTSCORE_MODEL_REVISION,
+        "num_layers": BERTSCORE_NUM_LAYERS,
+        "device": BERTSCORE_DEVICE,
+        "idf": False,
+        "rescale_with_baseline": False,
+        "scorer_hash": get_hash(
+            BERTSCORE_MODEL,
+            BERTSCORE_NUM_LAYERS,
+            False,
+            False,
+            False,
+            False,
+        ),
+    }
+
+
+def resolve_bertscore_snapshot(*, local_files_only: bool) -> Path:
+    """Resolve the immutable RoBERTa snapshot used by BERTScore."""
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as error:
+        raise MetricError(
+            "Hugging Face Hub is unavailable; install the eval dependency group"
+        ) from error
+
+    try:
+        snapshot = snapshot_download(
+            repo_id=BERTSCORE_MODEL,
+            revision=BERTSCORE_MODEL_REVISION,
+            local_files_only=local_files_only,
+            allow_patterns=list(BERTSCORE_SNAPSHOT_FILES),
+        )
+    except Exception as error:
+        mode = "local cache" if local_files_only else "Hugging Face Hub"
+        raise MetricError(
+            f"could not resolve the pinned BERTScore model from {mode}: {error}"
+        ) from error
+    return Path(snapshot)
+
+
+def build_bertscore_scorer(*, local_files_only: bool = True) -> BertScorer:
+    """Load the pinned BERTScore model on CPU, offline by default."""
+    try:
+        from bert_score import BERTScorer
+    except ImportError as error:
+        raise MetricError(
+            "BERTScore is unavailable; install the eval dependency group"
+        ) from error
+
+    snapshot = resolve_bertscore_snapshot(local_files_only=local_files_only)
+    try:
+        return BERTScorer(
+            model_type=str(snapshot),
+            num_layers=BERTSCORE_NUM_LAYERS,
+            device=BERTSCORE_DEVICE,
+            idf=False,
+            rescale_with_baseline=False,
+        )
+    except Exception as error:
+        raise MetricError(f"could not load the pinned BERTScore model: {error}") from error
+
+
+def _score_value(values: Any, index: int, name: str) -> float:
+    try:
+        value = values[index]
+        if hasattr(value, "item"):
+            value = value.item()
+        score = float(value)
+    except (IndexError, TypeError, ValueError) as error:
+        raise MetricError(f"BERTScore returned invalid {name} values") from error
+    if not math.isfinite(score):
+        raise MetricError(f"BERTScore returned non-finite {name}")
+    return score
+
+
+def score_bert_similarity(
+    candidate_answer: str,
+    reference_answers: Sequence[str],
+    scorer: BertScorer,
+    *,
+    threshold: float = DEFAULT_BERTSCORE_THRESHOLD,
+) -> dict[str, Any]:
+    """Score every reference and retain the full P/R/F1 tuple with best F1."""
+    candidate = normalize_whitespace(candidate_answer)
+    references = [normalize_whitespace(reference) for reference in reference_answers]
+    if not candidate:
+        raise MetricError("candidate answer must not be empty")
+    if not references or any(not reference for reference in references):
+        raise MetricError("reference answers must not be empty")
+    if not 0.0 <= threshold <= 1.0:
+        raise MetricError("BERTScore threshold must be between 0 and 1")
+
+    try:
+        precision_values, recall_values, f1_values = scorer.score(
+            [candidate] * len(references),
+            references,
+        )
+    except Exception as error:
+        raise MetricError(f"BERTScore scoring failed: {error}") from error
+
+    scores = [
+        (
+            _score_value(precision_values, index, "precision"),
+            _score_value(recall_values, index, "recall"),
+            _score_value(f1_values, index, "F1"),
+        )
+        for index in range(len(references))
+    ]
+    selected_index = max(range(len(scores)), key=lambda index: scores[index][2])
+    precision, recall, f1 = scores[selected_index]
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "threshold": threshold,
+        "passed": f1 >= threshold,
         "selected_reference": references[selected_index],
         "selected_reference_index": selected_index,
     }
@@ -135,40 +293,3 @@ def chunk_matches_evidence(
     return (
         evidence_token_recall(evidence_text, chunk.text) >= minimum_token_recall
     )
-
-
-def score_retrieval_evidence(
-    evidence_items: Sequence[Mapping[str, Any]],
-    retrieved_chunks: Sequence[RetrievedChunk],
-    *,
-    depths: Sequence[int] = (5, 10),
-) -> dict[str, Any]:
-    """Report evidence hit and recall independently at each requested depth."""
-    if not evidence_items:
-        raise MetricError("retrieval evaluation requires gold evidence")
-    if not depths or any(depth <= 0 for depth in depths):
-        raise MetricError("retrieval depths must be positive")
-
-    matches = []
-    for evidence_index, evidence in enumerate(evidence_items):
-        matching_ranks = [
-            rank + 1
-            for rank, retrieved in enumerate(retrieved_chunks)
-            if chunk_matches_evidence(evidence, retrieved)
-        ]
-        matches.append(
-            {
-                "evidence_index": evidence_index,
-                "matching_ranks": matching_ranks,
-            }
-        )
-
-    result: dict[str, Any] = {"matches": matches}
-    for depth in sorted(set(depths)):
-        matched_count = sum(
-            any(rank <= depth for rank in match["matching_ranks"])
-            for match in matches
-        )
-        result[f"evidence_hit_at_{depth}"] = matched_count > 0
-        result[f"evidence_recall_at_{depth}"] = matched_count / len(evidence_items)
-    return result

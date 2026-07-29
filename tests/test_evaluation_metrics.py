@@ -9,11 +9,16 @@ import pytest
 from csrs.models import Chunk, RetrievedChunk, content_hash
 from metrics import (
     ANSWER_SIMILARITY_PREFIX,
+    BERTSCORE_DEVICE,
+    BERTSCORE_MODEL,
+    BERTSCORE_MODEL_REVISION,
+    BERTSCORE_NUM_LAYERS,
     MetricError,
+    bertscore_config,
     chunk_matches_evidence,
     cosine_similarity,
     score_answer_similarity,
-    score_retrieval_evidence,
+    score_bert_similarity,
 )
 
 
@@ -77,7 +82,6 @@ def test_answer_similarity_uses_symmetric_prefix_and_best_reference() -> None:
     assert result["selected_reference_index"] == 1
     assert result["score"] == pytest.approx(0.9938837347)
     assert result["passed"] is True
-    assert result["threshold_is_provisional"] is True
 
 
 def test_answer_similarity_rejects_empty_answer_and_bad_embedding_count() -> None:
@@ -112,33 +116,56 @@ def test_evidence_matching_requires_document_page_and_token_coverage() -> None:
     assert not chunk_matches_evidence(evidence, wrong_document)
 
 
-def test_retrieval_evidence_scores_each_gold_span_at_each_depth() -> None:
-    chunks = [
-        _retrieved(f"standard.pdf:{index}", f"irrelevant text {index}")
-        for index in range(6)
-    ]
-    chunks[1] = _retrieved("standard.pdf:hit-1", "alpha beta gamma delta")
-    chunks[5] = _retrieved("standard.pdf:hit-2", "one two three four")
-    evidence = [
-        {
-            "document_path": "docs/standard.pdf",
-            "pdf_page_index": 2,
-            "text": "alpha beta gamma delta",
-        },
-        {
-            "document_path": "docs/standard.pdf",
-            "pdf_page_index": 2,
-            "text": "one two three four",
-        },
-    ]
+class FakeBertScorer:
+    def score(
+        self,
+        candidates: list[str],
+        references: list[str],
+    ) -> tuple[list[float], list[float], list[float]]:
+        assert candidates == ["candidate", "candidate"]
+        assert references == ["first reference", "best reference"]
+        return [0.8, 0.91], [0.7, 0.89], [0.74, 0.90]
 
-    result = score_retrieval_evidence(evidence, chunks, depths=(5, 10))
 
-    assert result["evidence_hit_at_5"] is True
-    assert result["evidence_recall_at_5"] == 0.5
-    assert result["evidence_hit_at_10"] is True
-    assert result["evidence_recall_at_10"] == 1.0
-    assert result["matches"] == [
-        {"evidence_index": 0, "matching_ranks": [2]},
-        {"evidence_index": 1, "matching_ranks": [6]},
-    ]
+def test_bertscore_retains_full_tuple_for_best_f1_reference() -> None:
+    result = score_bert_similarity(
+        "candidate",
+        ["first reference", "best reference"],
+        FakeBertScorer(),
+        threshold=0.85,
+    )
+
+    assert result == {
+        "precision": 0.91,
+        "recall": 0.89,
+        "f1": 0.90,
+        "threshold": 0.85,
+        "passed": True,
+        "selected_reference": "best reference",
+        "selected_reference_index": 1,
+    }
+
+
+def test_bertscore_rejects_bad_threshold_and_wraps_scorer_failure() -> None:
+    with pytest.raises(MetricError, match="threshold"):
+        score_bert_similarity("answer", ["reference"], FakeBertScorer(), threshold=1.1)
+
+    class FailingScorer:
+        def score(self, candidates, references):
+            raise RuntimeError("model unavailable")
+
+    with pytest.raises(MetricError, match="model unavailable"):
+        score_bert_similarity("answer", ["reference"], FailingScorer())
+
+
+def test_bertscore_configuration_is_pinned_to_cpu_roberta_large() -> None:
+    config = bertscore_config()
+
+    assert config["package_version"] == "0.3.13"
+    assert config["model"] == BERTSCORE_MODEL == "FacebookAI/roberta-large"
+    assert config["model_revision"] == BERTSCORE_MODEL_REVISION
+    assert config["num_layers"] == BERTSCORE_NUM_LAYERS == 17
+    assert config["device"] == BERTSCORE_DEVICE == "cpu"
+    assert config["idf"] is False
+    assert config["rescale_with_baseline"] is False
+    assert isinstance(config["scorer_hash"], str)

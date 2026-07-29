@@ -12,6 +12,16 @@ from pathlib import Path
 from csrs.config import settings
 from csrs.model_names import canonical_model_name
 
+BERTSCORE_MODEL = "FacebookAI/roberta-large"
+BERTSCORE_MODEL_REVISION = "722cf37b1afa9454edce342e7895e588b6ff1d59"
+BERTSCORE_SNAPSHOT_FILES = (
+    "config.json",
+    "merges.txt",
+    "model.safetensors",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.json",
+)
 DOCLING_REQUIRED_FILES = (
     Path("docling-project--docling-layout-heron/model.safetensors"),
     Path(
@@ -114,6 +124,40 @@ def warm_flashrank() -> bool:
     return True
 
 
+def warm_bertscore() -> bool:
+    """Download the immutable RoBERTa snapshot used by CPU BERTScore."""
+    print("BERTScore model:")
+    print(f"  model: {BERTSCORE_MODEL}")
+    print(f"  revision: {BERTSCORE_MODEL_REVISION}")
+
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        print("  FAILED: Hugging Face Hub is unavailable; install the eval group.\n")
+        return False
+
+    request = {
+        "repo_id": BERTSCORE_MODEL,
+        "revision": BERTSCORE_MODEL_REVISION,
+        "allow_patterns": list(BERTSCORE_SNAPSHOT_FILES),
+    }
+    try:
+        path = Path(snapshot_download(**request, local_files_only=True))
+    except Exception:
+        try:
+            path = Path(snapshot_download(**request, local_files_only=False))
+        except Exception as exc:
+            print(f"  FAILED: {exc}\n")
+            return False
+        status = "downloaded"
+    else:
+        status = "skipped (already present)"
+
+    print(f"  path: {path}")
+    print(f"  {_directory_size(path):,} bytes  [{status}]\n")
+    return True
+
+
 def _required_ollama_models() -> tuple[str, ...]:
     """Return configured model names once each, in application order."""
     return tuple(dict.fromkeys((settings.embed_model, *settings.supported_llms)))
@@ -193,14 +237,16 @@ def main() -> int:
     print("Preparing model weights for offline use\n")
     docling_ok = warm_docling()
     flashrank_ok = warm_flashrank()
+    bertscore_ok = warm_bertscore()
     ollama_ok, ollama_present, ollama_total = warm_ollama(args.pull_ollama)
 
     print("Summary:")
     print(f"  Docling: {'ready' if docling_ok else 'not ready'}")
     print(f"  FlashRank: {'ready' if flashrank_ok else 'not ready'}")
+    print(f"  BERTScore: {'ready' if bertscore_ok else 'not ready'}")
     print(f"  Ollama: {ollama_present} of {ollama_total} required models present")
 
-    if not docling_ok or not flashrank_ok or not ollama_ok:
+    if not docling_ok or not flashrank_ok or not bertscore_ok or not ollama_ok:
         print("\nRequired model weights are missing or could not be verified.")
         return 1
     print("\nAll required model weights are present.")

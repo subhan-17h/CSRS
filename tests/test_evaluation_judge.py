@@ -13,6 +13,7 @@ from judge import (
     MODEL,
     PROMPT_VERSION,
     GroqJudge,
+    JudgeRequestError,
     JudgeResponseError,
     load_judge_settings,
     make_cache_key,
@@ -39,20 +40,22 @@ def valid_judgment() -> dict[str, object]:
 
 
 class FakeCompletions:
-    def __init__(self, responses: list[str]) -> None:
+    def __init__(self, responses: list[str | Exception]) -> None:
         self.responses = iter(responses)
         self.calls: list[dict[str, object]] = []
 
     def create(self, **kwargs: object) -> SimpleNamespace:
         self.calls.append(kwargs)
         content = next(self.responses)
+        if isinstance(content, Exception):
+            raise content
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
         )
 
 
 class FakeClient:
-    def __init__(self, responses: list[str]) -> None:
+    def __init__(self, responses: list[str | Exception]) -> None:
         self.chat = SimpleNamespace(completions=FakeCompletions(responses))
 
 
@@ -62,6 +65,10 @@ def judge_kwargs() -> dict[str, object]:
         "question": "What does the control require?",
         "candidate_answer": "The organization must retain audit records.",
         "reference_answer": "The organization retains audit records.",
+        "reference_answers": [
+            "The organization retains audit records.",
+            "Audit records must be retained.",
+        ],
         "gold_claims": [{"id": "claim-1", "text": "Retain audit records."}],
         "gold_evidence": [
             {
@@ -202,6 +209,7 @@ def test_runner_facing_evaluate_accepts_positional_arguments(tmp_path: Path) -> 
         kwargs["question"],
         kwargs["candidate_answer"],
         kwargs["reference_answer"],
+        kwargs["reference_answers"],
         kwargs["gold_claims"],
         kwargs["gold_evidence"],
         kwargs["retrieved_context"],
@@ -225,10 +233,36 @@ def test_eval_settings_load_root_style_env_without_exposing_key(
     assert "test-secret-value" not in repr(settings)
 
 
+def test_real_client_disables_sdk_retries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import groq
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("GROQ_API_KEY=test-secret-value\n", encoding="utf-8")
+    observed: dict[str, object] = {}
+
+    def fake_groq(**kwargs: object) -> object:
+        observed.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(groq, "Groq", fake_groq)
+
+    GroqJudge._client_from_env(env_file)
+
+    assert observed == {"api_key": "test-secret-value", "max_retries": 0}
+
+
 def test_cache_key_is_stable_and_sensitive_to_answer_context_and_prompt() -> None:
     base = {
         "question_id": "question-1",
+        "question": "Question",
         "candidate_answer": "Answer",
+        "reference_answer": "Reference",
+        "reference_answers": ["Reference", "Alternative"],
+        "gold_claims": [{"id": "claim-1", "text": "Claim"}],
+        "gold_evidence": [{"text": "Gold evidence"}],
         "retrieved_context": [{"rank": 1, "text": "Evidence"}],
         "prompt_hash": "a" * 64,
     }
@@ -241,6 +275,16 @@ def test_cache_key_is_stable_and_sensitive_to_answer_context_and_prompt() -> Non
     assert first != make_cache_key(**{**base, "candidate_answer": "Different answer"})
     assert first != make_cache_key(
         **{**base, "retrieved_context": [{"rank": 1, "text": "Different"}]}
+    )
+    assert first != make_cache_key(**{**base, "question": "Different question"})
+    assert first != make_cache_key(
+        **{**base, "reference_answers": ["Different reference"]}
+    )
+    assert first != make_cache_key(
+        **{**base, "gold_claims": [{"id": "claim-2", "text": "Different"}]}
+    )
+    assert first != make_cache_key(
+        **{**base, "gold_evidence": [{"text": "Different evidence"}]}
     )
     assert first != make_cache_key(**{**base, "prompt_hash": "b" * 64})
 
@@ -268,3 +312,61 @@ def test_empty_candidate_answer_is_rejected_before_api_call(tmp_path: Path) -> N
         judge.judge(**kwargs)
 
     assert client.chat.completions.calls == []
+
+
+class TransientError(RuntimeError):
+    def __init__(self, status_code: int, retry_after: str | None = None) -> None:
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+        headers = {} if retry_after is None else {"Retry-After": retry_after}
+        self.response = SimpleNamespace(headers=headers)
+
+
+def test_transient_judge_failures_retry_with_retry_after(tmp_path: Path) -> None:
+    delays: list[float] = []
+    client = FakeClient(
+        [
+            TransientError(429, "3"),
+            TransientError(503),
+            json.dumps(valid_judgment()),
+        ]
+    )
+    judge = GroqJudge(client, cache_dir=tmp_path, sleep=delays.append)
+
+    result = judge.judge(**judge_kwargs())
+
+    assert result.judgment.verdict == "pass"
+    assert len(client.chat.completions.calls) == 3
+    assert delays == [3.0, 2.0]
+
+
+def test_transient_judge_failure_stops_after_five_attempts(tmp_path: Path) -> None:
+    delays: list[float] = []
+    client = FakeClient([TransientError(500) for _ in range(5)])
+    judge = GroqJudge(client, cache_dir=tmp_path, sleep=delays.append)
+
+    with pytest.raises(JudgeRequestError, match="after 5 total attempts"):
+        judge.judge(**judge_kwargs())
+
+    assert len(client.chat.completions.calls) == 5
+    assert delays == [1.0, 2.0, 4.0, 8.0]
+
+
+def test_initial_and_structured_repair_share_five_attempt_budget(tmp_path: Path) -> None:
+    delays: list[float] = []
+    client = FakeClient(
+        [
+            TransientError(503),
+            "not json",
+            TransientError(503),
+            TransientError(429),
+            json.dumps(valid_judgment()),
+        ]
+    )
+    judge = GroqJudge(client, cache_dir=tmp_path, sleep=delays.append)
+
+    result = judge.judge(**judge_kwargs())
+
+    assert result.judgment.verdict == "pass"
+    assert len(client.chat.completions.calls) == 5
+    assert delays == [1.0, 2.0, 4.0]

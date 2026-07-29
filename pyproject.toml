@@ -30,6 +30,7 @@ dev = [
     "pytest>=8.3.0",
 ]
 eval = [
+    "bert-score==0.3.13",
     "groq>=0.31.0",
     "pyyaml>=6.0.2",
     "numpy>=1.26.0",
