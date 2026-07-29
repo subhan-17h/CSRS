@@ -1777,3 +1777,12 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
     validation, Ruff, 269 offline tests, tracked-Python ASCII validation,
     `git diff --check`, exact final-artifact hash comparison, and live application health
     at one 32-page document and 209 chunks all pass.
+
+- [ ] **HIST-1** Create a concise, verified record of the complete project history.
+  - Summarize the six active development days and the major implementation stages.
+  - Account for all 85 canonical commits in a compact ledger.
+  - Verify the current architecture, evaluation results, and limitations against the
+    implementation and generated artifacts.
+  - Preserve and exclude unrelated pre-existing working-tree files.
+  - Done when the history document reconciles with Git, repository checks pass, and the
+    completed work is committed in focused subtasks.
