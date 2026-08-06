@@ -20,6 +20,10 @@ bm25_index/
 docs/*.pdf
 docs/*.txt
 !docs/samples/
+# Experiment corpus additions: ISO 27001:2022 is a licensed, user-provided
+# document (never commit it); SP 800-53r5 is fetched, not shipped.
+docs/samples/ISO_IEC-270012022-ed.3.pdf
+docs/samples/NIST.SP.800-53r5.pdf
 
 # Evaluation runs
 eval/results/
