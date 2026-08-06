@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Download the CSF 2.0 source document into docs/samples/.
+"""Download the standards source documents into docs/samples/.
 
 Deliberately stdlib-only, so a grader can run it on a fresh clone before
 installing anything:
 
     python scripts/fetch_docs.py
 
-The evaluation and shipped corpus intentionally contain only NIST CSF 2.0. The
-file is committed so a fresh clone remains queryable without a download; use
-``--force`` to refresh that same sample atomically from NIST.
+NIST CSF 2.0 is committed so a fresh clone remains queryable without a
+download; use ``--force`` to refresh that same sample atomically from NIST.
+NIST SP 800-53 Revision 5 is fetched (public domain, too large to commit);
+ISO/IEC 27001:2022 is licensed, so its PDF is user-provided and not in
+SOURCES. The experiment corpus is the three documents together.
 """
 
 from __future__ import annotations
@@ -47,6 +49,13 @@ SOURCES: tuple[Source, ...] = (
         name="NIST Cybersecurity Framework (CSF) 2.0",
         filename="NIST.CSWP.29_CSF-2.0.pdf",
         url="https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf",
+        licence="US Government work - public domain",
+        min_bytes=500_000,
+    ),
+    Source(
+        name="NIST SP 800-53 Revision 5",
+        filename="NIST.SP.800-53r5.pdf",
+        url="https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf",
         licence="US Government work - public domain",
         min_bytes=500_000,
     ),

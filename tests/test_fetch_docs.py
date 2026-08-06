@@ -5,9 +5,10 @@ from __future__ import annotations
 from scripts import fetch_docs
 
 
-def test_fetch_sources_contain_only_csf_sample() -> None:
+def test_fetch_sources_contain_csf_and_sp80053() -> None:
     assert [source.filename for source in fetch_docs.SOURCES] == [
-        "NIST.CSWP.29_CSF-2.0.pdf"
+        "NIST.CSWP.29_CSF-2.0.pdf",
+        "NIST.SP.800-53r5.pdf",
     ]
 
 
