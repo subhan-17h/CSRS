@@ -398,7 +398,13 @@ def resolve_source(relative_path: str) -> Path:
 
 
 def verify_manifest(manifest: CorpusManifest) -> dict[str, ManifestEntry]:
-    """Verify manifest sources, hashes, page counts, extraction, and live index identity."""
+    """Verify manifest sources, hashes, page counts, extraction, and live index identity.
+
+    The manifest may declare a subset of the on-disk corpus (the evaluation
+    benchmark is CSF-only, while the experiment corpus also carries ISO
+    IEC 27001:2022 and NIST SP 800-53); every document the manifest does
+    declare must be present on disk and in the live index, unchanged.
+    """
     by_path: dict[str, ManifestEntry] = {}
     for entry in manifest.documents:
         source = resolve_source(entry.document_path)
@@ -448,11 +454,11 @@ def verify_manifest(manifest: CorpusManifest) -> dict[str, ManifestEntry]:
         path.relative_to(PROJECT_ROOT).as_posix()
         for path in iter_document_paths(settings.docs_dir)
     }
-    if set(by_path) != discovered:
+    if not set(by_path) <= discovered:
         raise DatasetValidationError(
-            "manifest paths do not exactly match the supported corpus: "
-            f"missing={sorted(discovered - set(by_path))}, "
-            f"extra={sorted(set(by_path) - discovered)}"
+            "manifest paths do not match the supported corpus: "
+            f"missing={sorted(set(by_path) - discovered)}, "
+            f"extra={sorted(discovered - set(by_path))}"
         )
 
     indexed = load_index_manifest(settings.manifest_path)
@@ -460,9 +466,9 @@ def verify_manifest(manifest: CorpusManifest) -> dict[str, ManifestEntry]:
         Path(path).relative_to("docs").as_posix(): entry
         for path, entry in by_path.items()
     }
-    if set(indexed) != set(expected):
+    if not set(expected) <= set(indexed):
         raise DatasetValidationError(
-            "live index manifest does not cover the same corpus as the dataset manifest"
+            "live index manifest does not cover every document of the dataset manifest"
         )
     for identity, entry in expected.items():
         index_record = indexed[identity]
