@@ -52,7 +52,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "eval"]
+pythonpath = [".", "eval", "scripts"]
 markers = [
     "ollama: integration test requiring a running Ollama server (deselect with -m 'not ollama')",
     "docling: integration test requiring the Docling model weights (deselect with -m 'not docling')",
