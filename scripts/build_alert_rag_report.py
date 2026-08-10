@@ -6,8 +6,14 @@ Reads the resumable run snapshot written by run_alert_rag.py
 and writes two deliverables at CIL root:
 
     alert_rankings_rag.json         merged per-alert rows (rank, justification,
-                                    metrics, retrieved evidence)
+                                    metrics, retrieved evidence, mismatch flag,
+                                    mismatch justification, judge verdict)
     alert_ranking_rag_report.md     the report
+
+Two optional follow-up snapshots are merged when present: the mismatch
+justifications from scripts/justify_alert_mismatches.py and the Groq judge
+verdicts from scripts/judge_alert_rankings.py. When either file is absent
+its fields and report sections are simply omitted.
 
 Idempotent: existing deliverables are archived to the next _vN slot before
 being overwritten, never deleted.
@@ -26,11 +32,15 @@ from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
+from csrs.alert_ranking import ANCHOR, is_mismatch
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CIL_ROOT = PROJECT_ROOT.parent
 DEFAULT_RESULTS = CIL_ROOT / "alert_rag_run.jsonl"
 DEFAULT_SAMPLE = CIL_ROOT / "alert_sample_50.json"
 DEFAULT_PRIOR = CIL_ROOT / "alert_rankings.json"
+DEFAULT_JUSTIFY = CIL_ROOT / "alert_mismatch_justifications.jsonl"
+DEFAULT_JUDGE = CIL_ROOT / "alert_judge_run.jsonl"
 OUT = CIL_ROOT / "alert_ranking_rag_report.md"
 OUTJSON = CIL_ROOT / "alert_rankings_rag.json"
 MANIFEST = PROJECT_ROOT / "chroma_db" / "manifest.json"
@@ -38,8 +48,6 @@ MANIFEST = PROJECT_ROOT / "chroma_db" / "manifest.json"
 MODELS = ["llama3.2:latest", "gemma2:2b"]
 PARAMS = {"gemma2:2b": "2.6B", "llama3.2:latest": "3.2B"}
 CTX = {"gemma2:2b": "8,192", "llama3.2:latest": "8,192"}
-
-ANCHOR = {1: 1, 2: 3, 3: 5}
 
 KNOWN = {"alert_id", "alert", "rule_documentation", "rule_documentation_found"} | \
     {"timestamp", "alert_message", "rule_id", "protocol", "service", "source_ip",
@@ -72,6 +80,8 @@ def main() -> int:
     parser.add_argument("--results", default=str(DEFAULT_RESULTS))
     parser.add_argument("--sample", default=str(DEFAULT_SAMPLE))
     parser.add_argument("--prior", default=str(DEFAULT_PRIOR))
+    parser.add_argument("--justifications", default=str(DEFAULT_JUSTIFY))
+    parser.add_argument("--judge-results", default=str(DEFAULT_JUDGE))
     args = parser.parse_args()
 
     rows = []
@@ -96,6 +106,34 @@ def main() -> int:
     rows_by = {(row["model"], row["alert_id"]): row for row in rows}
     assert len(rows_by) == len(rows), "duplicate (model, alert) rows in snapshot"
     parsed_rows = [row for row in rows if row["status"] == "parsed"]
+
+    # Optional follow-up snapshots: mismatch justifications and Groq judge verdicts.
+    # Absent files simply leave those fields/sections out of the deliverables.
+    justifications = {}
+    if Path(args.justifications).exists():
+        j_rows = [json.loads(line) for line in
+                  Path(args.justifications).read_text(encoding="utf-8").splitlines()
+                  if line.strip()]
+        justifications = {(row["model"], row["alert_id"]): row["justification"]
+                          for row in j_rows if row["status"] == "parsed"}
+        assert len(justifications) == len(
+            [row for row in j_rows if row["status"] == "parsed"]
+        ), "duplicate (model, alert) rows in justification snapshot"
+
+    judge_rows = {}
+    judge_model = None
+    if Path(args.judge_results).exists():
+        j_rows = [json.loads(line) for line in
+                  Path(args.judge_results).read_text(encoding="utf-8").splitlines()
+                  if line.strip()]
+        judge_ids = {row["judge_model"] for row in j_rows}
+        assert len(judge_ids) == 1, f"mixed judge models in snapshot: {sorted(judge_ids)}"
+        judge_model = sorted(judge_ids)[0]
+        judge_rows = {(row["model"], row["alert_id"]): row
+                      for row in j_rows if row["status"] == "parsed"}
+        assert len(judge_rows) == len(
+            [row for row in j_rows if row["status"] == "parsed"]
+        ), "duplicate (model, alert) rows in judge snapshot"
 
     ollama_version = "unknown"
     try:
@@ -166,6 +204,49 @@ def main() -> int:
         pair_agree[(a, b)] = sum(1 for aid in ids
                                  if model_rank[a].get(aid) and model_rank[b].get(aid)
                                  and model_rank[a][aid] == model_rank[b][aid])
+
+    # --- mismatch analysis (model rank vs anchored Snort ground truth) ---
+    mismatch = {m: [aid for aid in ids if aid in model_rank[m]
+                    and is_mismatch(model_rank[m][aid], snort_prio[aid])]
+                for m in MODELS}
+    mismatch_by_prio = {m: Counter(snort_prio[aid] for aid in mismatch[m]) for m in MODELS}
+
+    # --- Groq judge results ---
+    if judge_rows:
+        judge_scores = {m: [judge_rows[(m, aid)]["verdict"]["score"] for aid in ids
+                            if (m, aid) in judge_rows] for m in MODELS}
+        judge_mean = {m: (sum(v) / len(v) if v else None) for m, v in judge_scores.items()}
+        judge_median = {}
+        for m in MODELS:
+            values = sorted(judge_scores[m])
+            n = len(values)
+            judge_median[m] = (values[n // 2] if n % 2
+                               else (values[n // 2 - 1] + values[n // 2]) / 2) if n else None
+        judge_bands = {m: Counter(
+            (0.0, 0.2) if v < 0.2 else (0.2, 0.4) if v < 0.4 else (0.4, 0.6) if v < 0.6
+            else (0.6, 0.8) if v < 0.8 else (0.8, 1.0)
+            for v in judge_scores[m]
+        ) for m in MODELS}
+        judge_exact = {m: sum(1 for v in judge_scores[m] if v == 1.0) for m in MODELS}
+        judge_close = {m: sum(1 for v in judge_scores[m] if v >= 0.5) for m in MODELS}
+        judge_mismatch_mean = {}
+        for m in MODELS:
+            rows_m = [judge_rows[(m, aid)]["verdict"]["score"] for aid in ids
+                      if (m, aid) in judge_rows and aid in mismatch[m]]
+            rows_ok = [judge_rows[(m, aid)]["verdict"]["score"] for aid in ids
+                       if (m, aid) in judge_rows and aid not in mismatch[m]]
+            judge_mismatch_mean[m] = (
+                (sum(rows_m) / len(rows_m) if rows_m else None),
+                (sum(rows_ok) / len(rows_ok) if rows_ok else None),
+            )
+        lowest = {}
+        for m in MODELS:
+            scored = sorted(
+                (judge_rows[(m, aid)]["verdict"]["score"],
+                 judge_rows[(m, aid)]["verdict"]["reasoning"], aid)
+                for aid in ids if (m, aid) in judge_rows
+            )
+            lowest[m] = scored[:3]
 
     # --- evidence statistics (section 6b) ---
     docs = {}
@@ -456,6 +537,114 @@ def main() -> int:
           + ", ".join(f"{aid} ({m}, {n})" for aid, m, n in short_evidence))
     w("")
 
+    w("## 6c. Mismatch analysis (model rank vs anchored Snort ground truth)")
+    w("")
+    w("A rank is a **mismatch** when it is more than one step from the anchored ground "
+      "truth: `|rank - ANCHOR[priority]| > 1` with `ANCHOR = {1:1, 2:3, 3:5}` — the same "
+      "mapping the exact-match stat in §6 uses. For every mismatch, the local model was "
+      "re-queried with its own original `[S1]..[S5]` evidence, its recorded rank, and the "
+      "Snort ground truth, and asked to explain why its rank differs and what led to its "
+      "rank; those explanations are stored verbatim in `alert_rankings_rag.json` as "
+      "`mismatch_justification`.")
+    w("")
+    w("| Model | mismatches | alerts | rate |")
+    w("|---|---:|---:|---:|")
+    for m in MODELS:
+        w(f"| {m} | {len(mismatch[m])} | {len(model_rank[m])} | "
+          f"{100 * len(mismatch[m]) / len(model_rank[m]):.0f}% |")
+    w("")
+    w("By Snort priority (anchor in parentheses), mismatches / alerts:")
+    w("")
+    w("| Model | p1 (→1) | p2 (→3) | p3 (→5) |")
+    w("|---|---:|---:|---:|")
+    for m in MODELS:
+        cells = []
+        for sp in (1, 2, 3):
+            total = sum(1 for aid in ids if snort_prio[aid] == sp and aid in model_rank[m])
+            cells.append(f"{mismatch_by_prio[m].get(sp, 0)}/{total}")
+        w(f"| {m} | " + " | ".join(cells) + " |")
+    w("")
+    for m in MODELS:
+        if not mismatch[m]:
+            w(f"**{m}: no mismatches.**")
+            w("")
+            continue
+        w(f"### Mismatch rows — {m}")
+        w("")
+        for aid in sorted(mismatch[m]):
+            justification = justifications.get((m, aid))
+            if justification:
+                w(f"- **alert {aid}** (Snort p{snort_prio[aid]} → anchored "
+                  f"{ANCHOR[snort_prio[aid]]}): model rank **{model_rank[m][aid]}**")
+                w("")
+                w(f"  > \"{justification}\"")
+                w("")
+            else:
+                missing_note = ("— no justification pass ran" if not justifications
+                                else "— justification missing")
+                w(f"- **alert {aid}** (Snort p{snort_prio[aid]} → anchored "
+                  f"{ANCHOR[snort_prio[aid]]}): model rank **{model_rank[m][aid]}** "
+                  f"{missing_note}")
+                w("")
+    w("")
+
+    w("## 6d. LLM-as-judge: Groq GPT-OSS scores the local rankings")
+    w("")
+    if not judge_rows:
+        w(f"The judge snapshot (`{args.judge_results}`) is missing — section skipped. "
+          "Run `scripts/judge_alert_rankings.py` to score every parsed ranking.")
+    else:
+        w(f"Every parsed (model, alert) ranking was scored on **0-1** by "
+          f"`{judge_model}` (Groq API, `temperature=0`, strict JSON schema). The judge "
+          f"received the local model's rank/justification/metrics, the **complete "
+          f"original alert** (header + full rule documentation) and the ground truth "
+          f"(Snort priority + anchored rank). Rubric: **1.0** exact match, **0.5–0.9** "
+          f"within one step of the anchored rank, **0.0–0.4** more than one step away; "
+          f"justification quality nudges the score within each band. Judge verdicts "
+          f"(score + reasoning) are stored in `alert_rankings_rag.json`.")
+        w("")
+        w("| Model | mean | median | exact (1.0) | ≥ 0.5 |")
+        w("|---|---:|---:|---:|---:|")
+        for m in MODELS:
+            mean = f"{judge_mean[m]:.3f}" if judge_mean[m] is not None else "—"
+            median = f"{judge_median[m]:.3f}" if judge_median[m] is not None else "—"
+            w(f"| {m} | {mean} | {median} | {judge_exact[m]} | "
+              f"{judge_close[m]} |")
+        w("")
+        w("Score distribution (0.0–1.0):")
+        w("")
+        w("| Model | 0.0–0.2 | 0.2–0.4 | 0.4–0.6 | 0.6–0.8 | 0.8–1.0 |")
+        w("|---|---:|---:|---:|---:|---:|")
+        for m in MODELS:
+            w("| " + " | ".join(
+                [m] + [str(judge_bands[m].get((lo, hi), 0))
+                       for lo, hi in ((0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0))]
+            ) + " |")
+        w("")
+        w("Agreement with the mismatch flag — mean judge score on mismatch rows vs "
+          "non-mismatch rows (empty cell when a class has no rows):")
+        w("")
+        w("| Model | mismatch rows | non-mismatch rows |")
+        w("|---|---:|---:|")
+        for m in MODELS:
+            mm, ok = judge_mismatch_mean[m]
+            w(f"| {m} | {f'{mm:.3f}' if mm is not None else '—'} | "
+              f"{f'{ok:.3f}' if ok is not None else '—'} |")
+        w("")
+        for m in MODELS:
+            w(f"### Lowest-scored rankings — {m}")
+            w("")
+            if not lowest[m]:
+                w("_none_")
+                w("")
+                continue
+            for score, reasoning, aid in lowest[m]:
+                w(f"- **alert {aid}**: judge score **{score:.2f}** — "
+                  f"model rank **{model_rank[m].get(aid, '?')}** vs anchored "
+                  f"{ANCHOR[snort_prio[aid]]}. Judge reasoning: \"{reasoning}\"")
+            w("")
+    w("")
+
     w("## 7. Caveats")
     w("")
     w("- **N=3 for priority 3.** The dataset holds only 3 priority-3 alerts, all from one "
@@ -571,11 +760,24 @@ def main() -> int:
                 row[m] = {"status": "failed", "raw": [a["content"] for a in r["attempts"]]}
             else:
                 p = r["parsed"]
-                row[m] = {"status": "parsed", "rank": p["rank"],
-                          "justification": p["justification"],
-                          "metrics_used": p["metrics_used"],
-                          "raw": r["attempts"][-1]["content"],
-                          "done_reason": r["done_reasons"][-1]}
+                model_row = {"status": "parsed", "rank": p["rank"],
+                             "justification": p["justification"],
+                             "metrics_used": p["metrics_used"],
+                             "raw": r["attempts"][-1]["content"],
+                             "done_reason": r["done_reasons"][-1]}
+                model_row["mismatch"] = is_mismatch(p["rank"], snort_prio[aid])
+                if (m, aid) in justifications:
+                    model_row["mismatch_justification"] = justifications[(m, aid)]
+                if (m, aid) in judge_rows:
+                    j = judge_rows[(m, aid)]
+                    verdict = j["verdict"]
+                    model_row["judge"] = {
+                        "score": verdict["score"],
+                        "reasoning": verdict["reasoning"],
+                        "model": j["judge_model"],
+                        "latency_ms": j["latency_ms"],
+                    }
+                row[m] = model_row
         merged.append(row)
 
     archive_if_exists(OUTJSON)
@@ -586,9 +788,15 @@ def main() -> int:
     print(f"wrote {OUT}")
     print(f"wrote {OUTJSON}")
     for m in MODELS:
+        judge_note = ""
+        if judge_rows:
+            mean = judge_mean[m]
+            judge_note = (f", judge mean {mean:.3f} ({len(judge_scores[m])} rows)"
+                          if mean is not None else ", judge mean n/a")
         print(f"{m}: parsed {len(model_rank[m])}/50, exact match {agree[m]}/50 "
-              f"({100*agree[m]/50:.0f}%), spread {dict(sorted(spread[m].items()))}, "
-              f"failures {len(fail[m])}")
+              f"({100*agree[m]/50:.0f}%), mismatches {len(mismatch[m])}/50, "
+              f"spread {dict(sorted(spread[m].items()))}, failures {len(fail[m])}"
+              f"{judge_note}")
     for (a, b), num in pair_agree.items():
         print(f"{a} vs {b}: agree {num}/50")
     return 0
