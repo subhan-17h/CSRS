@@ -1838,9 +1838,16 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     local (`GroqQuotaStop`) or server-side (`JudgeQuotaError`) daily-quota stops before the
     row-failure path. Retry budget, repair retry, and error taxonomy untouched. 22 offline
     tests, ruff, import, and ASCII checks pass.
-- [ ] **ALERT-GROQ-5** `build_alert_rag_report.py` single-model generalization (models derived
+- [x] **ALERT-GROQ-5** `build_alert_rag_report.py` single-model generalization (models derived
   from snapshot; drop `ollama --version`; metadata/§5/§7 wording); no-network regression
   against the existing 2-model snapshot.
+  - Review: builder derives the model list from the snapshot and is count-agnostic for 1 or N
+    models; metadata reports Groq API / openai/gpt-oss-120b; the `ollama --version`
+    subprocess is gone; §8 still skips when `alert_rankings.json` is absent. Real offline
+    regression on the old 2-model snapshot reproduces the known numbers (gemma2 19/50
+    mismatches, judge mean 0.598; llama3.2 24/50, 0.426) and regenerates both deliverables
+    (originals archived to `_v1`; `_vN` archives are deleted after the final production
+    build). ruff clean.
 - [ ] **ALERT-GROQ-6** Full suite + one real `--limit 1` smoke run (finish_reason must be
   `stop`, not `length`); then the multi-day production sequence (rank → justify → judge →
   report) with quota-safe resumes.

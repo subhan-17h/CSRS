@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from collections import Counter
 from itertools import combinations
@@ -44,10 +43,6 @@ DEFAULT_JUDGE = CIL_ROOT / "alert_judge_run.jsonl"
 OUT = CIL_ROOT / "alert_ranking_rag_report.md"
 OUTJSON = CIL_ROOT / "alert_rankings_rag.json"
 MANIFEST = PROJECT_ROOT / "chroma_db" / "manifest.json"
-
-MODELS = ["llama3.2:latest", "gemma2:2b"]
-PARAMS = {"gemma2:2b": "2.6B", "llama3.2:latest": "3.2B"}
-CTX = {"gemma2:2b": "8,192", "llama3.2:latest": "8,192"}
 
 KNOWN = {"alert_id", "alert", "rule_documentation", "rule_documentation_found"} | \
     {"timestamp", "alert_message", "rule_id", "protocol", "service", "source_ip",
@@ -90,6 +85,7 @@ def main() -> int:
             rows.append(json.loads(line))
     if not rows:
         sys.exit(f"no rows in {args.results} - run scripts/run_alert_rag.py first")
+    models = sorted({row["model"] for row in rows})
     sample = json.loads(Path(args.sample).read_text(encoding="utf-8"))
     entries = sample["entries"]
     by_id = {entry["alert_id"]: entry for entry in entries}
@@ -135,15 +131,6 @@ def main() -> int:
             [row for row in j_rows if row["status"] == "parsed"]
         ), "duplicate (model, alert) rows in judge snapshot"
 
-    ollama_version = "unknown"
-    try:
-        ollama_version = subprocess.run(
-            ["/opt/homebrew/bin/ollama", "--version"],
-            capture_output=True, text=True, timeout=10,
-        ).stdout.strip() or "unknown"
-    except (OSError, subprocess.SubprocessError):
-        pass
-
     manifest = {}
     if MANIFEST.exists():
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -158,7 +145,7 @@ def main() -> int:
     model_rank = {
         m: {aid: rows_by[(m, aid)]["parsed"]["rank"] for aid in ids
             if rows_by[(m, aid)]["status"] == "parsed"}
-        for m in MODELS
+        for m in models
     }
     snort_prio = {aid: int(by_id[aid]["alert"]["priority"]) for aid in ids}
     classification = {aid: by_id[aid]["alert"].get("classification", "") for aid in ids}
@@ -166,26 +153,26 @@ def main() -> int:
                  for aid in ids}
 
     agree = {m: sum(1 for aid in ids if model_rank[m].get(aid) == ANCHOR[snort_prio[aid]])
-             for m in MODELS}
-    fail = {m: [aid for aid in ids if rows_by[(m, aid)]["status"] == "failed"] for m in MODELS}
+             for m in models}
+    fail = {m: [aid for aid in ids if rows_by[(m, aid)]["status"] == "failed"] for m in models}
     retried = {m: [aid for aid in ids if len(rows_by[(m, aid)]["attempts"]) == 2]
-               for m in MODELS}
+               for m in models}
     done_reasons = {}
-    for m in MODELS:
+    for m in models:
         counter = Counter()
         for aid in ids:
             counter.update(rows_by[(m, aid)]["done_reasons"])
         done_reasons[m] = counter
-    spread = {m: Counter(model_rank[m].values()) for m in MODELS}
+    spread = {m: Counter(model_rank[m].values()) for m in models}
 
-    cross = {m: Counter() for m in MODELS}
-    for m in MODELS:
+    cross = {m: Counter() for m in models}
+    for m in models:
         for aid in ids:
             if aid in model_rank[m]:
                 cross[m][(snort_prio[aid], model_rank[m][aid])] += 1
 
-    bad_metrics = {m: [] for m in MODELS}
-    for m in MODELS:
+    bad_metrics = {m: [] for m in models}
+    for m in models:
         for aid in ids:
             parsed = rows_by[(m, aid)]["parsed"]
             if parsed:
@@ -197,10 +184,10 @@ def main() -> int:
               in (by_id[aid].get("rule_documentation") or {}).get("rule_explanation", "")]
     big_diffs = {m: [aid for aid in ids if aid in model_rank[m]
                      and abs(model_rank[m][aid] - ANCHOR[snort_prio[aid]]) == 2]
-                 for m in MODELS}
-    collapsed = {m: len(spread[m]) == 1 for m in MODELS}
+                 for m in models}
+    collapsed = {m: len(spread[m]) == 1 for m in models}
     pair_agree = {}
-    for a, b in combinations(MODELS, 2):
+    for a, b in combinations(models, 2):
         pair_agree[(a, b)] = sum(1 for aid in ids
                                  if model_rank[a].get(aid) and model_rank[b].get(aid)
                                  and model_rank[a][aid] == model_rank[b][aid])
@@ -208,16 +195,16 @@ def main() -> int:
     # --- mismatch analysis (model rank vs anchored Snort ground truth) ---
     mismatch = {m: [aid for aid in ids if aid in model_rank[m]
                     and is_mismatch(model_rank[m][aid], snort_prio[aid])]
-                for m in MODELS}
-    mismatch_by_prio = {m: Counter(snort_prio[aid] for aid in mismatch[m]) for m in MODELS}
+                for m in models}
+    mismatch_by_prio = {m: Counter(snort_prio[aid] for aid in mismatch[m]) for m in models}
 
     # --- Groq judge results ---
     if judge_rows:
         judge_scores = {m: [judge_rows[(m, aid)]["verdict"]["score"] for aid in ids
-                            if (m, aid) in judge_rows] for m in MODELS}
+                            if (m, aid) in judge_rows] for m in models}
         judge_mean = {m: (sum(v) / len(v) if v else None) for m, v in judge_scores.items()}
         judge_median = {}
-        for m in MODELS:
+        for m in models:
             values = sorted(judge_scores[m])
             n = len(values)
             judge_median[m] = (values[n // 2] if n % 2
@@ -226,11 +213,11 @@ def main() -> int:
             (0.0, 0.2) if v < 0.2 else (0.2, 0.4) if v < 0.4 else (0.4, 0.6) if v < 0.6
             else (0.6, 0.8) if v < 0.8 else (0.8, 1.0)
             for v in judge_scores[m]
-        ) for m in MODELS}
-        judge_exact = {m: sum(1 for v in judge_scores[m] if v == 1.0) for m in MODELS}
-        judge_close = {m: sum(1 for v in judge_scores[m] if v >= 0.5) for m in MODELS}
+        ) for m in models}
+        judge_exact = {m: sum(1 for v in judge_scores[m] if v == 1.0) for m in models}
+        judge_close = {m: sum(1 for v in judge_scores[m] if v >= 0.5) for m in models}
         judge_mismatch_mean = {}
-        for m in MODELS:
+        for m in models:
             rows_m = [judge_rows[(m, aid)]["verdict"]["score"] for aid in ids
                       if (m, aid) in judge_rows and aid in mismatch[m]]
             rows_ok = [judge_rows[(m, aid)]["verdict"]["score"] for aid in ids
@@ -240,7 +227,7 @@ def main() -> int:
                 (sum(rows_ok) / len(rows_ok) if rows_ok else None),
             )
         lowest = {}
-        for m in MODELS:
+        for m in models:
             scored = sorted(
                 (judge_rows[(m, aid)]["verdict"]["score"],
                  judge_rows[(m, aid)]["verdict"]["reasoning"], aid)
@@ -256,7 +243,7 @@ def main() -> int:
         )
     doc_names = sorted({name for names in docs.values() for name in names})
     n_docs_per_alert = {
-        m: Counter(len(docs.get((m, aid), [])) for aid in ids) for m in MODELS
+        m: Counter(len(docs.get((m, aid), [])) for aid in ids) for m in models
     }
     doc_by_priority = {name: Counter() for name in doc_names}
     for row in parsed_rows:
@@ -279,11 +266,14 @@ def main() -> int:
     L = []
     w = L.append
 
-    w("# Standards-grounded alert severity ranking (RAG) by two local models")
+    model_label = "model" if len(models) == 1 else "models"
+    model_names = ", ".join(f"`{model}`" for model in models)
+
+    w("# Standards-grounded alert severity ranking (RAG)")
     w("")
     w("50 distinct alerts sampled from `enriched_snort_alerts.json` were each sent **in full** "
-      "— alert header plus complete rule documentation, **nothing removed** — to two locally "
-      "hosted models, `llama3.2:latest` and `gemma2:2b`, one alert per call. Before the model "
+      "— alert header plus complete rule documentation, **nothing removed** — and ranked by "
+      f"the {model_label} recorded in this snapshot: {model_names}. Before the model "
       "saw each alert, a deterministic query composed from its record was run through the CSRS "
       "**hybrid retriever** (Chroma dense + BM25, RRF-fused) against a corpus of **three "
       "cybersecurity standards** (NIST CSF 2.0, ISO/IEC 27001:2022, NIST SP 800-53 Rev 5); the "
@@ -300,13 +290,13 @@ def main() -> int:
     w("")
     w("| | |")
     w("|---|---|")
-    w(f"| Ollama | `{ollama_version}` |")
-    w(f"| Pipeline | CSRS at `{PROJECT_ROOT}` (Ollama on `127.0.0.1:11434`) |")
+    w("| Provider | Groq API |")
+    w("| Model | openai/gpt-oss-120b |")
+    w(f"| Pipeline | CSRS at `{PROJECT_ROOT}` |")
     w(f"| Run id | `{run_id}` |")
     w(f"| Sample | `{args.sample}` (50 alerts) |")
     w(f"| Snapshot | `{args.results}` ({len(rows)} rows) |")
-    w("| Options (all models) | `temperature=0`, `seed=42`, `num_ctx=8192`, "
-      "`repeat_penalty=1.15`, `num_predict=200` |")
+    w("| Options (all models) | `temperature=0`, `max_completion_tokens=200` |")
     w("| Retrieval | hybrid (dense top-20 + BM25 top-20, RRF k=60), rerank disabled, "
       "`limit=5` |")
     w("| Embedding model | `nomic-embed-text` (768-dim, task prefixes) |")
@@ -314,8 +304,8 @@ def main() -> int:
     w("")
     w("| Model | Parameters | Context window | Calls parsed |")
     w("|---|---|---:|---:|")
-    for m in MODELS:
-        w(f"| {m} | {PARAMS[m]} | {CTX[m]} | {len(model_rank[m])}/50 |")
+    for m in models:
+        w(f"| {m} | &mdash; | &mdash; | {len(model_rank[m])}/50 |")
     w("")
 
     w("## 2. Sampling")
@@ -332,7 +322,7 @@ def main() -> int:
       f"documentation (alert_ids {cvss10}) — the spot-checks in §6.")
     w("")
 
-    w("## 3. Fields supplied to the models")
+    w("## 3. Fields supplied to each model")
     w("")
     w("**Nothing was hidden.** Every record contains the full alert header — including "
       "`alert.priority` (Snort's own severity number), `alert.classification` (Snort's "
@@ -351,10 +341,10 @@ def main() -> int:
 
     w("## 4. The prompt, verbatim")
     w("")
-    w("**Pipe-line contract** — used by both models. System message:")
+    w("**Pipe-line contract** — used by every model in the snapshot. System message:")
     w("")
     w("```text")
-    w(rows_by[(MODELS[0], ids[0])]["system"])
+    w(rows_by[(models[0], ids[0])]["system"])
     w("```")
     w("")
     w("User message (one per alert; the record is embedded in full):")
@@ -386,15 +376,15 @@ def main() -> int:
     w("```")
     w("")
 
-    w("## 5. Both models' responses, verbatim")
+    w("## 5. Model responses, verbatim")
     w("")
-    w("Each row is one alert. `Snort prio` is the priority inside the record the models saw. "
-      "Justification and metrics are the exact strings the models returned; a row marked "
+    w("Each row is one alert. `Snort prio` is the priority inside the record each model saw. "
+      "Justification and metrics are the exact strings each model returned; a row marked "
       "**(parse failed)** shows both raw attempts beneath the table.")
     w("")
     hdr = "| alert_id | rule_id | Snort prio | alert_message"
     sep = "|---|---|---:|---"
-    for m in MODELS:
+    for m in models:
         hdr += f" | {m} rank | {m} justification | {m} metrics"
         sep += "|---|---|---"
     w(hdr + " |")
@@ -403,7 +393,7 @@ def main() -> int:
         entry = by_id[aid]
         cells = [str(aid), f"`{entry['alert']['rule_id']}`", str(snort_prio[aid]),
                  entry["alert"]["alert_message"]]
-        for m in MODELS:
+        for m in models:
             row = rows_by[(m, aid)]
             if row["status"] == "failed":
                 cells += ["**(parse failed)**", "—", "—"]
@@ -413,7 +403,7 @@ def main() -> int:
                           ", ".join(parsed["metrics_used"])]
         w("| " + " | ".join(cells) + " |")
     w("")
-    for m in MODELS:
+    for m in models:
         if fail[m]:
             w(f"### Parse failures — {m}")
             w("")
@@ -436,14 +426,15 @@ def main() -> int:
 
     w("## 6. Model versus Snort (priority visible in every record)")
     w("")
-    w("The models rank on **1-5 (1 = most severe)**. Snort's ground truth is coarser (1-3); "
+    w("Each model ranks on **1-5 (1 = most severe)**. Snort's ground truth is coarser (1-3); "
       "for the exact-match stat it is mapped to its 5-point anchor — Snort 1 → model rank 1, "
       "Snort 2 → 3, Snort 3 → 5. The confusion tables show the raw ranks with no mapping. "
-      "This run the models **saw** Snort's priority in every record, so an exact match can be "
+      "In this run, each model **saw** Snort's priority in every record, so an exact match "
+      "can be "
       "simple copying; the prior non-RAG 1-5 run (`alert_rankings.json`) is the comparison "
       "baseline in §8.")
     w("")
-    for m in MODELS:
+    for m in models:
         n = len(model_rank[m])
         w(f"### {m}")
         w("")
@@ -505,7 +496,7 @@ def main() -> int:
     w("")
     w("| Model | alerts with chunks from 1 doc | 2 docs | 3 docs |")
     w("|---|---:|---:|---:|")
-    for m in MODELS:
+    for m in models:
         c = n_docs_per_alert[m]
         w(f"| {m} | {c.get(1,0)} | {c.get(2,0)} | {c.get(3,0)} |")
     w("")
@@ -541,7 +532,7 @@ def main() -> int:
     w("")
     w("A rank is a **mismatch** when it is more than one step from the anchored ground "
       "truth: `|rank - ANCHOR[priority]| > 1` with `ANCHOR = {1:1, 2:3, 3:5}` — the same "
-      "mapping the exact-match stat in §6 uses. For every mismatch, the local model was "
+      "mapping the exact-match stat in §6 uses. For every mismatch, the model was "
       "re-queried with its own original `[S1]..[S5]` evidence, its recorded rank, and the "
       "Snort ground truth, and asked to explain why its rank differs and what led to its "
       "rank; those explanations are stored verbatim in `alert_rankings_rag.json` as "
@@ -549,7 +540,7 @@ def main() -> int:
     w("")
     w("| Model | mismatches | alerts | rate |")
     w("|---|---:|---:|---:|")
-    for m in MODELS:
+    for m in models:
         w(f"| {m} | {len(mismatch[m])} | {len(model_rank[m])} | "
           f"{100 * len(mismatch[m]) / len(model_rank[m]):.0f}% |")
     w("")
@@ -557,14 +548,14 @@ def main() -> int:
     w("")
     w("| Model | p1 (→1) | p2 (→3) | p3 (→5) |")
     w("|---|---:|---:|---:|")
-    for m in MODELS:
+    for m in models:
         cells = []
         for sp in (1, 2, 3):
             total = sum(1 for aid in ids if snort_prio[aid] == sp and aid in model_rank[m])
             cells.append(f"{mismatch_by_prio[m].get(sp, 0)}/{total}")
         w(f"| {m} | " + " | ".join(cells) + " |")
     w("")
-    for m in MODELS:
+    for m in models:
         if not mismatch[m]:
             w(f"**{m}: no mismatches.**")
             w("")
@@ -605,7 +596,7 @@ def main() -> int:
         w("")
         w("| Model | mean | median | exact (1.0) | ≥ 0.5 |")
         w("|---|---:|---:|---:|---:|")
-        for m in MODELS:
+        for m in models:
             mean = f"{judge_mean[m]:.3f}" if judge_mean[m] is not None else "—"
             median = f"{judge_median[m]:.3f}" if judge_median[m] is not None else "—"
             w(f"| {m} | {mean} | {median} | {judge_exact[m]} | "
@@ -615,7 +606,7 @@ def main() -> int:
         w("")
         w("| Model | 0.0–0.2 | 0.2–0.4 | 0.4–0.6 | 0.6–0.8 | 0.8–1.0 |")
         w("|---|---:|---:|---:|---:|---:|")
-        for m in MODELS:
+        for m in models:
             w("| " + " | ".join(
                 [m] + [str(judge_bands[m].get((lo, hi), 0))
                        for lo, hi in ((0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0))]
@@ -626,12 +617,12 @@ def main() -> int:
         w("")
         w("| Model | mismatch rows | non-mismatch rows |")
         w("|---|---:|---:|")
-        for m in MODELS:
+        for m in models:
             mm, ok = judge_mismatch_mean[m]
             w(f"| {m} | {f'{mm:.3f}' if mm is not None else '—'} | "
               f"{f'{ok:.3f}' if ok is not None else '—'} |")
         w("")
-        for m in MODELS:
+        for m in models:
             w(f"### Lowest-scored rankings — {m}")
             w("")
             if not lowest[m]:
@@ -650,9 +641,9 @@ def main() -> int:
     w("- **N=3 for priority 3.** The dataset holds only 3 priority-3 alerts, all from one "
       "rule (`1:987:32`), so that column of the confusion table is thin and not "
       "representative of the priority-3 population.")
-    w("- **Small local models.** 2.6B-3.2B parameter models; prior sessions recorded "
-      "gemma2:2b anchoring onto a single rank and llama3.2 losing discrimination. The "
-      "collapsed-rank and parse-failure outcomes above are reported, not repaired.")
+    w("- **Single hosted model.** The production experiment uses the hosted 120B-class "
+      "`openai/gpt-oss-120b` model through the Groq API, so its results do not establish "
+      "how other models or providers would rank the same alerts.")
     w("- **Agreement can be pure copying.** The answer was visible in the input, so a model "
       "that echoes `priority` scores an exact match without weighing anything. Deviations "
       "from the visible priority are more informative than matches in this run.")
@@ -669,7 +660,7 @@ def main() -> int:
       "alert (for example ISO Annex A controls vs Snort's `content_matches` tokens) may not "
       "be retrieved even when relevant. §6b reports what was actually retrieved.")
     w("- **The standards context is evidence, not a rank.** The system prompt instructs the "
-      "models to use `[S1]..[S5]` only as supporting comparison material and never force a "
+      "model to use `[S1]..[S5]` only as supporting comparison material and never force a "
       "connection; the justification column shows whether the model cited the context or "
       "ignored it.")
     w("- **ISO control ids are absent.** ISO chunks carry `control_id=None` because the "
@@ -688,9 +679,9 @@ def main() -> int:
         prior_rank = {
             m: {row["alert_id"]: row[m]["rank"] for row in prior
                 if row.get(m, {}).get("status") == "parsed"}
-            for m in MODELS
+            for m in models
         }
-        prior_spread = {m: Counter(prior_rank[m].values()) for m in MODELS}
+        prior_spread = {m: Counter(prior_rank[m].values()) for m in models}
         w("The previous run (`alert_rankings.json`) used the same 50 alerts, the same "
           "visible fields and an identical prompt **without** the standards context. The "
           "table shows each model's rank spread before and after adding RAG context, and how "
@@ -699,7 +690,7 @@ def main() -> int:
         w("| Model | non-RAG spread | RAG spread | ranks used (non-RAG → RAG) | "
           "rank changed |")
         w("|---|---:|---:|:--:|---:|")
-        for m in MODELS:
+        for m in models:
             changed = sum(1 for aid in ids
                           if aid in model_rank[m] and aid in prior_rank[m]
                           and model_rank[m][aid] != prior_rank[m][aid])
@@ -712,7 +703,7 @@ def main() -> int:
               + f" | {used_prior} of 5 → {used_rag} of 5 | {changed}/50 |")
         w("")
         per_model_lines = []
-        for m in MODELS:
+        for m in models:
             moved = [(aid, prior_rank[m].get(aid), model_rank[m].get(aid))
                      for aid in ids
                      if aid in model_rank[m] and aid in prior_rank[m]
@@ -730,7 +721,7 @@ def main() -> int:
             lines = []
             for aid in cvss10:
                 cells = []
-                for m in MODELS:
+                for m in models:
                     before = prior_rank[m].get(aid, "-")
                     after = model_rank[m].get(aid, "-")
                     cells.append(f"{m}: {before} → {after}")
@@ -743,7 +734,7 @@ def main() -> int:
     merged = []
     for aid in ids:
         entry = by_id[aid]
-        first_model_row = rows_by[(MODELS[0], aid)]
+        first_model_row = rows_by[(models[0], aid)]
         row = {
             "alert_id": aid,
             "rule_id": entry["alert"]["rule_id"],
@@ -754,7 +745,7 @@ def main() -> int:
             "query": first_model_row["query"],
             "retrieved_chunks": first_model_row["chunks"],
         }
-        for m in MODELS:
+        for m in models:
             r = rows_by[(m, aid)]
             if r["status"] == "failed":
                 row[m] = {"status": "failed", "raw": [a["content"] for a in r["attempts"]]}
@@ -787,7 +778,7 @@ def main() -> int:
 
     print(f"wrote {OUT}")
     print(f"wrote {OUTJSON}")
-    for m in MODELS:
+    for m in models:
         judge_note = ""
         if judge_rows:
             mean = judge_mean[m]
