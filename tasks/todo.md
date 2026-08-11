@@ -1817,12 +1817,21 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     `x-ratelimit-*` header refinement), and `chat()` (`with_raw_response`, 5-attempt budget,
     None-safe usage) implemented per the approved plan. 12 offline tests pass in both the
     eval-group and base environments, ruff clean, base-env import works, ASCII verified.
-- [ ] **ALERT-GROQ-2** `run_alert_rag.py` transport swap
+- [x] **ALERT-GROQ-2** `run_alert_rag.py` transport swap
   - `DEFAULT_MODELS = ("openai/gpt-oss-120b",)`; `OPTIONS` → `{temperature: 0,
     max_completion_tokens: 200}`; inventory check only requires the embed model; attempt meta
     mapped into existing row keys; `--rpm/--rpd/--tpm/--tpd/--budget-file` flags;
     `GroqQuotaStop` → exit 2. Retrieval/prompts/pipe contract untouched.
-- [ ] **ALERT-GROQ-3** `justify_alert_mismatches.py` transport swap (same pattern, 300 tokens)
+  - Review: runner calls `openai/gpt-oss-120b` through the shared transport with the rate
+    limiter; embeddings/retrieval stay local. Prompt blocks byte-identical to HEAD;
+    `tests/test_run_alert_rag.py` covers the two-attempt parse/retry loop offline (3 tests).
+    All 22 groq_llm + runner + severity-judge tests pass, ruff and `git diff --check` clean.
+- [x] **ALERT-GROQ-3** `justify_alert_mismatches.py` transport swap (same pattern, 300 tokens)
+  - Review: justification pass calls `openai/gpt-oss-120b` through the shared transport with
+    the rate limiter; prompts and the two-attempt empty-answer loop preserved, quota stop
+    exits 2. Transport-level errors still propagate (matching the original Ollama behavior);
+    realistic failures are parse-level and land as recorded failed rows. 22 offline tests,
+    ruff, import, and ASCII checks pass.
 - [ ] **ALERT-GROQ-4** `judge_alert_rankings.py` additive rate limiting + `DEFAULT_MODELS`
 - [ ] **ALERT-GROQ-5** `build_alert_rag_report.py` single-model generalization (models derived
   from snapshot; drop `ollama --version`; metadata/§5/§7 wording); no-network regression

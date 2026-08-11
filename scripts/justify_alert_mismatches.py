@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # ruff: noqa: E501  (the prompt block below is verbatim contract text; see module docstring)
 
-"""Ask each local model to justify its severity-rank mismatches.
+"""Ask the Groq-hosted openai/gpt-oss-120b model to justify severity-rank mismatches.
 
 For every (model, alert) row in the RAG ranking snapshot
 (alert_rag_run.jsonl) whose rank is a mismatch against the anchored Snort
@@ -12,11 +12,10 @@ truth, and asked to explain (a) why its rank differs from the ground truth and
 (b) what evidence led to its rank. Existing rankings are untouched.
 
 The pass reuses each run row's stored chunks - no retrieval is performed
-again, and no re-ranking happens. Same Ollama contract as the ranking run
-(temperature 0, seed 42, num_ctx 8192, repeat_penalty 1.15, num_predict 300),
-one retry on an empty answer, both attempts recorded verbatim, never coerced.
-Each (model, alert) row is upserted into a resumable JSONL snapshot;
---resume skips complete rows.
+again, and no re-ranking happens. The Groq-hosted openai/gpt-oss-120b model
+runs at temperature 0 with a 300-token completion cap. One retry on an empty
+answer, both attempts recorded verbatim, never coerced. Each (model, alert)
+row is upserted into a resumable JSONL snapshot; --resume skips complete rows.
 
 Usage:
     uv run python scripts/justify_alert_mismatches.py [--models M1 M2] [--resume]
@@ -32,24 +31,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import ollama
-
+import groq_llm
 from csrs.alert_ranking import anchored_rank, is_mismatch
-from csrs.config import settings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CIL_ROOT = PROJECT_ROOT.parent
 DEFAULT_RUN = CIL_ROOT / "alert_rag_run.jsonl"
 DEFAULT_SAMPLE = CIL_ROOT / "alert_sample_50.json"
 DEFAULT_RESULTS = CIL_ROOT / "alert_mismatch_justifications.jsonl"
-DEFAULT_MODELS = ("llama3.2:latest", "gemma2:2b")
+DEFAULT_MODELS = ("openai/gpt-oss-120b",)
 
 OPTIONS = {
     "temperature": 0,
-    "seed": 42,
-    "num_ctx": 8192,
-    "repeat_penalty": 1.15,
-    "num_predict": 300,
+    "max_completion_tokens": 300,
 }
 
 SYSTEM = """You are a senior SOC analyst explaining a previous severity-ranking decision.
@@ -103,8 +97,12 @@ def build_user_message(entry: dict[str, Any], chunks: list[dict[str, Any]],
     )
 
 
-def call_model(client: ollama.Client, model: str,
-               user_message: str) -> tuple[list[dict[str, Any]], str, str | None]:
+def call_model(
+    client: Any,
+    model: str,
+    user_message: str,
+    limiter: groq_llm.RateLimiter,
+) -> tuple[list[dict[str, Any]], str, str | None]:
     """Call the model once, retry once, and record both attempts verbatim."""
     messages = [
         {"role": "system", "content": SYSTEM},
@@ -113,18 +111,19 @@ def call_model(client: ollama.Client, model: str,
     attempts: list[dict[str, Any]] = []
     justification: str | None = None
     for _ in range(2):
-        response = client.chat(
-            model=model,
-            messages=messages,
-            options=OPTIONS,
-            keep_alive=settings.keep_alive,
+        result = groq_llm.chat(
+            client,
+            model,
+            messages,
+            max_tokens=300,
+            limiter=limiter,
         )
-        content = response["message"]["content"].strip()
+        content = result.content.strip()
         meta = {
-            "done_reason": response.get("done_reason"),
-            "prompt_eval_count": response.get("prompt_eval_count"),
-            "eval_count": response.get("eval_count"),
-            "total_duration": response.get("total_duration"),
+            "done_reason": result.finish_reason,
+            "prompt_eval_count": result.prompt_tokens,
+            "eval_count": result.completion_tokens,
+            "total_duration": result.total_time_s,
         }
         attempts.append({"content": content, "meta": meta})
         if content:
@@ -175,6 +174,11 @@ def main() -> int:
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_MODELS))
     parser.add_argument("--resume", action="store_true",
                         help="skip (model, alert) rows already complete in --results")
+    parser.add_argument("--rpm", type=int, default=groq_llm.DEFAULT_RPM)
+    parser.add_argument("--rpd", type=int, default=groq_llm.DEFAULT_RPD)
+    parser.add_argument("--tpm", type=int, default=groq_llm.DEFAULT_TPM)
+    parser.add_argument("--tpd", type=int, default=groq_llm.DEFAULT_TPD)
+    parser.add_argument("--budget-file", default=str(groq_llm.DEFAULT_TRACKER_PATH))
     args = parser.parse_args()
 
     run_rows = [json.loads(line) for line in Path(args.run).read_text(encoding="utf-8")
@@ -203,7 +207,15 @@ def main() -> int:
     if missing:
         sys.exit(f"models {', '.join(missing)} have no rows in the run snapshot")
 
-    client = ollama.Client(host=settings.ollama_host)
+    client = groq_llm.client_from_env()
+    tracker = groq_llm.DailyUsageTracker(Path(args.budget_file))
+    limiter = groq_llm.RateLimiter(
+        rpm=args.rpm,
+        rpd=args.rpd,
+        tpm=args.tpm,
+        tpd=args.tpd,
+        tracker=tracker,
+    )
     results_path = Path(args.results)
     results = load_results(results_path) if args.resume else []
     existing = {(row["model"], row["alert_id"]) for row in results
@@ -220,33 +232,41 @@ def main() -> int:
         priority = int(entry["alert"]["priority"])
         rank = run_row["parsed"]["rank"]
         anchored = anchored_rank(priority)
-        user_message = build_user_message(entry, run_row["chunks"], rank, anchored, priority)
-        t1 = time.monotonic()
-        attempts, status, justification = call_model(client, model, user_message)
-        generation_ms = (time.monotonic() - t1) * 1000
-        row = {
-            "schema_version": 1,
-            "run_id": run_row["run_id"],
-            "justified_at": started,
-            "model": model,
-            "alert_id": alert_id,
-            "rule_id": run_row.get("rule_id"),
-            "snort_priority": priority,
-            "anchored_rank": anchored,
-            "llm_rank": rank,
-            "mismatch": True,
-            "justification": justification,
-            "attempts": attempts,
-            "status": status,
-            "done_reasons": [attempt["meta"].get("done_reason") for attempt in attempts],
-            "latency_ms": {"generation": round(generation_ms)},
-        }
-        upsert_result(results_path, results, row)
-        existing.add((model, alert_id))
-        print(f"[{i:2d}/{len(pending_pairs)}] {alert_id} {model} "
-              f"rank {rank} vs anchored {anchored} -> "
-              f"{'ok' if status == 'parsed' else 'FAILED'}  "
-              f"{(justification or '(empty)')[:80]}", flush=True)
+        try:
+            user_message = build_user_message(
+                entry, run_row["chunks"], rank, anchored, priority
+            )
+            t1 = time.monotonic()
+            attempts, status, justification = call_model(
+                client, model, user_message, limiter
+            )
+            generation_ms = (time.monotonic() - t1) * 1000
+            row = {
+                "schema_version": 1,
+                "run_id": run_row["run_id"],
+                "justified_at": started,
+                "model": model,
+                "alert_id": alert_id,
+                "rule_id": run_row.get("rule_id"),
+                "snort_priority": priority,
+                "anchored_rank": anchored,
+                "llm_rank": rank,
+                "mismatch": True,
+                "justification": justification,
+                "attempts": attempts,
+                "status": status,
+                "done_reasons": [attempt["meta"].get("done_reason") for attempt in attempts],
+                "latency_ms": {"generation": round(generation_ms)},
+            }
+            upsert_result(results_path, results, row)
+            existing.add((model, alert_id))
+            print(f"[{i:2d}/{len(pending_pairs)}] {alert_id} {model} "
+                  f"rank {rank} vs anchored {anchored} -> "
+                  f"{'ok' if status == 'parsed' else 'FAILED'}  "
+                  f"{(justification or '(empty)')[:80]}", flush=True)
+        except groq_llm.GroqQuotaStop as error:
+            print(error)
+            return 2
 
     parsed = [row for row in results if row["status"] == "parsed"]
     print(f"\njustified {len(parsed)}/{len(pending_pairs)} mismatch rows "
