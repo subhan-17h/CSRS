@@ -20,12 +20,15 @@ justification and lower it for one that misreads the record.
 The judge SEES the ground truth: this is an agreement check, not a blind
 plausibility review. Transport retries, backoff and daily-quota detection
 mirror eval/judge.py (imported from there); the verdict schema is this
-script's own. Each (model, alert) row is upserted into a resumable JSONL
-snapshot; --resume skips complete rows. GROQ_API_KEY is read from
+script's own. A shared free-tier rate limiter paces requests and persists
+daily usage. Each (model, alert) row is upserted into a resumable JSONL
+snapshot; --resume skips complete rows. A daily-quota stop exits with code 2
+and resumes with --resume after the quota resets. GROQ_API_KEY is read from
 CSRS/.env.
 
 Usage:
     uv run python scripts/judge_alert_rankings.py [--models M1 M2] [--resume]
+        [--rpm N] [--rpd N] [--tpm N] [--tpd N] [--budget-file PATH]
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+import groq_llm
 from csrs.alert_ranking import anchored_rank, is_mismatch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +51,7 @@ CIL_ROOT = PROJECT_ROOT.parent
 DEFAULT_RUN = CIL_ROOT / "alert_rag_run.jsonl"
 DEFAULT_SAMPLE = CIL_ROOT / "alert_sample_50.json"
 DEFAULT_RESULTS = CIL_ROOT / "alert_judge_run.jsonl"
-DEFAULT_MODELS = ("llama3.2:latest", "gemma2:2b")
+DEFAULT_MODELS = ("openai/gpt-oss-120b",)
 
 # Reuse the eval judge's transport plumbing: settings loader, error taxonomy,
 # retry budget, backoff and quota detection live in eval/judge.py.
@@ -137,10 +141,17 @@ def _client_from_env() -> Any:
 
 
 def _request(client: Any, messages: list[dict[str, str]],
-             budget: _RequestBudget) -> tuple[str, str]:
+             budget: _RequestBudget,
+             limiter: groq_llm.RateLimiter | None = None) -> tuple[str, str]:
     """Call Groq once with bounded retries; return (content, finish_reason)."""
     while budget.attempts < MAX_REQUEST_ATTEMPTS:
         budget.attempts += 1
+        if limiter is not None:
+            message_text = "".join(message["content"] for message in messages)
+            estimated_input = (
+                groq_llm.estimate_tokens(message_text) + MAX_COMPLETION_TOKENS
+            )
+            limiter.before_request(estimated_input, MAX_COMPLETION_TOKENS)
         try:
             response = client.chat.completions.create(
                 model=JUDGE_MODEL,
@@ -171,6 +182,8 @@ def _request(client: Any, messages: list[dict[str, str]],
                     f"Groq judge request failed after {MAX_REQUEST_ATTEMPTS} "
                     f"total attempts: {error}"
                 ) from error
+            if limiter is not None:
+                limiter.note_error(error)
             delay = GroqJudge._retry_delay(error, budget.transient_failures)
             budget.transient_failures += 1
             time.sleep(delay)
@@ -188,6 +201,11 @@ def _request(client: Any, messages: list[dict[str, str]],
         raise JudgeResponseError("Groq judge response did not contain message content") from error
     if not isinstance(content, str) or not content.strip():
         raise JudgeResponseError("Groq judge response content was empty")
+    usage = getattr(response, "usage", None)
+    prompt_tokens = getattr(usage, "prompt_tokens", None)
+    completion_tokens = getattr(usage, "completion_tokens", None)
+    if limiter is not None:
+        limiter.after_request(prompt_tokens, completion_tokens)
     return content, getattr(choice, "finish_reason", None)
 
 
@@ -200,15 +218,16 @@ def _parse_verdict(raw_response: str) -> SeverityJudgment:
         ) from error
 
 
-def call_judge(client: Any, payload: dict[str, Any]) -> tuple[str, SeverityJudgment | None,
-                                                            str | None, str | None]:
+def call_judge(client: Any, payload: dict[str, Any],
+               limiter: groq_llm.RateLimiter | None = None
+               ) -> tuple[str, SeverityJudgment | None, str | None, str | None]:
     """Judge one row: bounded transport retries, one repair retry, verbatim response."""
     messages = [
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": _canonical_json(payload)},
     ]
     budget = _RequestBudget()
-    raw_response, done_reason = _request(client, messages, budget)
+    raw_response, done_reason = _request(client, messages, budget, limiter)
     try:
         verdict = _parse_verdict(raw_response)
     except JudgeResponseError as first_error:
@@ -223,7 +242,9 @@ def call_judge(client: Any, payload: dict[str, Any]) -> tuple[str, SeverityJudgm
                 ),
             },
         ]
-        repaired_response, done_reason = _request(client, repair_messages, budget)
+        repaired_response, done_reason = _request(
+            client, repair_messages, budget, limiter
+        )
         try:
             verdict = _parse_verdict(repaired_response)
         except JudgeResponseError as second_error:
@@ -275,6 +296,11 @@ def main() -> int:
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_MODELS))
     parser.add_argument("--resume", action="store_true",
                         help="skip (model, alert) rows already complete in --results")
+    parser.add_argument("--rpm", type=int, default=groq_llm.DEFAULT_RPM)
+    parser.add_argument("--rpd", type=int, default=groq_llm.DEFAULT_RPD)
+    parser.add_argument("--tpm", type=int, default=groq_llm.DEFAULT_TPM)
+    parser.add_argument("--tpd", type=int, default=groq_llm.DEFAULT_TPD)
+    parser.add_argument("--budget-file", default=str(groq_llm.DEFAULT_TRACKER_PATH))
     args = parser.parse_args()
 
     run_rows = [json.loads(line) for line in Path(args.run).read_text(encoding="utf-8")
@@ -301,6 +327,14 @@ def main() -> int:
         sys.exit(f"models {', '.join(missing)} have no rows in the run snapshot")
 
     client = _client_from_env()
+    tracker = groq_llm.DailyUsageTracker(Path(args.budget_file))
+    limiter = groq_llm.RateLimiter(
+        rpm=args.rpm,
+        rpd=args.rpd,
+        tpm=args.tpm,
+        tpd=args.tpd,
+        tracker=tracker,
+    )
     results_path = Path(args.results)
     results = load_results(results_path) if args.resume else []
     existing = {(row["model"], row["alert_id"]) for row in results
@@ -333,8 +367,16 @@ def main() -> int:
         }
         t1 = time.monotonic()
         try:
-            raw_response, verdict, done_reason, error = call_judge(client, payload)
+            raw_response, verdict, done_reason, error = call_judge(
+                client, payload, limiter
+            )
             status = "parsed" if verdict is not None else "failed"
+        except groq_llm.GroqQuotaStop as error:
+            print(error)
+            return 2
+        except JudgeQuotaError as error:
+            print(error)
+            return 2
         except (JudgeRequestError, JudgeResponseError) as error:
             verdict = None
             done_reason = None

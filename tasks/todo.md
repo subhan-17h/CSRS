@@ -1832,7 +1832,12 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     exits 2. Transport-level errors still propagate (matching the original Ollama behavior);
     realistic failures are parse-level and land as recorded failed rows. 22 offline tests,
     ruff, import, and ASCII checks pass.
-- [ ] **ALERT-GROQ-4** `judge_alert_rankings.py` additive rate limiting + `DEFAULT_MODELS`
+- [x] **ALERT-GROQ-4** `judge_alert_rankings.py` additive rate limiting + `DEFAULT_MODELS`
+  - Review: judge defaults to `openai/gpt-oss-120b`; the shared limiter hooks into every
+    request attempt, records success usage, paces on transient errors, and exits 2 on
+    local (`GroqQuotaStop`) or server-side (`JudgeQuotaError`) daily-quota stops before the
+    row-failure path. Retry budget, repair retry, and error taxonomy untouched. 22 offline
+    tests, ruff, import, and ASCII checks pass.
 - [ ] **ALERT-GROQ-5** `build_alert_rag_report.py` single-model generalization (models derived
   from snapshot; drop `ollama --version`; metadata/§5/§7 wording); no-network regression
   against the existing 2-model snapshot.
