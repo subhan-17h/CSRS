@@ -9,8 +9,8 @@ weighted), embedded, and run through the CSRS hybrid retriever (Chroma dense
 + BM25, RRF-fused) against a corpus of three standards (NIST CSF 2.0,
 ISO/IEC 27001:2022, NIST SP 800-53 Rev 5). The top chunks are injected into
 the model prompt as [S1]..[S5] context alongside the full alert record, and
-the model ranks severity on a 1-5 scale (1 = MOST severe, 5 = least) under
-the strict pipe contract:
+the Groq-hosted openai/gpt-oss-120b model ranks severity on a 1-5 scale
+(1 = MOST severe, 5 = least) under the strict pipe contract:
 
     <rank 1-5> | <short 3-10 word justification> | <comma-separated field names>
 
@@ -40,6 +40,7 @@ from typing import Any
 
 import ollama
 
+import groq_llm
 from csrs.config import settings
 from csrs.embeddings import embed_query
 from csrs.model_names import canonical_model_name
@@ -52,7 +53,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CIL_ROOT = PROJECT_ROOT.parent
 DEFAULT_SAMPLE = CIL_ROOT / "alert_sample_50.json"
 DEFAULT_RESULTS = CIL_ROOT / "alert_rag_run.jsonl"
-DEFAULT_MODELS = ("llama3.2:latest", "gemma2:2b")
+DEFAULT_MODELS = ("openai/gpt-oss-120b",)
 
 CONTRACT = "pipe"
 RETRIEVAL_LIMIT = 5
@@ -60,10 +61,7 @@ RETRIEVAL_LIMIT_MAX = 10
 
 OPTIONS = {
     "temperature": 0,
-    "seed": 42,
-    "num_ctx": 8192,
-    "repeat_penalty": 1.15,
-    "num_predict": 200,
+    "max_completion_tokens": 200,
 }
 
 _COMMON = """You are a senior SOC analyst. You will be shown ONE Snort intrusion-detection alert: the
@@ -239,9 +237,10 @@ def parse_line(content: str) -> dict[str, Any] | None:
 
 
 def call_model(
-    client: ollama.Client,
+    client: Any,
     model: str,
     user_message: str,
+    limiter: groq_llm.RateLimiter,
 ) -> tuple[list[dict[str, Any]], str, dict[str, Any] | None]:
     """Call the model once, retry once, and record both attempts verbatim."""
     messages = [
@@ -251,18 +250,19 @@ def call_model(
     attempts: list[dict[str, Any]] = []
     parsed: dict[str, Any] | None = None
     for _ in range(2):
-        response = client.chat(
-            model=model,
-            messages=messages,
-            options=OPTIONS,
-            keep_alive=settings.keep_alive,
+        result = groq_llm.chat(
+            client,
+            model,
+            messages,
+            max_tokens=200,
+            limiter=limiter,
         )
-        content = response["message"]["content"].strip()
+        content = result.content.strip()
         meta = {
-            "done_reason": response.get("done_reason"),
-            "prompt_eval_count": response.get("prompt_eval_count"),
-            "eval_count": response.get("eval_count"),
-            "total_duration": response.get("total_duration"),
+            "done_reason": result.finish_reason,
+            "prompt_eval_count": result.prompt_tokens,
+            "eval_count": result.completion_tokens,
+            "total_duration": result.total_time_s,
         }
         attempts.append({"content": content, "meta": meta})
         parsed = parse_line(content)
@@ -327,10 +327,13 @@ def model_inventory(client: ollama.Client) -> dict[str, str]:
 
 
 def validate_models(requested: Sequence[str], inventory: dict[str, str]) -> None:
-    required = [*requested, canonical_model_name(settings.embed_model)]
+    required = [canonical_model_name(settings.embed_model)]
     missing = [model for model in required if model not in inventory]
     if missing:
-        sys.exit(f"required exact Ollama tags are not installed: {', '.join(missing)}")
+        sys.exit(
+            "the embed model must be installed locally in Ollama while ranking/judge "
+            f"LLMs run on Groq; missing exact tag: {', '.join(missing)}"
+        )
 
 
 def write_per_model_outputs(rows: Sequence[dict[str, Any]], n_alerts: int, started: str) -> None:
@@ -439,6 +442,11 @@ def main() -> int:
     )
     parser.add_argument("--resume", action="store_true",
                         help="skip (model, alert) rows already complete in --results")
+    parser.add_argument("--rpm", type=int, default=groq_llm.DEFAULT_RPM)
+    parser.add_argument("--rpd", type=int, default=groq_llm.DEFAULT_RPD)
+    parser.add_argument("--tpm", type=int, default=groq_llm.DEFAULT_TPM)
+    parser.add_argument("--tpd", type=int, default=groq_llm.DEFAULT_TPD)
+    parser.add_argument("--budget-file", default=str(groq_llm.DEFAULT_TRACKER_PATH))
     args = parser.parse_args()
 
     if not 1 <= args.top_k <= RETRIEVAL_LIMIT_MAX:
@@ -450,9 +458,18 @@ def main() -> int:
     if args.limit is not None:
         entries = entries[: args.limit]
 
-    client = ollama.Client(host=settings.ollama_host)
-    inventory = model_inventory(client)
+    ollama_client = ollama.Client(host=settings.ollama_host)
+    inventory = model_inventory(ollama_client)
     validate_models(args.models, inventory)
+    client = groq_llm.client_from_env()
+    tracker = groq_llm.DailyUsageTracker(Path(args.budget_file))
+    limiter = groq_llm.RateLimiter(
+        rpm=args.rpm,
+        rpd=args.rpd,
+        tpm=args.tpm,
+        tpd=args.tpd,
+        tracker=tracker,
+    )
 
     store = ChunkStore()
     if store.count() == 0:
@@ -479,39 +496,46 @@ def main() -> int:
         retrieval_ms = (time.monotonic() - t0) * 1000
         user_message = build_user_message(entry, chunks)
 
-        for model in pending:
-            t1 = time.monotonic()
-            attempts, status, parsed = call_model(client, model, user_message)
-            generation_ms = (time.monotonic() - t1) * 1000
-            row = {
-                "schema_version": 1,
-                "run_id": started,
-                "model": model,
-                "model_digest": inventory.get(model),
-                "alert_id": alert_id,
-                "rule_id": entry["alert"].get("rule_id"),
-                "query": query,
-                "system": SYSTEM,
-                "user_message": user_message,
-                "retry_reminder": None if len(attempts) == 1 else RETRY_REMINDER,
-                "chunks": serialize_chunks(chunks),
-                "attempts": attempts,
-                "parsed": parsed,
-                "status": status,
-                "done_reasons": [attempt["meta"].get("done_reason") for attempt in attempts],
-                "latency_ms": {
-                    "retrieval": round(retrieval_ms),
-                    "generation": round(generation_ms),
-                },
-            }
-            upsert_result(results_path, rows, row)
-            existing.add((model, alert_id))
-            rank = row["parsed"]["rank"] if row["parsed"] else "-"
-            justification = (
-                row["parsed"]["justification"][:80] if row["parsed"] else "(parse failed)"
-            )
-            print(f"[{i:2d}/{len(entries)}] {alert_id} {model} -> rank={rank}  {justification}",
-                  flush=True)
+        try:
+            for model in pending:
+                t1 = time.monotonic()
+                attempts, status, parsed = call_model(client, model, user_message, limiter)
+                generation_ms = (time.monotonic() - t1) * 1000
+                row = {
+                    "schema_version": 1,
+                    "run_id": started,
+                    "model": model,
+                    "model_digest": None,
+                    "alert_id": alert_id,
+                    "rule_id": entry["alert"].get("rule_id"),
+                    "query": query,
+                    "system": SYSTEM,
+                    "user_message": user_message,
+                    "retry_reminder": None if len(attempts) == 1 else RETRY_REMINDER,
+                    "chunks": serialize_chunks(chunks),
+                    "attempts": attempts,
+                    "parsed": parsed,
+                    "status": status,
+                    "done_reasons": [attempt["meta"].get("done_reason") for attempt in attempts],
+                    "latency_ms": {
+                        "retrieval": round(retrieval_ms),
+                        "generation": round(generation_ms),
+                    },
+                }
+                upsert_result(results_path, rows, row)
+                existing.add((model, alert_id))
+                rank = row["parsed"]["rank"] if row["parsed"] else "-"
+                justification = (
+                    row["parsed"]["justification"][:80] if row["parsed"] else "(parse failed)"
+                )
+                print(
+                    f"[{i:2d}/{len(entries)}] {alert_id} {model} -> "
+                    f"rank={rank}  {justification}",
+                    flush=True,
+                )
+        except groq_llm.GroqQuotaStop as error:
+            print(error)
+            return 2
 
     validate_run(rows, expected)
     write_per_model_outputs(rows, len(entries), started)
