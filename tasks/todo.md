@@ -1791,3 +1791,42 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
     audit. Local links, daily counts, churn, the 250-row evaluation, and the one-document
     209-chunk index reconcile. Dataset validation, Ruff, 269 offline tests, the frontend
     build, Python ASCII validation, and `git diff --check` pass.
+
+## Phase 9 — Alert-ranking experiment on Groq (no local LLMs in the experiment chain)
+
+Approved plan: `/Users/rowdy/.claude/plans/one-thing-to-change-valiant-lake.md`. The alert
+experiment chain (`run_alert_rag.py`, `justify_alert_mismatches.py`, `judge_alert_rankings.py`)
+moves entirely to `openai/gpt-oss-120b` via Groq with free-tier rate limiting (RPM 30, RPD
+1000, TPM 8000, TPD 200000); embeddings stay local (nomic-embed-text). Same 50 alerts, same
+prompts/pipe contract, same judge model. Multi-day run by design (~400K tokens vs 200K/day);
+scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
+
+- [x] **ALERT-GROQ-1** Shared `scripts/groq_llm.py` + `tests/test_groq_llm.py`
+  - Reuse `eval/judge.py` static helpers (`_is_transient_error`, `_is_daily_token_quota_error`,
+    `_retry_delay`, `load_judge_settings`) via the existing `sys.path.insert(0, "eval")` pattern.
+  - Exceptions: `GroqScriptError` / `GroqConfigError` / `GroqRequestError` / `GroqQuotaStop`.
+  - `DailyUsageTracker` persisted at `.csrs_cache/groq_daily_usage.json` (date rollover, atomic
+    tmp+replace); `RateLimiter` sliding-window RPM/TPM pacing + daily-cap stop + best-effort
+    `x-ratelimit-*` header refinement; `chat()` via `with_raw_response.create(...)` with the
+    5-attempt retry budget and meta mapping (`finish_reason`, `prompt_tokens`, ...).
+  - No module-level groq import (keeps `test_severity_judge.py` green in the base env).
+  - Done when `tests/test_groq_llm.py` passes fully offline and ruff is clean.
+  - Review: `scripts/groq_llm.py` reuses `eval/judge.py`'s transport helpers via the existing
+    `sys.path.insert` pattern; `DailyUsageTracker` (date rollover, atomic persistence),
+    `RateLimiter` (sliding RPM/TPM windows, daily-cap `GroqQuotaStop`, best-effort
+    `x-ratelimit-*` header refinement), and `chat()` (`with_raw_response`, 5-attempt budget,
+    None-safe usage) implemented per the approved plan. 12 offline tests pass in both the
+    eval-group and base environments, ruff clean, base-env import works, ASCII verified.
+- [ ] **ALERT-GROQ-2** `run_alert_rag.py` transport swap
+  - `DEFAULT_MODELS = ("openai/gpt-oss-120b",)`; `OPTIONS` → `{temperature: 0,
+    max_completion_tokens: 200}`; inventory check only requires the embed model; attempt meta
+    mapped into existing row keys; `--rpm/--rpd/--tpm/--tpd/--budget-file` flags;
+    `GroqQuotaStop` → exit 2. Retrieval/prompts/pipe contract untouched.
+- [ ] **ALERT-GROQ-3** `justify_alert_mismatches.py` transport swap (same pattern, 300 tokens)
+- [ ] **ALERT-GROQ-4** `judge_alert_rankings.py` additive rate limiting + `DEFAULT_MODELS`
+- [ ] **ALERT-GROQ-5** `build_alert_rag_report.py` single-model generalization (models derived
+  from snapshot; drop `ollama --version`; metadata/§5/§7 wording); no-network regression
+  against the existing 2-model snapshot.
+- [ ] **ALERT-GROQ-6** Full suite + one real `--limit 1` smoke run (finish_reason must be
+  `stop`, not `length`); then the multi-day production sequence (rank → justify → judge →
+  report) with quota-safe resumes.
