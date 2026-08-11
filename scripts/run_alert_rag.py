@@ -61,7 +61,7 @@ RETRIEVAL_LIMIT_MAX = 10
 
 OPTIONS = {
     "temperature": 0,
-    "max_completion_tokens": 200,
+    "max_completion_tokens": 400,
 }
 
 _COMMON = """You are a senior SOC analyst. You will be shown ONE Snort intrusion-detection alert: the
@@ -254,7 +254,7 @@ def call_model(
             client,
             model,
             messages,
-            max_tokens=200,
+            max_tokens=400,
             limiter=limiter,
         )
         content = result.content.strip()

@@ -287,6 +287,8 @@ def chat(
     *,
     max_tokens: int,
     temperature: float = 0,
+    reasoning_effort: str = "low",
+    include_reasoning: bool = False,
     response_format: Any | None = None,
     limiter: RateLimiter | None = None,
     sleep: Callable[[float], None] = time.sleep,
@@ -305,6 +307,8 @@ def chat(
                 "model": model,
                 "messages": messages,
                 "temperature": temperature,
+                "reasoning_effort": reasoning_effort,
+                "include_reasoning": include_reasoning,
                 "max_completion_tokens": max_tokens,
             }
             if response_format:

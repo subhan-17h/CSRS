@@ -13,7 +13,7 @@ truth, and asked to explain (a) why its rank differs from the ground truth and
 
 The pass reuses each run row's stored chunks - no retrieval is performed
 again, and no re-ranking happens. The Groq-hosted openai/gpt-oss-120b model
-runs at temperature 0 with a 300-token completion cap. One retry on an empty
+runs at temperature 0 with a 400-token completion cap. One retry on an empty
 answer, both attempts recorded verbatim, never coerced. Each (model, alert)
 row is upserted into a resumable JSONL snapshot; --resume skips complete rows.
 
@@ -43,7 +43,7 @@ DEFAULT_MODELS = ("openai/gpt-oss-120b",)
 
 OPTIONS = {
     "temperature": 0,
-    "max_completion_tokens": 300,
+    "max_completion_tokens": 400,
 }
 
 SYSTEM = """You are a senior SOC analyst explaining a previous severity-ranking decision.
@@ -115,7 +115,7 @@ def call_model(
             client,
             model,
             messages,
-            max_tokens=300,
+            max_tokens=400,
             limiter=limiter,
         )
         content = result.content.strip()

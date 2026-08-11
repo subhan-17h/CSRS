@@ -224,6 +224,11 @@ def test_chat_maps_response_and_records_usage(tmp_path: Path) -> None:
     assert tracker.tokens_today == 20
     assert tracker.requests_today == 1
 
+    call = client.chat.completions.calls[0]
+    assert call["reasoning_effort"] == "low"
+    assert call["include_reasoning"] is False
+    assert call["max_completion_tokens"] == 20
+
 
 def test_chat_retries_429_using_retry_after_then_succeeds() -> None:
     client = FakeClient([Transient429Error(), fake_response()])

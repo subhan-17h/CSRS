@@ -296,7 +296,7 @@ def main() -> int:
     w(f"| Run id | `{run_id}` |")
     w(f"| Sample | `{args.sample}` (50 alerts) |")
     w(f"| Snapshot | `{args.results}` ({len(rows)} rows) |")
-    w("| Options (all models) | `temperature=0`, `max_completion_tokens=200` |")
+    w("| Options (all models) | `temperature=0`, `max_completion_tokens=400` |")
     w("| Retrieval | hybrid (dense top-20 + BM25 top-20, RRF k=60), rerank disabled, "
       "`limit=5` |")
     w("| Embedding model | `nomic-embed-text` (768-dim, task prefixes) |")
