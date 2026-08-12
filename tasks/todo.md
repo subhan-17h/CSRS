@@ -1848,6 +1848,15 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     mismatches, judge mean 0.598; llama3.2 24/50, 0.426) and regenerates both deliverables
     (originals archived to `_v1`; `_vN` archives are deleted after the final production
     build). ruff clean.
-- [ ] **ALERT-GROQ-6** Full suite + one real `--limit 1` smoke run (finish_reason must be
+- [x] **ALERT-GROQ-6** Full suite + one real `--limit 1` smoke run (finish_reason must be
   `stop`, not `length`); then the multi-day production sequence (rank → justify → judge →
   report) with quota-safe resumes.
+  - Review: the `--limit 1` smoke run surfaced the reasoning_effort gap (gpt-oss-120b emits
+    no content when it is unset) and is fixed by b1b3d6b (default `reasoning_effort="low"`,
+    `include_reasoning=False`; ranking/justify caps 200/300 -> 400). Production sequence ran
+    quota-safe across two UTC days: rank 50/50 (133K tokens), justify 23/23 (57K), judge
+    50/50 (54K), report built with the single-model schema; daily tracker rolls over at UTC
+    midnight and the multi-day resumes used exit-2 quota stops + `--resume`. Full suite 311
+    passed; final numbers: parsed 50/50, exact 21/50 (42%), mismatches 23/50, spread
+    {1: 2, 2: 4, 3: 41, 4: 3}, failures 0, judge mean 0.586. §8 stays skipped (non-RAG
+    `alert_rankings.json` baseline absent). `_vN` archives deleted after the final build.
