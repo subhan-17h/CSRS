@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
-"""Assemble the standards-grounded alert ranking report.
+"""Assemble the v2 standards-grounded alert ranking report.
 
 Reads the resumable run snapshot written by run_alert_rag.py
-(alert_rag_run.jsonl), derives Snort ground truth from the alert records,
-and writes two deliverables at CIL root:
-
-    alert_rankings_rag.json         merged per-alert rows (rank, justification,
-                                    metrics, retrieved evidence, mismatch flag,
-                                    mismatch justification, judge verdict)
-    alert_ranking_rag_report.md     the report
-
-Two optional follow-up snapshots are merged when present: the mismatch
-justifications from scripts/justify_alert_mismatches.py and the Groq judge
-verdicts from scripts/judge_alert_rankings.py. When either file is absent
-its fields and report sections are simply omitted.
+(alert_rag_run.jsonl), derives Snort ground truth from the alert records, and
+writes a readable report plus a flat single-model JSON deliverable at CIL root.
+The snapshot supplies model_rank, justification, mismatch_explanation,
+metrics_used, matched_sid, and sid_evidence_document. Judge verdicts from
+scripts/judge_alert_rankings.py are merged when present; there is no separate
+justify-pass input. SID comparison is grouped in a sid_matching sub-object.
 
 Idempotent: existing deliverables are archived to the next _vN slot before
 being overwritten, never deleted.
@@ -31,27 +25,34 @@ from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
-from csrs.alert_ranking import ANCHOR, is_mismatch
+from csrs.alert_ranking import ANCHOR, anchored_rank, is_mismatch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CIL_ROOT = PROJECT_ROOT.parent
 DEFAULT_RESULTS = CIL_ROOT / "alert_rag_run.jsonl"
 DEFAULT_SAMPLE = CIL_ROOT / "alert_sample_50.json"
 DEFAULT_PRIOR = CIL_ROOT / "alert_rankings.json"
-DEFAULT_JUSTIFY = CIL_ROOT / "alert_mismatch_justifications.jsonl"
 DEFAULT_JUDGE = CIL_ROOT / "alert_judge_run.jsonl"
 OUT = CIL_ROOT / "alert_ranking_rag_report.md"
 OUTJSON = CIL_ROOT / "alert_rankings_rag.json"
 MANIFEST = PROJECT_ROOT / "chroma_db" / "manifest.json"
 
-KNOWN = {"alert_id", "alert", "rule_documentation", "rule_documentation_found"} | \
-    {"timestamp", "alert_message", "rule_id", "protocol", "service", "source_ip",
-     "destination_ip", "source_port", "destination_port", "direction", "packet_length",
-     "gid", "sid", "rev", "priority", "classification"} | \
-    {"msg", "rule_category", "flow", "rule_explanation", "content_matches", "metadata",
-     "rule_text", "doc_url", "doc_found", "cve_ids", "references_text", "what_to_look_for",
-     "mitre_id", "mitre_tactic", "mitre_technique", "rule_vulnerability",
-     "false_positives", "known_usage", "classtype"}
+KNOWN = {
+    "alert_id",
+    "alert",
+    "timestamp",
+    "alert_message",
+    "classification",
+    "priority",
+    "protocol",
+    "service",
+    "source_ip",
+    "source_port",
+    "destination_ip",
+    "destination_port",
+    "direction",
+    "packet_length",
+}
 
 
 def normalize(token: str) -> str:
@@ -75,7 +76,6 @@ def main() -> int:
     parser.add_argument("--results", default=str(DEFAULT_RESULTS))
     parser.add_argument("--sample", default=str(DEFAULT_SAMPLE))
     parser.add_argument("--prior", default=str(DEFAULT_PRIOR))
-    parser.add_argument("--justifications", default=str(DEFAULT_JUSTIFY))
     parser.add_argument("--judge-results", default=str(DEFAULT_JUDGE))
     args = parser.parse_args()
 
@@ -103,19 +103,6 @@ def main() -> int:
     assert len(rows_by) == len(rows), "duplicate (model, alert) rows in snapshot"
     parsed_rows = [row for row in rows if row["status"] == "parsed"]
 
-    # Optional follow-up snapshots: mismatch justifications and Groq judge verdicts.
-    # Absent files simply leave those fields/sections out of the deliverables.
-    justifications = {}
-    if Path(args.justifications).exists():
-        j_rows = [json.loads(line) for line in
-                  Path(args.justifications).read_text(encoding="utf-8").splitlines()
-                  if line.strip()]
-        justifications = {(row["model"], row["alert_id"]): row["justification"]
-                          for row in j_rows if row["status"] == "parsed"}
-        assert len(justifications) == len(
-            [row for row in j_rows if row["status"] == "parsed"]
-        ), "duplicate (model, alert) rows in justification snapshot"
-
     judge_rows = {}
     judge_model = None
     if Path(args.judge_results).exists():
@@ -137,13 +124,13 @@ def main() -> int:
     corpus_lines = []
     for path, info in sorted(manifest.items()):
         corpus_lines.append(
-            f"`{path}` — {info.get('chunk_count', '?')} chunks, "
+            f"`{path}` -- {info.get('chunk_count', '?')} chunks, "
             f"{info.get('page_count', '?')} pages"
         )
 
     ids = sorted(by_id)
     model_rank = {
-        m: {aid: rows_by[(m, aid)]["parsed"]["rank"] for aid in ids
+        m: {aid: rows_by[(m, aid)]["parsed"]["model_rank"] for aid in ids
             if rows_by[(m, aid)]["status"] == "parsed"}
         for m in models
     }
@@ -253,6 +240,7 @@ def main() -> int:
     iso_no_control = 0
     scores = []
     short_evidence = []
+    retrieval_limit = max(len(row["chunks"]) for row in rows) if rows else 0
     for row in parsed_rows:
         for chunk in row["chunks"]:
             if chunk["control_id"]:
@@ -260,7 +248,7 @@ def main() -> int:
             if chunk["document"].startswith("ISO"):
                 iso_no_control += 1
             scores.append(chunk["dense_cosine_score"] or 0.0)
-        if len(row["chunks"]) < 5:
+        if len(row["chunks"]) < retrieval_limit:
             short_evidence.append((row["alert_id"], row["model"], len(row["chunks"])))
 
     L = []
@@ -268,22 +256,19 @@ def main() -> int:
 
     model_label = "model" if len(models) == 1 else "models"
     model_names = ", ".join(f"`{model}`" for model in models)
+    metadata_models = models[0] if len(models) == 1 else ", ".join(models)
 
     w("# Standards-grounded alert severity ranking (RAG)")
     w("")
-    w("50 distinct alerts sampled from `enriched_snort_alerts.json` were each sent **in full** "
-      "— alert header plus complete rule documentation, **nothing removed** — and ranked by "
-      f"the {model_label} recorded in this snapshot: {model_names}. Before the model "
-      "saw each alert, a deterministic query composed from its record was run through the CSRS "
-      "**hybrid retriever** (Chroma dense + BM25, RRF-fused) against a corpus of **three "
-      "cybersecurity standards** (NIST CSF 2.0, ISO/IEC 27001:2022, NIST SP 800-53 Rev 5); the "
-      "top 5 chunks were injected into the prompt as `[S1]..[S5]` context. Each model added "
-      "three fields to the record: a **severity rank on a 1-5 scale (1 = most severe, "
-      "5 = least severe)**, a **justification**, and the **metrics (record fields) it "
-      "weighed**. The alerts' original Snort `priority`, `classification` and `classtype` "
-      "were **included** in every record. The retrieved evidence chunks are recorded per "
-      "alert, so every ranking is auditable against the standards. All responses are "
-      "verbatim below.")
+    w("50 distinct alerts sampled from `enriched_snort_alerts.json` were ranked by the "
+      f"{model_label} recorded in this snapshot: {model_names}. Each request included the "
+      "complete alert header content, but withheld rule identity and rule documentation. "
+      "A deterministic content-only query ran through the CSRS hybrid retriever (Chroma "
+      "dense + BM25, RRF-fused) over three cybersecurity standards and Snort rule "
+      "documentation. The top 8 chunks were labeled `[S{n}|<document>]` and supplied as "
+      "evidence. The ranker returned a 1-5 model rank, a complete justification, an "
+      "optional mismatch explanation, metrics used, and an evidence-based SID match. All "
+      "responses are reproduced below, and judge verdicts are merged where available.")
     w("")
 
     w("## 1. Run metadata")
@@ -291,14 +276,14 @@ def main() -> int:
     w("| | |")
     w("|---|---|")
     w("| Provider | Groq API |")
-    w("| Model | openai/gpt-oss-120b |")
+    w(f"| Model | {metadata_models} |")
     w(f"| Pipeline | CSRS at `{PROJECT_ROOT}` |")
     w(f"| Run id | `{run_id}` |")
     w(f"| Sample | `{args.sample}` (50 alerts) |")
     w(f"| Snapshot | `{args.results}` ({len(rows)} rows) |")
-    w("| Options (all models) | `temperature=0`, `max_completion_tokens=400` |")
+    w("| Options (all models) | `temperature=0`, `max_completion_tokens=1200` |")
     w("| Retrieval | hybrid (dense top-20 + BM25 top-20, RRF k=60), rerank disabled, "
-      "`limit=5` |")
+      "`limit=8` |")
     w("| Embedding model | `nomic-embed-text` (768-dim, task prefixes) |")
     w("| Corpus | " + "; ".join(corpus_lines) + " |")
     w("")
@@ -311,56 +296,60 @@ def main() -> int:
     w("## 2. Sampling")
     w("")
     w("Stratified by Snort priority so the sample spans all three of Snort's own priorities. "
-      "The export's priority mix is 544 × 1, 500 × 2, 3 × 3; the sample takes **all 3 "
+      "The export's priority mix is 544 x 1, 500 x 2, 3 x 3; the sample takes **all 3 "
       "priority-3 alerts, 24 priority-1 and 23 priority-2**, drawn at random with "
-      "`random.Random(42)` — reproducible. The 3 priority-3 alerts all belong to rule "
+      "`random.Random(42)` -- reproducible. The 3 priority-3 alerts all belong to rule "
       "`1:987:32` (FILE-IDENTIFY `.htr` access), so that end of the scale is one rule only. "
       "The 50 alert_ids are identical to the previous runs', so the runs are directly "
       "comparable.")
     w("")
     w(f"{len(cvss10)} of the 50 sampled alerts carry `CVSS base score 10.0` in their rule "
-      f"documentation (alert_ids {cvss10}) — the spot-checks in §6.")
+      f"documentation (alert_ids {cvss10}) -- the spot-checks in Section 6.")
     w("")
 
     w("## 3. Fields supplied to each model")
     w("")
-    w("**Nothing was hidden.** Every record contains the full alert header — including "
-      "`alert.priority` (Snort's own severity number), `alert.classification` (Snort's "
-      "severity taxonomy) and `rule_documentation.classtype` — plus the complete rule "
-      "documentation: CVSS text, CVE IDs, MITRE data, rule text and references.")
+    w("Each record sent to the ranker contains the complete alert header content fields: "
+      "`timestamp`, `alert_message`, `classification`, `priority`, `protocol`, `service`, "
+      "`source_ip`, `source_port`, `destination_ip`, `destination_port`, `direction`, and "
+      "`packet_length`.")
     w("")
-    w("In addition, each prompt carries the **retrieved standards context** in `[S1]..[S5]` "
-      "blocks: the top 5 chunks returned by the hybrid retriever for the query composed from "
-      "the alert's `alert_message`, rule `msg`, `classtype`, `rule_category`, "
-      "`content_matches` and `rule_explanation` (rule documentation weighted). The system "
-      "prompt instructs the model to treat that context as supporting evidence only, "
-      "mentioning it in the justification only when it matches what the alert actually does. "
-      "The per-alert evidence (document, section, control_id, page, similarity score) is "
-      "recorded in `alert_rankings_rag.json`.")
+    w("The rule-identity fields (`rule_id`, `gid`, `sid`, `rev`) and the entire "
+      "`rule_documentation` object are withheld, so the model must identify the matching "
+      "rule from retrieved evidence. The retrieval query is composed from `alert_message`, "
+      "`classification`, `protocol`, and `service`. The corpus contains the three standards "
+      "plus the complete Snort community ruleset (rule text, "
+      "`docs/samples/snort_rule_1-<sid>.txt`) and 14 rule documentation pages "
+      "(`snort_rule_doc_1-<sid>.txt`), and evidence "
+      "blocks are labeled with their source document as `[S{n}|<document>]`. The flat JSON "
+      "deliverable records the comparison in its `sid_matching` object.")
     w("")
 
     w("## 4. The prompt, verbatim")
     w("")
-    w("**Pipe-line contract** — used by every model in the snapshot. System message:")
+    w("**One-line JSON contract** - used by every model in the snapshot. System message:")
     w("")
     w("```text")
     w(rows_by[(models[0], ids[0])]["system"])
     w("```")
     w("")
-    w("User message (one per alert; the record is embedded in full):")
+    w("User message (one per alert; rule identity and documentation are withheld):")
     w("")
     w("```text")
-    w("CONTEXT - cybersecurity standards retrieved for comparison")
-    w("[S1]")
+    w("CONTEXT - retrieved evidence for comparison")
+    w("[S1|{document}]")
     w("{chunk text of the highest-ranked retrieved chunk, with its section breadcrumb}")
     w("[/S1]")
-    w("[S2] ... [/S5]")
+    w("[S2|{document}] ... [/S2]")
     w("")
     w("ALERT RECORD")
-    w("{... the complete alert record as compact JSON, fields as in the source export ...}")
+    w("{the alert header content fields as compact JSON, rule-identity fields withheld}")
     w("")
-    w("Severity-rank this single Snort alert. Reply with exactly one line: "
-      "<rank 1-5> | <short 3-10 word justification> | <comma-separated field names>")
+    w("Severity-rank this single Snort alert. Reply with exactly one line of valid JSON: "
+      '{"model_rank": <int 1-5>, "justification": "<2-4 complete sentences>", '
+      '"mismatch_explanation": <string or null>, "metrics_used": '
+      '["<field names weighed>"], "matched_sid": <int or null>, '
+      '"sid_evidence_document": "<document name>" or null}')
     w("```")
     w("")
     w("Retry reminder, appended once when the first answer failed the strict format check:")
@@ -369,8 +358,11 @@ def main() -> int:
     reminder = next(
         (row["retry_reminder"] for row in rows if row.get("retry_reminder")),
         "Your previous answer did not match the required format. Reply again with EXACTLY "
-        "ONE line containing EXACTLY two \"|\" characters and nothing else:\n"
-        "<rank 1-5> | <short 3-10 word justification> | <comma-separated field names>",
+        "ONE line containing only valid JSON with exactly these keys:\n"
+        '{"model_rank": <int 1-5>, "justification": "<2-4 complete sentences explaining '
+        'why this rank, citing the record\'s own evidence>", "mismatch_explanation": '
+        '<string or null>, "metrics_used": ["<field names weighed>"], "matched_sid": '
+        '<int or null>, "sid_evidence_document": "<document name>" or null}',
     )
     w(reminder)
     w("```")
@@ -396,16 +388,16 @@ def main() -> int:
         for m in models:
             row = rows_by[(m, aid)]
             if row["status"] == "failed":
-                cells += ["**(parse failed)**", "—", "—"]
+                cells += ["**(parse failed)**", "--", "--"]
             else:
                 parsed = row["parsed"]
-                cells += [f"**{parsed['rank']}**", parsed["justification"],
+                cells += [f"**{parsed['model_rank']}**", parsed["justification"],
                           ", ".join(parsed["metrics_used"])]
         w("| " + " | ".join(cells) + " |")
     w("")
     for m in models:
         if fail[m]:
-            w(f"### Parse failures — {m}")
+            w(f"### Parse failures -- {m}")
             w("")
             for aid in fail[m]:
                 row = rows_by[(m, aid)]
@@ -427,12 +419,12 @@ def main() -> int:
     w("## 6. Model versus Snort (priority visible in every record)")
     w("")
     w("Each model ranks on **1-5 (1 = most severe)**. Snort's ground truth is coarser (1-3); "
-      "for the exact-match stat it is mapped to its 5-point anchor — Snort 1 → model rank 1, "
-      "Snort 2 → 3, Snort 3 → 5. The confusion tables show the raw ranks with no mapping. "
+      "for the exact-match stat it is mapped to its 5-point anchor -- Snort 1 -> model rank 1, "
+      "Snort 2 -> 3, Snort 3 -> 5. The confusion tables show the raw ranks with no mapping. "
       "In this run, each model **saw** Snort's priority in every record, so an exact match "
       "can be "
       "simple copying; the prior non-RAG 1-5 run (`alert_rankings.json`) is the comparison "
-      "baseline in §8.")
+      "baseline in Section 8.")
     w("")
     for m in models:
         n = len(model_rank[m])
@@ -443,25 +435,25 @@ def main() -> int:
             cr = list(spread[m])[0]
             if cr in ANCHOR.values():
                 sp = {v: k for k, v in ANCHOR.items()}[cr]
-                collapse_note = (f" — all 50 were scored {cr}, so the {agree[m]} matches are "
+                collapse_note = (f" -- all 50 were scored {cr}, so the {agree[m]} matches are "
                                  f"exactly the alerts whose Snort priority is {sp} (anchor "
                                  f"{cr}); the agreement is the collapse, not discrimination")
             else:
-                collapse_note = (f" — all 50 were scored {cr}, which is not one of the anchor "
+                collapse_note = (f" -- all 50 were scored {cr}, which is not one of the anchor "
                                  f"ranks (1/3/5), so the collapse produces no exact matches")
         w(f"- Exact match with Snort priority: **{agree[m]}/50 ({100*agree[m]/50:.0f}%)**"
           f"{collapse_note}")
         w("- Rank distribution: "
-          + ", ".join(f"{k}→{spread[m].get(k,0)}" for k in (1,2,3,4,5))
-          + " vs sample composition 1→24, 2→23, 3→3")
+          + ", ".join(f"{k}->{spread[m].get(k,0)}" for k in (1,2,3,4,5))
+          + " vs sample composition 1->24, 2->23, 3->3")
         w("- `done_reason`: "
           + ", ".join(f"{k}={v}" for k, v in sorted(done_reasons[m].items()))
           + "; alerts retried once: "
           + (", ".join(map(str, retried[m])) if retried[m] else "none"))
         w("")
-        w("Confusion table — rows are Snort's priority, columns the model's rank 1-5:")
+        w("Confusion table -- rows are Snort's priority, columns the model's rank 1-5:")
         w("")
-        w("| Snort \\ model | → 1 | → 2 | → 3 | → 4 | → 5 | Total |")
+        w("| Snort \\ model | -> 1 | -> 2 | -> 3 | -> 4 | -> 5 | Total |")
         w("|---:|---:|---:|---:|---:|---:|---:|")
         for sp in (1, 2, 3):
             cells = [cross[m].get((sp, k), 0) for k in (1, 2, 3, 4, 5)]
@@ -469,7 +461,7 @@ def main() -> int:
         w("")
         if collapsed[m]:
             w(f"**This model collapsed all {n} parsed alerts onto a single rank "
-              f"({list(spread[m])[0]}) — recorded failure, not smoothed.**")
+              f"({list(spread[m])[0]}) -- recorded failure, not smoothed.**")
             w("")
         if big_diffs[m]:
             w("Two scale steps from the 5-point anchor (model rank vs anchor 1/3/5): "
@@ -492,7 +484,7 @@ def main() -> int:
         w(f"`{a}` and `{b}` agree with each other on {num}/50 alerts.")
     w("")
 
-    w("## 6b. Evidence statistics (what the standards retrieval actually returned)")
+    w("## 6b. Evidence statistics (what retrieval actually returned)")
     w("")
     w("| Model | alerts with chunks from 1 doc | 2 docs | 3 docs |")
     w("|---|---:|---:|---:|")
@@ -513,7 +505,7 @@ def main() -> int:
         w("Most-retrieved control ids / sections (top 12):")
         w("")
         for label, count in top_control.most_common(12):
-            w(f"- `{label}` — {count}")
+            w(f"- `{label}` -- {count}")
         w("")
     if scores:
         mean = sum(scores) / len(scores)
@@ -524,29 +516,30 @@ def main() -> int:
       f"ISO document by section breadcrumb only.")
     if short_evidence:
         w("")
-        w("Alerts whose retrieval returned fewer than 5 chunks: "
+        w(f"Alerts whose retrieval returned fewer chunks than the retrieval limit "
+          f"({retrieval_limit}): "
           + ", ".join(f"{aid} ({m}, {n})" for aid, m, n in short_evidence))
     w("")
 
     w("## 6c. Mismatch analysis (model rank vs anchored Snort ground truth)")
     w("")
     w("A rank is a **mismatch** when it is more than one step from the anchored ground "
-      "truth: `|rank - ANCHOR[priority]| > 1` with `ANCHOR = {1:1, 2:3, 3:5}` — the same "
-      "mapping the exact-match stat in §6 uses. For every mismatch, the model was "
-      "re-queried with its own original `[S1]..[S5]` evidence, its recorded rank, and the "
-      "Snort ground truth, and asked to explain why its rank differs and what led to its "
-      "rank; those explanations are stored verbatim in `alert_rankings_rag.json` as "
-      "`mismatch_justification`.")
+      "truth: `|model_rank - ANCHOR[priority]| > 1` with "
+      "`ANCHOR = {1:1, 2:3, 3:5}` - the same mapping the exact-match stat in Section 6 "
+      "uses. The ranker's own `mismatch_explanation` is recorded in the original snapshot; "
+      "there is no separate re-query. Each explanation below is reproduced verbatim.")
     w("")
     w("| Model | mismatches | alerts | rate |")
     w("|---|---:|---:|---:|")
     for m in models:
+        parsed_count = len(model_rank[m])
+        rate = 100 * len(mismatch[m]) / parsed_count if parsed_count else 0
         w(f"| {m} | {len(mismatch[m])} | {len(model_rank[m])} | "
-          f"{100 * len(mismatch[m]) / len(model_rank[m]):.0f}% |")
+          f"{rate:.0f}% |")
     w("")
     w("By Snort priority (anchor in parentheses), mismatches / alerts:")
     w("")
-    w("| Model | p1 (→1) | p2 (→3) | p3 (→5) |")
+    w("| Model | p1 (->1) | p2 (->3) | p3 (->5) |")
     w("|---|---:|---:|---:|")
     for m in models:
         cells = []
@@ -560,51 +553,57 @@ def main() -> int:
             w(f"**{m}: no mismatches.**")
             w("")
             continue
-        w(f"### Mismatch rows — {m}")
+        w(f"### Mismatch rows -- {m}")
         w("")
         for aid in sorted(mismatch[m]):
-            justification = justifications.get((m, aid))
-            if justification:
-                w(f"- **alert {aid}** (Snort p{snort_prio[aid]} → anchored "
-                  f"{ANCHOR[snort_prio[aid]]}): model rank **{model_rank[m][aid]}**")
-                w("")
-                w(f"  > \"{justification}\"")
-                w("")
+            explanation = rows_by[(m, aid)]["parsed"]["mismatch_explanation"]
+            w(f"- **alert {aid}**: Snort priority **{snort_prio[aid]}**, anchored rank "
+              f"**{anchored_rank(snort_prio[aid])}**, model rank "
+              f"**{model_rank[m][aid]}**")
+            w("")
+            if explanation is None:
+                w("  > (explanation missing)")
             else:
-                missing_note = ("— no justification pass ran" if not justifications
-                                else "— justification missing")
-                w(f"- **alert {aid}** (Snort p{snort_prio[aid]} → anchored "
-                  f"{ANCHOR[snort_prio[aid]]}): model rank **{model_rank[m][aid]}** "
-                  f"{missing_note}")
-                w("")
+                w("  > " + explanation.replace("\n", "\n  > "))
+            w("")
     w("")
 
-    w("## 6d. LLM-as-judge: Groq GPT-OSS scores the local rankings")
+    w("## 6d. LLM-as-judge: Llama 3.3 70B scores the ranker output")
     w("")
     if not judge_rows:
-        w(f"The judge snapshot (`{args.judge_results}`) is missing — section skipped. "
+        w(f"The judge snapshot (`{args.judge_results}`) is missing -- section skipped. "
           "Run `scripts/judge_alert_rankings.py` to score every parsed ranking.")
+        for m in models:
+            if model_rank[m]:
+                w(f"(judged 0/{len(model_rank[m])} parsed rankings) - `{m}`")
     else:
-        w(f"Every parsed (model, alert) ranking was scored on **0-1** by "
-          f"`{judge_model}` (Groq API, `temperature=0`, strict JSON schema). The judge "
-          f"received the local model's rank/justification/metrics, the **complete "
-          f"original alert** (header + full rule documentation) and the ground truth "
-          f"(Snort priority + anchored rank). Rubric: **1.0** exact match, **0.5–0.9** "
-          f"within one step of the anchored rank, **0.0–0.4** more than one step away; "
-          f"justification quality nudges the score within each band. Judge verdicts "
-          f"(score + reasoning) are stored in `alert_rankings_rag.json`.")
+        w(f"The judge is `{judge_model}` through the Groq API with `temperature=0` and a "
+          "`json_object` response contract. It is a different model family and size from "
+          "the `openai/gpt-oss-120b` ranker to avoid correlated judgment bias. The judge "
+          "received the candidate's `model_rank`, `justification`, and `metrics_used`, the "
+          "complete original alert, and the ground truth. Rubric bands remain **1.0** for "
+          "an exact match, **0.5-0.9** within one step of the anchored rank, and **0.0-0.4** "
+          "more than one step away; v2 also grades justification completeness and quality "
+          "within each band. Judge scores and reasoning are stored in "
+          "`alert_rankings_rag.json`.")
         w("")
-        w("| Model | mean | median | exact (1.0) | ≥ 0.5 |")
+        w("| Model | mean | median | exact (1.0) | >= 0.5 |")
         w("|---|---:|---:|---:|---:|")
         for m in models:
-            mean = f"{judge_mean[m]:.3f}" if judge_mean[m] is not None else "—"
-            median = f"{judge_median[m]:.3f}" if judge_median[m] is not None else "—"
+            mean = f"{judge_mean[m]:.3f}" if judge_mean[m] is not None else "--"
+            median = f"{judge_median[m]:.3f}" if judge_median[m] is not None else "--"
             w(f"| {m} | {mean} | {median} | {judge_exact[m]} | "
               f"{judge_close[m]} |")
         w("")
-        w("Score distribution (0.0–1.0):")
+        for m in models:
+            judged = len(judge_scores[m])
+            parsed_count = len(model_rank[m])
+            if judged < parsed_count:
+                w(f"(judged {judged}/{parsed_count} parsed rankings) - `{m}`")
+                w("")
+        w("Score distribution (0.0-1.0):")
         w("")
-        w("| Model | 0.0–0.2 | 0.2–0.4 | 0.4–0.6 | 0.6–0.8 | 0.8–1.0 |")
+        w("| Model | 0.0-0.2 | 0.2-0.4 | 0.4-0.6 | 0.6-0.8 | 0.8-1.0 |")
         w("|---|---:|---:|---:|---:|---:|")
         for m in models:
             w("| " + " | ".join(
@@ -612,25 +611,25 @@ def main() -> int:
                        for lo, hi in ((0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0))]
             ) + " |")
         w("")
-        w("Agreement with the mismatch flag — mean judge score on mismatch rows vs "
+        w("Agreement with the mismatch flag -- mean judge score on mismatch rows vs "
           "non-mismatch rows (empty cell when a class has no rows):")
         w("")
         w("| Model | mismatch rows | non-mismatch rows |")
         w("|---|---:|---:|")
         for m in models:
             mm, ok = judge_mismatch_mean[m]
-            w(f"| {m} | {f'{mm:.3f}' if mm is not None else '—'} | "
-              f"{f'{ok:.3f}' if ok is not None else '—'} |")
+            w(f"| {m} | {f'{mm:.3f}' if mm is not None else '--'} | "
+              f"{f'{ok:.3f}' if ok is not None else '--'} |")
         w("")
         for m in models:
-            w(f"### Lowest-scored rankings — {m}")
+            w(f"### Lowest-scored rankings -- {m}")
             w("")
             if not lowest[m]:
                 w("_none_")
                 w("")
                 continue
             for score, reasoning, aid in lowest[m]:
-                w(f"- **alert {aid}**: judge score **{score:.2f}** — "
+                w(f"- **alert {aid}**: judge score **{score:.2f}** -- "
                   f"model rank **{model_rank[m].get(aid, '?')}** vs anchored "
                   f"{ANCHOR[snort_prio[aid]]}. Judge reasoning: \"{reasoning}\"")
             w("")
@@ -641,40 +640,42 @@ def main() -> int:
     w("- **N=3 for priority 3.** The dataset holds only 3 priority-3 alerts, all from one "
       "rule (`1:987:32`), so that column of the confusion table is thin and not "
       "representative of the priority-3 population.")
-    w("- **Single hosted model.** The production experiment uses the hosted 120B-class "
-      "`openai/gpt-oss-120b` model through the Groq API, so its results do not establish "
-      "how other models or providers would rank the same alerts.")
-    w("- **Agreement can be pure copying.** The answer was visible in the input, so a model "
-      "that echoes `priority` scores an exact match without weighing anything. Deviations "
-      "from the visible priority are more informative than matches in this run.")
+    w("- **Two hosted models.** The experiment uses ranker `openai/gpt-oss-120b` and judge "
+      "`meta-llama/llama-3.3-70b-versatile` through the Groq API, so its results do not "
+      "establish how other models or providers would handle the same alerts.")
+    w("- **Agreement can be pure copying.** The ranker still sees `priority`, because it is "
+      "an alert content field, so exact matches can be simple copying. Rule identity fields "
+      "such as `rule_id` and `sid` are withheld, so SID matches must come from retrieved "
+      "evidence.")
     w("- **The exact-match stat uses mapped anchors.** Snort's 1-3 priority is compared "
-      "against the 5-point anchors 1, 3 and 5 (Snort 1 → 1, 2 → 3, 3 → 5). This is a "
+      "against the 5-point anchors 1, 3 and 5 (Snort 1 -> 1, 2 -> 3, 3 -> 5). This is a "
       "modeling choice; the confusion tables and `alert_rankings_rag.json` carry the raw, "
       "unmapped ranks.")
     w("- **`metrics_used` are model-authored field names.** They may not exactly match the "
-      "record's keys; mismatches are listed in §6 rather than silently normalized.")
-    w("- **Same rule documentation repeats.** Alerts of the same rule carry identical "
-      "`rule_documentation`; the calls re-send it. Judgement is per-alert by design.")
+      "record's keys; mismatches are listed in Section 6 rather than silently normalized.")
     w("- **Retrieval quality is query-vocabulary dependent.** The composed query is built "
-      "from the alert's own wording, so standards language that shares no terms with the "
-      "alert (for example ISO Annex A controls vs Snort's `content_matches` tokens) may not "
-      "be retrieved even when relevant. §6b reports what was actually retrieved.")
+      "from `alert_message`, `classification`, `protocol`, and `service`, so evidence that "
+      "shares no terms with those fields may not be retrieved even when relevant. Section "
+      "6b reports what was actually retrieved.")
     w("- **The standards context is evidence, not a rank.** The system prompt instructs the "
-      "model to use `[S1]..[S5]` only as supporting comparison material and never force a "
+      "model to use labeled evidence only as supporting comparison material and never force a "
       "connection; the justification column shows whether the model cited the context or "
       "ignored it.")
     w("- **ISO control ids are absent.** ISO chunks carry `control_id=None` because the "
       "chunker's control-id patterns match CSF and SP 800-53 headings, not Annex A (`A.5.1`) "
       "headings; ISO citations use section breadcrumbs instead.")
-    w("- **Retry policy.** A malformed first answer triggered exactly one retry with the "
-      "reminder above; both attempts are recorded. Anything still failing is shown verbatim "
-      "in §5, never coerced into a rank.")
+    w("- **SID matching is retrieval-limited.** When no `snort_rule_*` document chunk was "
+      "retrieved, `matched_sid` is null and `sid_matching.sid_match` is null, so no SID "
+      "comparison is possible.")
+    w("- **Retry policy.** A first answer that violated the one-line JSON contract triggered "
+      "exactly one retry with the JSON-contract reminder above; both attempts are recorded. "
+      "Anything still failing is shown verbatim in Section 5, never coerced into a rank.")
     w("")
 
     w("## 8. Compared with the prior non-RAG 1-5 run (same 50 alerts, priority visible)")
     w("")
     if prior is None:
-        w(f"The prior run data (`{args.prior}`) is missing — comparison skipped.")
+        w(f"The prior run data (`{args.prior}`) is missing -- comparison skipped.")
     else:
         prior_rank = {
             m: {row["alert_id"]: row[m]["rank"] for row in prior
@@ -687,7 +688,7 @@ def main() -> int:
           "table shows each model's rank spread before and after adding RAG context, and how "
           "often the RAG run changed the model's rank per alert:")
         w("")
-        w("| Model | non-RAG spread | RAG spread | ranks used (non-RAG → RAG) | "
+        w("| Model | non-RAG spread | RAG spread | ranks used (non-RAG -> RAG) | "
           "rank changed |")
         w("|---|---:|---:|:--:|---:|")
         for m in models:
@@ -697,10 +698,10 @@ def main() -> int:
             used_prior = len([k for k in (1,2,3,4,5) if prior_spread[m].get(k)])
             used_rag = len([k for k in (1,2,3,4,5) if spread[m].get(k)])
             w(f"| {m} | "
-              + ", ".join(f"{k}→{prior_spread[m].get(k,0)}" for k in (1,2,3,4,5))
+              + ", ".join(f"{k}->{prior_spread[m].get(k,0)}" for k in (1,2,3,4,5))
               + " | "
-              + ", ".join(f"{k}→{spread[m].get(k,0)}" for k in (1,2,3,4,5))
-              + f" | {used_prior} of 5 → {used_rag} of 5 | {changed}/50 |")
+              + ", ".join(f"{k}->{spread[m].get(k,0)}" for k in (1,2,3,4,5))
+              + f" | {used_prior} of 5 -> {used_rag} of 5 | {changed}/50 |")
         w("")
         per_model_lines = []
         for m in models:
@@ -711,8 +712,8 @@ def main() -> int:
             moved.sort()
             if moved:
                 per_model_lines.append(
-                    f"{m}: {len(moved)} alerts moved — "
-                    + "; ".join(f"{aid} {a}→{b}" for aid, a, b in moved)
+                    f"{m}: {len(moved)} alerts moved -- "
+                    + "; ".join(f"{aid} {a}->{b}" for aid, a, b in moved)
                 )
         for line in per_model_lines:
             w(line)
@@ -724,9 +725,9 @@ def main() -> int:
                 for m in models:
                     before = prior_rank[m].get(aid, "-")
                     after = model_rank[m].get(aid, "-")
-                    cells.append(f"{m}: {before} → {after}")
+                    cells.append(f"{m}: {before} -> {after}")
                 lines.append(f"alert {aid} ({' / '.join(cells)})")
-            w("CVSS-10.0 alerts (expected rank 1), non-RAG → RAG: " + "; ".join(lines))
+            w("CVSS-10.0 alerts (expected rank 1), non-RAG -> RAG: " + "; ".join(lines))
             w("")
     w("")
 
@@ -735,7 +736,7 @@ def main() -> int:
     for aid in ids:
         entry = by_id[aid]
         first_model_row = rows_by[(models[0], aid)]
-        row = {
+        shared = {
             "alert_id": aid,
             "rule_id": entry["alert"]["rule_id"],
             "alert_message": entry["alert"]["alert_message"],
@@ -743,30 +744,82 @@ def main() -> int:
             "classification": classification[aid],
             "classtype": classtype[aid],
             "query": first_model_row["query"],
-            "retrieved_chunks": first_model_row["chunks"],
         }
-        for m in models:
+
+        if len(models) == 1:
+            m = models[0]
             r = rows_by[(m, aid)]
+            row = {**shared, "ranker_model": m}
             if r["status"] == "failed":
-                row[m] = {"status": "failed", "raw": [a["content"] for a in r["attempts"]]}
+                row.update(
+                    status="failed",
+                    raw=[attempt["content"] for attempt in r["attempts"]],
+                )
             else:
                 p = r["parsed"]
-                model_row = {"status": "parsed", "rank": p["rank"],
-                             "justification": p["justification"],
-                             "metrics_used": p["metrics_used"],
-                             "raw": r["attempts"][-1]["content"],
-                             "done_reason": r["done_reasons"][-1]}
-                model_row["mismatch"] = is_mismatch(p["rank"], snort_prio[aid])
-                if (m, aid) in justifications:
-                    model_row["mismatch_justification"] = justifications[(m, aid)]
+                matched_sid = p["matched_sid"]
+                snort_sid = int(entry["alert"]["sid"])
+                row.update(
+                    model_rank=p["model_rank"],
+                    justification=p["justification"],
+                    anchored_rank=anchored_rank(snort_prio[aid]),
+                    mismatch=is_mismatch(p["model_rank"], snort_prio[aid]),
+                    mismatch_explanation=p["mismatch_explanation"],
+                    metrics_used=p["metrics_used"],
+                    sid_matching={
+                        "snort_sid": snort_sid,
+                        "rag_matched_sid": matched_sid,
+                        "evidence_document": p["sid_evidence_document"],
+                        "sid_match": (
+                            matched_sid == snort_sid if matched_sid is not None else None
+                        ),
+                    },
+                )
+                if (m, aid) in judge_rows:
+                    j = judge_rows[(m, aid)]
+                    verdict = j["verdict"]
+                    row["judge"] = {
+                        "model": j["judge_model"],
+                        "score": verdict["score"],
+                        "reasoning": verdict["reasoning"],
+                    }
+        else:
+            row = shared
+            for m in models:
+                r = rows_by[(m, aid)]
+                if r["status"] == "failed":
+                    row[m] = {
+                        "status": "failed",
+                        "raw": [attempt["content"] for attempt in r["attempts"]],
+                    }
+                    continue
+                p = r["parsed"]
+                matched_sid = p["matched_sid"]
+                snort_sid = int(entry["alert"]["sid"])
+                model_row = {
+                    "status": "parsed",
+                    "model_rank": p["model_rank"],
+                    "justification": p["justification"],
+                    "anchored_rank": anchored_rank(snort_prio[aid]),
+                    "mismatch": is_mismatch(p["model_rank"], snort_prio[aid]),
+                    "mismatch_explanation": p["mismatch_explanation"],
+                    "metrics_used": p["metrics_used"],
+                    "sid_matching": {
+                        "snort_sid": snort_sid,
+                        "rag_matched_sid": matched_sid,
+                        "evidence_document": p["sid_evidence_document"],
+                        "sid_match": (
+                            matched_sid == snort_sid if matched_sid is not None else None
+                        ),
+                    },
+                }
                 if (m, aid) in judge_rows:
                     j = judge_rows[(m, aid)]
                     verdict = j["verdict"]
                     model_row["judge"] = {
+                        "model": j["judge_model"],
                         "score": verdict["score"],
                         "reasoning": verdict["reasoning"],
-                        "model": j["judge_model"],
-                        "latency_ms": j["latency_ms"],
                     }
                 row[m] = model_row
         merged.append(row)
@@ -779,6 +832,19 @@ def main() -> int:
     print(f"wrote {OUT}")
     print(f"wrote {OUTJSON}")
     for m in models:
+        sid_matched = sum(
+            1
+            for aid in ids
+            if rows_by[(m, aid)]["status"] == "parsed"
+            and rows_by[(m, aid)]["parsed"]["matched_sid"]
+            == int(by_id[aid]["alert"]["sid"])
+        )
+        sid_attempted = sum(
+            1
+            for aid in ids
+            if rows_by[(m, aid)]["status"] == "parsed"
+            and rows_by[(m, aid)]["parsed"]["matched_sid"] is not None
+        )
         judge_note = ""
         if judge_rows:
             mean = judge_mean[m]
@@ -787,7 +853,10 @@ def main() -> int:
         print(f"{m}: parsed {len(model_rank[m])}/50, exact match {agree[m]}/50 "
               f"({100*agree[m]/50:.0f}%), mismatches {len(mismatch[m])}/50, "
               f"spread {dict(sorted(spread[m].items()))}, failures {len(fail[m])}"
-              f"{judge_note}")
+              f"{judge_note}, sid match {sid_matched}/50 (attempted on {sid_attempted})")
+        judged = sum(1 for aid in ids if (m, aid) in judge_rows)
+        if judged < len(model_rank[m]):
+            print(f"WARNING: {m}: judged {judged}/{len(model_rank[m])} parsed rankings")
     for (a, b), num in pair_agree.items():
         print(f"{a} vs {b}: agree {num}/50")
     return 0
