@@ -206,3 +206,18 @@ the final handoff.
 Delaying the commits made completed subtasks look untracked and forced the user to repeat
 the instruction. Focused commits also make long evaluation work recoverable and reviewable
 before an external service blocks the final run.
+
+---
+
+## L-10 · Gate provider options by model capability
+
+**Date:** 2026-08-13 · **Trigger:** Groq rejected reasoning-only request parameters for the
+non-reasoning judge model with HTTP 400.
+
+**Rule.** Treat request options as model capabilities, not provider-wide capabilities. Keep
+an explicit allowlist for model-specific options and test both a supported model and a
+negative control.
+
+**Why.** Models served by the same API do not necessarily accept the same request schema.
+Sending reasoning options unconditionally made an otherwise valid non-reasoning model call
+fail before generation.

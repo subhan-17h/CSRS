@@ -225,9 +225,24 @@ def test_chat_maps_response_and_records_usage(tmp_path: Path) -> None:
     assert tracker.requests_today == 1
 
     call = client.chat.completions.calls[0]
+    assert "reasoning_effort" not in call
+    assert "include_reasoning" not in call
+    assert call["max_completion_tokens"] == 20
+
+
+def test_chat_includes_reasoning_options_for_reasoning_model() -> None:
+    client = FakeClient([fake_response()])
+
+    chat(
+        client,
+        "openai/gpt-oss-120b",
+        [{"role": "user", "content": "rank this"}],
+        max_tokens=20,
+    )
+
+    call = client.chat.completions.calls[0]
     assert call["reasoning_effort"] == "low"
     assert call["include_reasoning"] is False
-    assert call["max_completion_tokens"] == 20
 
 
 def test_chat_retries_429_using_retry_after_then_succeeds() -> None:

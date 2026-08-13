@@ -24,6 +24,7 @@ from judge import (  # noqa: E402  (deliberate: sibling eval module)
 
 MAX_REQUEST_ATTEMPTS = 5
 MAX_RETRY_DELAY_SECONDS = 60.0
+REASONING_MODELS = frozenset({"openai/gpt-oss-120b", "openai/gpt-oss-20b"})
 DEFAULT_RPM = 30
 DEFAULT_RPD = 1_000
 DEFAULT_TPM = 8_000
@@ -307,10 +308,11 @@ def chat(
                 "model": model,
                 "messages": messages,
                 "temperature": temperature,
-                "reasoning_effort": reasoning_effort,
-                "include_reasoning": include_reasoning,
                 "max_completion_tokens": max_tokens,
             }
+            if model in REASONING_MODELS:
+                kwargs["reasoning_effort"] = reasoning_effort
+                kwargs["include_reasoning"] = include_reasoning
             if response_format:
                 kwargs["response_format"] = response_format
             response = client.chat.completions.with_raw_response.create(**kwargs)
