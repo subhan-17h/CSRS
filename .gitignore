@@ -24,6 +24,9 @@ docs/*.txt
 # document (never commit it); SP 800-53r5 is fetched, not shipped.
 docs/samples/ISO_IEC-270012022-ed.3.pdf
 docs/samples/NIST.SP.800-53r5.pdf
+# Snort rule documentation is fetched by scripts/fetch_snort_rule_docs.py
+# (Cisco-copyrighted pages, no NIST-style public-domain exception).
+docs/samples/snort_rule_*.txt
 
 # Evaluation runs
 eval/results/
