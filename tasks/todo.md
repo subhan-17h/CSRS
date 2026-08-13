@@ -1817,6 +1817,12 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     `x-ratelimit-*` header refinement), and `chat()` (`with_raw_response`, 5-attempt budget,
     None-safe usage) implemented per the approved plan. 12 offline tests pass in both the
     eval-group and base environments, ruff clean, base-env import works, ASCII verified.
+  - [x] **Follow-up:** Send `reasoning_effort` and `include_reasoning` only for the supported
+        reasoning models; cover reasoning and non-reasoning request kwargs and verify with
+        the focused eval-group tests and Ruff.
+    - Review: the transport now gates both options through an exact three-model allowlist.
+      The non-reasoning negative control omits both keys and `openai/gpt-oss-120b` keeps the
+      existing defaults. Focused verification passes with 13 tests; Ruff is clean.
 - [x] **ALERT-GROQ-2** `run_alert_rag.py` transport swap
   - `DEFAULT_MODELS = ("openai/gpt-oss-120b",)`; `OPTIONS` → `{temperature: 0,
     max_completion_tokens: 200}`; inventory check only requires the embed model; attempt meta
@@ -1860,3 +1866,37 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     passed; final numbers: parsed 50/50, exact 21/50 (42%), mismatches 23/50, spread
     {1: 2, 2: 4, 3: 41, 4: 3}, failures 0, judge mean 0.586. §8 stays skipped (non-RAG
     `alert_rankings.json` baseline absent). `_vN` archives deleted after the final build.
+
+- [x] **ALERT-GROQ-7** v2 deliverable: split ranker/judge models, clean JSON schema, RAG-embedded Snort rule matching
+  - Ranker stays `openai/gpt-oss-120b`; judge moves to a different family (`qwen/qwen3.6-27b`;
+    llama-3.3-70b-versatile is listed but not callable on this key, 404 model_not_found) with
+    `reasoning_effort="none"` + `json_object` (qwen rejects "low"; thinking mode breaks json_object).
+  - `run_alert_rag.py`: one-line JSON reply contract `{model_rank, justification (complete),
+    mismatch_explanation, metrics_used, matched_sid, sid_evidence_document}`; parsed key
+    `rank` -> `model_rank`; retrieval query and prompt record from alert content only (rule_id,
+    gid, sid, rev and rule_documentation withheld - the sid answer key); evidence blocks
+    labeled `[S{n}|<document>]`; `--resume` reuses the snapshot run_id (multi-day split).
+  - `fetch_snort_rule_docs.py` (new): downloads the 14 unique snort.org rule-doc pages
+    (browser UA required) as `docs/samples/snort_rule_1-<sid>.txt`; corpus re-indexed to
+    17 documents. gitignored (Cisco-copyrighted).
+  - `judge_alert_rankings.py`: judge `qwen/qwen3.6-27b`, `json_object` format, v2 rubric grades
+    justification completeness; `llm_rank` -> `model_rank`; fixed latent UnboundLocalError on
+    the request-failure path.
+  - `justify_alert_mismatches.py` retired (rankers write mismatch_explanation in their own
+    call); `alert_mismatch_justifications.jsonl` deleted; old v1 snapshots archived to
+    CIL/archive_v1/.
+  - `build_alert_rag_report.py`: flat 50-record deliverable with `sid_matching` sub-object
+    (snort_sid vs rag_matched_sid + evidence_document + sid_match) and `judge` block; stale
+    justify-pass merge removed; report prose/caveats updated for the withheld answer key.
+  - Done when: full offline suite green, corpus manifest 17 docs, ranker + judge smoke runs
+    pass on real calls, production run completes rank -> judge -> report with the new schema.
+    - Review: production sequence completed on the full 4,022-rule community corpus (corpus
+      4,039 docs / 6,518 chunks): rank 50/50 (165K tokens, account 3), judge 50/50 (qwen,
+      accounts 3+4), report built. Final: exact 32/50 (64%), mismatches 4/50, spread
+      {1: 21, 2: 1, 3: 12, 4: 13, 5: 3}, failures 0, judge mean 0.868. Sid matching
+      30/34 attempted (16 alerts had no rule-doc evidence in top-8); the 4 wrong matches
+      are a documented retrieval-ambiguity limitation (dozens of community rules share
+      generic msgs such as "SERVER-WEBAPP /.... access" and the true rule is not surfaced).
+      The 3.3-70b-versatile judge was replaced by qwen/qwen3.6-27b after the project key
+      returned 404 model_not_found; llama/account-2 key turned out to be a 20K-token tier.
+      Full suite 324 passed; 7 implementation commits + this phase-closing commit.
