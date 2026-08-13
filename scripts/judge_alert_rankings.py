@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 # ruff: noqa: E501  (the prompt block below is verbatim contract text; see module docstring)
 
-"""Score the local models' severity rankings with a Groq-hosted GPT-OSS judge.
+"""Score the local models' severity rankings with a Groq-hosted Qwen judge.
 
 For every parsed (model, alert) row in the RAG ranking snapshot
-(alert_rag_run.jsonl), the Groq judge (openai/gpt-oss-120b) receives the local
-model's output (rank, justification, metrics_used), the COMPLETE original
+(alert_rag_run.jsonl), the Groq judge (qwen/qwen3.6-27b) receives the local
+model's output (model_rank, justification, metrics_used), the COMPLETE original
 Snort alert (header plus full rule documentation) and the ground truth (Snort
-priority mapped to its 1-5 anchor). It returns a strict JSON verdict with a
-correctness score on 0-1:
+priority mapped to its 1-5 anchor). The judge uses a different model family and
+size from the ranker to avoid correlated judgment bias. It returns a strict
+JSON verdict with a correctness score on 0-1:
 
     1.0        rank exactly matches the anchored ground truth
     0.5-0.9    rank is within one step of the anchored ground truth
     0.0-0.4    rank is more than one step away
 
-Within each band the judge may raise the score for a coherent, evidence-based
-justification and lower it for one that misreads the record.
+Within each band the v2 rubric also grades justification completeness and
+quality, rewarding substantive, evidence-grounded explanations and lowering
+scores for generic, vague, incomplete, or inaccurate reasoning.
 
 The judge SEES the ground truth: this is an agreement check, not a blind
 plausibility review. Transport retries, backoff and daily-quota detection
@@ -66,12 +68,10 @@ from judge import (  # noqa: E402  (deliberate: sibling eval module)
     load_judge_settings,
 )
 
-JUDGE_MODEL = "openai/gpt-oss-120b"
-JUDGE_PROMPT_VERSION = "severity_judge_v1"
+JUDGE_MODEL = "qwen/qwen3.6-27b"
+JUDGE_PROMPT_VERSION = "severity_judge_v2"
 TEMPERATURE = 0
 MAX_COMPLETION_TOKENS = 1_200
-REASONING_EFFORT = "low"
-INCLUDE_REASONING = False
 QUOTA_ERROR_MESSAGE = (
     "Groq judge daily token quota was exhausted; resume this run after the quota resets"
 )
@@ -79,10 +79,10 @@ QUOTA_ERROR_MESSAGE = (
 SYSTEM = """You are an expert severity-ranking judge.
 
 A local LLM ranked ONE Snort alert on a 1-5 severity scale (1 = MOST severe, 5 = least
-severe). You receive the local model's output - its rank, its justification, and the
-record fields it says it weighed - plus the COMPLETE original Snort alert: the alert
-header and the full rule documentation. Snort's own priority (a coarser 1-3 scale, 1 =
-most severe) is included and is mapped to the model's 5-point scale as the
+severe). You receive the local model's output - its model_rank, its justification, and
+the record fields it says it weighed - plus the COMPLETE original Snort alert: the
+alert header and the full rule documentation. Snort's own priority (a coarser 1-3
+scale, 1 = most severe) is included and is mapped to the model's 5-point scale as the
 ground-truth anchor: Snort 1 -> rank 1, Snort 2 -> rank 3, Snort 3 -> rank 5.
 
 Score how correct the local model's rank decision was, on a 0-1 scale:
@@ -90,15 +90,17 @@ Score how correct the local model's rank decision was, on a 0-1 scale:
 - 0.5-0.9: rank is within ONE step of the anchored ground-truth rank (|rank - anchored| = 1).
 - 0.0-0.4: rank differs by MORE than one step (|rank - anchored| > 1).
 
-Within each band, raise the score when the model's justification is coherent and
-grounded in the record; lower it when the justification misreads the record, invents
-values, or ignores stronger evidence.
+Within each band, grade the quality and completeness of the candidate's justification.
+It must be a complete 2-4 sentence explanation of why the rank was chosen. Reward
+substantive, evidence-grounded reasoning that explains the decision. Lower the score
+when the justification is generic or vague, merely restates Snort's priority or the
+rank, misreads the record, invents values, or ignores stronger evidence.
 
 Rules:
 - Judge the rank decision, not the prose. Rank distance decides the band first; the
   justification only nudges the score within that band.
 - Do not invent alert facts. Evaluate only the material you receive.
-- Respond with a single JSON object matching the supplied schema:
+- Respond with a single JSON object:
   {"score": float in [0,1], "reasoning": string}. The reasoning is 1-3 sentences
   stating the model's rank, the anchored ground truth, and why the score was assigned,
   citing justification issues when they affected the score."""
@@ -153,22 +155,18 @@ def _request(client: Any, messages: list[dict[str, str]],
             )
             limiter.before_request(estimated_input, MAX_COMPLETION_TOKENS)
         try:
-            response = client.chat.completions.create(
-                model=JUDGE_MODEL,
-                messages=messages,
-                temperature=TEMPERATURE,
-                reasoning_effort=REASONING_EFFORT,
-                include_reasoning=INCLUDE_REASONING,
-                max_completion_tokens=MAX_COMPLETION_TOKENS,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "severity_judgment",
-                        "strict": True,
-                        "schema": SeverityJudgment.model_json_schema(),
-                    },
-                },
-            )
+            kwargs: dict[str, Any] = {
+                "model": JUDGE_MODEL,
+                "messages": messages,
+                "temperature": TEMPERATURE,
+                "max_completion_tokens": MAX_COMPLETION_TOKENS,
+                "response_format": {"type": "json_object"},
+            }
+            # qwen's reasoning_effort accepts only "none" or "default"; "default"
+            # (thinking mode) breaks json_object validation, so disable it.
+            if JUDGE_MODEL == "qwen/qwen3.6-27b":
+                kwargs["reasoning_effort"] = "none"
+            response = client.chat.completions.create(**kwargs)
         except Exception as error:
             if not GroqJudge._is_transient_error(error):
                 raise JudgeRequestError(f"Groq judge request failed: {error}") from error
@@ -349,13 +347,13 @@ def main() -> int:
         run_row = rows_by[(model, alert_id)]
         entry = by_id[alert_id]
         priority = int(entry["alert"]["priority"])
-        rank = run_row["parsed"]["rank"]
+        rank = run_row["parsed"]["model_rank"]
         anchored = anchored_rank(priority)
         payload = {
             "alert_id": alert_id,
             "candidate": {
                 "model": model,
-                "rank": rank,
+                "model_rank": rank,
                 "justification": run_row["parsed"]["justification"],
                 "metrics_used": run_row["parsed"]["metrics_used"],
             },
@@ -377,11 +375,12 @@ def main() -> int:
         except JudgeQuotaError as error:
             print(error)
             return 2
-        except (JudgeRequestError, JudgeResponseError) as error:
+        except (JudgeRequestError, JudgeResponseError) as request_error:
             verdict = None
             done_reason = None
             raw_response = ""
             status = "failed"
+            error = request_error
             print(f"[{i:2d}/{len(pending)}] {alert_id} {model} ERROR: {error}",
                   flush=True)
         latency_ms = (time.monotonic() - t1) * 1000
@@ -396,7 +395,7 @@ def main() -> int:
             "rule_id": run_row.get("rule_id"),
             "snort_priority": priority,
             "anchored_rank": anchored,
-            "llm_rank": rank,
+            "model_rank": rank,
             "mismatch": is_mismatch(rank, priority),
             "prompt": payload,
             "response": raw_response,
