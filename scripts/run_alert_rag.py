@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # ruff: noqa: E501  (the prompt blocks below are verbatim contract text; see module docstring)
 
-"""Rank 50 Snort alerts grounded in retrieved cybersecurity-standards context.
+"""Rank 50 Snort alerts grounded in retrieved cybersecurity evidence.
 
-For each alert in the sample, a deterministic query is composed from the
-record (alert_message plus rule documentation fields, rule_documentation
-weighted), embedded, and run through the CSRS hybrid retriever (Chroma dense
-+ BM25, RRF-fused) against a corpus of three standards (NIST CSF 2.0,
-ISO/IEC 27001:2022, NIST SP 800-53 Rev 5). The top chunks are injected into
-the model prompt as [S1]..[S5] context alongside the full alert record, and
-the Groq-hosted openai/gpt-oss-120b model ranks severity on a 1-5 scale
-(1 = MOST severe, 5 = least) under the strict pipe contract:
+For each alert in the sample, a deterministic query is composed only from
+the alert's content fields, embedded, and run through the CSRS hybrid
+retriever (Chroma dense + BM25, RRF-fused). Retrieved standards and Snort
+rule-documentation chunks are injected into the model prompt as evidence
+blocks labeled with their document names. The alert record withholds rule_id,
+gid, sid, rev, and the entire rule_documentation object so the model cannot
+see the experiment's answer key.
 
-    <rank 1-5> | <short 3-10 word justification> | <comma-separated field names>
+The Groq-hosted openai/gpt-oss-120b model ranks severity on a 1-5 scale
+(1 = MOST severe, 5 = least) under a strict one-line JSON reply contract.
+It must identify a matching Snort sid only from a retrieved document named
+snort_rule_<gid>-<sid>.txt for rule text or snort_rule_doc_<gid>-<sid>.txt
+for a documentation page.
 
 One call per alert, fresh context every time: batched list-ranking failed
 repeatedly on llama3.2 in earlier sessions (scrambled ids, positional rank
@@ -55,20 +58,23 @@ DEFAULT_SAMPLE = CIL_ROOT / "alert_sample_50.json"
 DEFAULT_RESULTS = CIL_ROOT / "alert_rag_run.jsonl"
 DEFAULT_MODELS = ("openai/gpt-oss-120b",)
 
-CONTRACT = "pipe"
+CONTRACT = "json"
 RETRIEVAL_LIMIT = 5
 RETRIEVAL_LIMIT_MAX = 10
 
 OPTIONS = {
     "temperature": 0,
-    "max_completion_tokens": 400,
+    "max_completion_tokens": 1200,
 }
 
-_COMMON = """You are a senior SOC analyst. You will be shown ONE Snort intrusion-detection alert: the
-alert header fields plus the full documentation of the rule that fired, together with
-context retrieved from cybersecurity standards (NIST CSF 2.0, ISO/IEC 27001:2022, NIST SP
-800-53 Rev 5). Use the standards context to compare the alert's behaviour against
-recognised patterns, but judge THIS SINGLE ALERT.
+_COMMON = """You are a senior SOC analyst. You will be shown ONE Snort intrusion-detection alert
+containing ONLY these alert header fields: timestamp, alert_message, classification,
+priority, protocol, service, source_ip, source_port, destination_ip, destination_port,
+direction, and packet_length. You will also receive retrieved evidence blocks labeled
+with their source document as [S{n}|<document>]. The blocks may come from cybersecurity
+standards or from Snort rule documentation; community rule text is named
+snort_rule_<gid>-<sid>.txt and documentation pages are named
+snort_rule_doc_<gid>-<sid>.txt. Judge THIS SINGLE ALERT.
 
 Assign the alert a severity rank on a 1-5 scale, 1 the MOST severe:
   1 = CRITICAL. Direct exploitation attempt against a critical vulnerability (command
@@ -81,48 +87,56 @@ Assign the alert a severity rank on a 1-5 scale, 1 the MOST severe:
 Rules for the task:
 - Judge THIS SINGLE ALERT from its own record. Do not compare it to any other alert, and
   never count, aggregate, or summarize anything across alerts.
-- Weigh every field present in the record. If a field is absent from the record (for example
-  no cve_ids, no mitre data, no CVSS score), treat it as unknown and say so. Never invent or
-  assume values that are not in the record.
-- The standards context in [S1]..[S5] is supporting evidence only: mention it in your
-  justification only when it matches what this alert actually does. If no context block is
-  relevant, ignore it; never force a connection.
-- The record includes Snort's own "priority" (a COARSER 1-3 scale, 1 = high), "classification"
-  and "classtype". You may weigh them, but your 1-5 rank should refine, not copy, the coarse
-  priority. Base your rank on the record as a whole.
+- Weigh the alert fields present in the record. Treat any absent value as unknown. Never
+  invent or assume values that are not in the record or retrieved evidence.
+- Retrieved evidence is supporting evidence only. Mention a block only when it matches what
+  this alert actually does. If no block is relevant, ignore it; never force a connection.
+- Snort priority is a coarse 1-3 scale: 1 = high, 2 = medium, 3 = low. It maps onto the
+  requested 1-5 scale as 1 -> 1, 2 -> 3, and 3 -> 5. Treat the mapped rank as a starting
+  point only: weigh the complete alert record and REFINE the rank when the evidence
+  warrants it. Your final rank must reflect the record as a whole, not copy the coarse
+  priority.
+- Set mismatch_explanation to a complete 2-4 sentence explanation when model_rank deviates
+  from the mapped Snort-priority rank by MORE THAN ONE STEP. Set mismatch_explanation to
+  null when the absolute difference is one step or less.
+- Set matched_sid ONLY from a retrieved block whose document name carries a rule id:
+  snort_rule_1-<sid>.txt (community rule text) or snort_rule_doc_1-<sid>.txt (rule
+  documentation page). Take the sid number from that document name and set
+  sid_evidence_document to the exact document name. If no such block is present, set both
+  fields to null. NEVER guess a sid that is not backed by a retrieved block.
 - Use ONLY field names that actually appear in the record you were shown.
 - Do not number or address the alert. Do not comment on the process.
 
-Reply with EXACTLY ONE LINE and nothing else - no preamble, no markdown, no bullets, no
-extra lines - in this strict format:
+Reply with EXACTLY ONE LINE containing only valid JSON with exactly these keys:
+{"model_rank": <int 1-5>, "justification": "<2-4 complete sentences explaining why this rank, citing the record's own evidence>", "mismatch_explanation": <string or null>, "metrics_used": ["<field names weighed>"], "matched_sid": <int or null>, "sid_evidence_document": "<document name>" or null}
 
-<rank 1-5> | <short 3-10 word justification citing the record's own evidence> | <comma-separated field names you weighed>
-
-Format rules:
-- Your reply is ONE line containing EXACTLY two "|" characters and three parts.
-- rank is a single digit: 1, 2, 3, 4 or 5. 1 is the MOST severe, 5 the least. Never invert this.
-- The justification is a SHORT phrase of 3 to 10 words, NOT a sentence, and contains no "|" characters.
-- The third part is a comma-separated list of the record's field names you actually weighed,
-  using the field names exactly as they appear in the record, for example:
-  alert_message, cve_ids, rule_explanation, rule_vulnerability, mitre_tactic"""
+The justification must be a complete 2-4 sentence explanation, not a short phrase.
+metrics_used must contain field names exactly as they appear in the alert record."""
 
 SYSTEM = _COMMON
 
-RETRY_REMINDER = """Your previous answer did not match the required format. Reply again with EXACTLY ONE line
-containing EXACTLY two "|" characters and nothing else:
-<rank 1-5> | <short 3-10 word justification> | <comma-separated field names>"""
+RETRY_REMINDER = """Your previous answer did not match the required format. Reply again with EXACTLY ONE line containing only valid JSON with exactly these keys:
+{"model_rank": <int 1-5>, "justification": "<2-4 complete sentences explaining why this rank, citing the record's own evidence>", "mismatch_explanation": <string or null>, "metrics_used": ["<field names weighed>"], "matched_sid": <int or null>, "sid_evidence_document": "<document name>" or null}"""
 
 RANK_RE = re.compile(r"^[1-5]$")
 
 # Known record field names, for the informational metrics-vocabulary check.
-KNOWN = {"alert_id", "alert", "rule_documentation", "rule_documentation_found"} | \
-    {"timestamp", "alert_message", "rule_id", "protocol", "service", "source_ip",
-     "destination_ip", "source_port", "destination_port", "direction", "packet_length",
-     "gid", "sid", "rev", "priority", "classification"} | \
-    {"msg", "rule_category", "flow", "rule_explanation", "content_matches", "metadata",
-     "rule_text", "doc_url", "doc_found", "cve_ids", "references_text", "what_to_look_for",
-     "mitre_id", "mitre_tactic", "mitre_technique", "rule_vulnerability",
-     "false_positives", "known_usage", "classtype"}
+KNOWN = {
+    "alert_id",
+    "alert",
+    "timestamp",
+    "alert_message",
+    "classification",
+    "priority",
+    "protocol",
+    "service",
+    "source_ip",
+    "source_port",
+    "destination_ip",
+    "destination_port",
+    "direction",
+    "packet_length",
+}
 
 
 def normalize(token: str) -> str:
@@ -130,33 +144,37 @@ def normalize(token: str) -> str:
 
 
 def build_query(entry: dict[str, Any]) -> str:
-    """Compose the deterministic retrieval query, rule documentation weighted."""
+    """Compose the deterministic retrieval query from alert content only."""
     alert = entry["alert"]
-    doc = entry.get("rule_documentation") or {}
     parts = [
         alert.get("alert_message", ""),
-        doc.get("msg", ""),
-        f"classtype: {doc['classtype']}" if doc.get("classtype") else "",
-        doc.get("rule_category", ""),
-        f"content: {doc['content_matches']}" if doc.get("content_matches") else "",
-        doc.get("rule_explanation", ""),
+        alert.get("classification", ""),
+        alert.get("protocol", ""),
+        alert.get("service", ""),
     ]
     return " ".join(part for part in parts if part)
 
 
 def build_user_message(entry: dict[str, Any], chunks: Sequence[RetrievedChunk]) -> str:
-    """Return the standards context blocks, the full alert record, and the pipe instruction."""
+    """Return labeled evidence, a redacted alert record, and the JSON instruction."""
     context = "\n\n".join(
-        f"[S{position}]\n{retrieved.chunk.text}\n[/S{position}]"
+        f"[S{position}|{retrieved.chunk.doc_name}]\n{retrieved.chunk.text}\n[/S{position}]"
         for position, retrieved in enumerate(chunks, start=1)
     )
-    alert_json = json.dumps(entry, indent=2)
+    redacted_alert = {
+        key: value
+        for key, value in entry["alert"].items()
+        if key not in {"rule_id", "gid", "sid", "rev"}
+    }
+    alert_json = json.dumps(redacted_alert, indent=2)
     return (
-        "CONTEXT - cybersecurity standards retrieved for comparison\n"
+        "CONTEXT - retrieved evidence for comparison\n"
         f"{context}\n\n"
         f"ALERT RECORD\n{alert_json}\n\n"
-        "Severity-rank this single Snort alert. Reply with exactly one line: "
-        "<rank 1-5> | <short 3-10 word justification> | <comma-separated field names>"
+        "Severity-rank this single Snort alert. Reply with exactly one line of valid JSON: "
+        '{"model_rank": <int 1-5>, "justification": "<2-4 complete sentences>", '
+        '"mismatch_explanation": <string or null>, "metrics_used": ["<field names weighed>"], '
+        '"matched_sid": <int or null>, "sid_evidence_document": "<document name>" or null}'
     )
 
 
@@ -208,32 +226,60 @@ def serialize_chunks(chunks: Sequence[RetrievedChunk]) -> list[dict[str, Any]]:
 
 
 def parse_line(content: str) -> dict[str, Any] | None:
-    """Strict single-line contract: <1-5> | <justification> | <metrics>.
-
-    The line must contain exactly two "|" separators. Anything else --
-    multiple lines, extra pipes, missing parts -- is a format violation and
-    returns None. We never coerce a malformed answer into a rank.
-    """
+    """Parse the strict one-line JSON reply contract without coercion."""
     text = content.strip()
-    if not text:
+    if not text or len(text.splitlines()) != 1:
         return None
-    lines = text.splitlines()
-    if len(lines) != 1:
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
         return None
-    parts = [part.strip() for part in lines[0].split("|")]
-    if len(parts) != 3:
+    if not isinstance(payload, dict):
         return None
-    rank_s, justification, metrics_s = parts
-    if not RANK_RE.match(rank_s) or not justification:
+
+    required = {"model_rank", "justification", "metrics_used"}
+    optional = {"mismatch_explanation", "matched_sid", "sid_evidence_document"}
+    if not required <= payload.keys() or payload.keys() - required - optional:
         return None
-    metrics = [token.strip() for token in metrics_s.split(",")]
-    metrics = [token for token in metrics if token]
-    # The record's field vocabulary is ~40 names; a verbose model may list most
-    # of them (gemma2 did: 21 tokens). The cap only guards runaway lists, not
-    # thorough ones - an earlier 12-token cap wrongly rejected good answers.
-    if not metrics or len(metrics) > 60:
+
+    model_rank = payload["model_rank"]
+    justification = payload["justification"]
+    metrics_used = payload["metrics_used"]
+    mismatch_explanation = payload.get("mismatch_explanation")
+    matched_sid = payload.get("matched_sid")
+    sid_evidence_document = payload.get("sid_evidence_document")
+
+    if (
+        not isinstance(model_rank, int)
+        or isinstance(model_rank, bool)
+        or not RANK_RE.fullmatch(str(model_rank))
+    ):
         return None
-    return {"rank": int(rank_s), "justification": justification, "metrics_used": metrics}
+    if not isinstance(justification, str) or not justification.strip():
+        return None
+    if (
+        not isinstance(metrics_used, list)
+        or not 1 <= len(metrics_used) <= 60
+        or any(not isinstance(metric, str) or not metric.strip() for metric in metrics_used)
+    ):
+        return None
+    if mismatch_explanation is not None and not isinstance(mismatch_explanation, str):
+        return None
+    if (
+        matched_sid is not None
+        and (not isinstance(matched_sid, int) or isinstance(matched_sid, bool))
+    ):
+        return None
+    if sid_evidence_document is not None and not isinstance(sid_evidence_document, str):
+        return None
+    return {
+        "model_rank": model_rank,
+        "justification": justification,
+        "mismatch_explanation": mismatch_explanation,
+        "metrics_used": metrics_used,
+        "matched_sid": matched_sid,
+        "sid_evidence_document": sid_evidence_document,
+    }
 
 
 def call_model(
@@ -254,7 +300,7 @@ def call_model(
             client,
             model,
             messages,
-            max_tokens=400,
+            max_tokens=OPTIONS["max_completion_tokens"],
             limiter=limiter,
         )
         content = result.content.strip()
@@ -375,9 +421,13 @@ def write_per_model_outputs(rows: Sequence[dict[str, Any]], n_alerts: int, start
         parsed_rows = [
             {
                 "alert_id": row["alert_id"],
-                **({"rank": row["parsed"]["rank"],
+                **({"model_rank": row["parsed"]["model_rank"],
                     "justification": row["parsed"]["justification"],
-                    "metrics_used": row["parsed"]["metrics_used"]} if row["parsed"] else {}),
+                    "mismatch_explanation": row["parsed"]["mismatch_explanation"],
+                    "metrics_used": row["parsed"]["metrics_used"],
+                    "matched_sid": row["parsed"]["matched_sid"],
+                    "sid_evidence_document": row["parsed"]["sid_evidence_document"]}
+                   if row["parsed"] else {}),
                 "raw": row["attempts"][-1]["content"],
                 "attempts": len(row["attempts"]),
                 "status": row["status"],
@@ -406,7 +456,7 @@ def validate_run(rows: Sequence[dict[str, Any]], expected: int) -> None:
     print(f"\nparsed {len(parsed)}/{expected}")
     for model in sorted({row["model"] for row in rows}):
         model_rows = [row for row in rows if row["model"] == model]
-        ranks = [row["parsed"]["rank"] for row in model_rows if row["parsed"]]
+        ranks = [row["parsed"]["model_rank"] for row in model_rows if row["parsed"]]
         print(f"{model}: rank spread",
               dict(sorted(Counter(ranks).items())))
         if len(set(ranks)) == 1:
@@ -480,7 +530,11 @@ def main() -> int:
     rows = load_results(results_path) if args.resume else []
     existing = {(row["model"], row["alert_id"]) for row in rows}
 
-    started = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    started = (
+        rows[0]["run_id"]
+        if args.resume and rows
+        else datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    )
     expected = len(entries) * len(args.models)
 
     for i, entry in enumerate(entries, start=1):
@@ -524,7 +578,7 @@ def main() -> int:
                 }
                 upsert_result(results_path, rows, row)
                 existing.add((model, alert_id))
-                rank = row["parsed"]["rank"] if row["parsed"] else "-"
+                rank = row["parsed"]["model_rank"] if row["parsed"] else "-"
                 justification = (
                     row["parsed"]["justification"][:80] if row["parsed"] else "(parse failed)"
                 )
@@ -548,9 +602,9 @@ def main() -> int:
         and row["parsed"]
     ]
     for row in cvss10:
-        mark = "OK" if row["parsed"]["rank"] == 1 else "** expected 1"
+        mark = "OK" if row["parsed"]["model_rank"] == 1 else "** expected 1"
         print(f"CVSS 10.0 spot-check: alert {row['alert_id']} {row['model']} "
-              f"rank {row['parsed']['rank']} {mark}")
+              f"rank {row['parsed']['model_rank']} {mark}")
 
     bad_metrics = []
     for row in rows:
