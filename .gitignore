@@ -33,3 +33,7 @@ eval/results/
 
 # macOS
 .DS_Store
+
+# Built work-record PDF (rebuild with ./latex/build.sh)
+CSRS_Work_Record.pdf
+latex/CSRS_Work_Record.pdf

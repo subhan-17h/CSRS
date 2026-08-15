@@ -1917,3 +1917,28 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
       The 3.3-70b-versatile judge was replaced by qwen/qwen3.6-27b after the project key
       returned 404 model_not_found; llama/account-2 key turned out to be a 20K-token tier.
       Full suite 324 passed; 7 implementation commits + this phase-closing commit.
+
+## PDF-1 — Internship work-record PDF (LaTeX)
+
+- [x] Turn `project-docs/PROJECT_WORK_HISTORY.md` into a designed, self-contained PDF work
+      record for the internship showcase, with every figure produced from the system itself.
+- [x] `latex/CSRS_Work_Record.tex` — 11 pages: title page, what was built, timeline (the
+      112 commits summarised by working day, replacing the row-by-row ledger), the system
+      running, evaluation, the alert experiment, limitations, deliverables. Kept as editable
+      source; `latex/README.md` documents the style hooks.
+- [x] `latex/build.sh` — `tectonic` build; `--figures` regenerates the charts and cards,
+      `--shots` re-captures the live UI. Output copied to the repository root.
+- [x] `latex/make_figures.py` — the five-model chart from `eval/final/summary.csv` and the
+      v1/v2 alert chart, palette validated for colour-vision safety.
+- [x] `latex/make_excerpts.py` — report and JSON deliverable cards rendered from the live
+      artefacts in `~/Projects/work/CIL/` (corpus row collapsed to the manifest totals).
+- [x] `latex/make_screenshots.py` — Playwright against the running system: React answer with
+      its five citations, corpus explorer, Streamlit, and the HTTP service.
+- Done when: the PDF builds from a clean `./latex/build.sh`, every figure traces to a real
+  artefact or a live capture, and the title-page statistics are verified.
+  - Review: built at 11 pages. `gemma2:2b` was pulled so the captured answers are real
+    (it is the model the benchmark ranks first); the Streamlit sidebar honestly reports the
+    other four benchmark models as absent. Statistics verified: 112 commits over 11 distinct
+    commit days (`git log --date=short`), 4,039 documents / 6,518 chunks (`/api/health`),
+    324 tests passed (`-m "not ollama and not docling"`). The built PDF is gitignored; the
+    sources and captured figures are committed so it can be rebuilt.
