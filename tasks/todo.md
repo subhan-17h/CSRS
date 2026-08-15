@@ -1792,6 +1792,23 @@ T-6.2 `requirements.txt`. **Frozen unchanged:** hybrid retrieval and the reranke
     209-chunk index reconcile. Dataset validation, Ruff, 269 offline tests, the frontend
     build, Python ASCII validation, and `git diff --check` pass.
 
+- [x] **HIST-2** Extend `PROJECT_WORK_HISTORY.md` through the alert-ranking experiment.
+  - Add the August 6-13 work-by-day sections, the alert-ranking outcome table, the
+    evidence and deliverables section, and the 27 commits after `ef4736b` to the ledger.
+  - Update the overview totals and verified-implementation test counts to the current
+    repository state.
+  - Done when the history reconciles with Git and the alert artifacts, and the required
+    checks pass.
+  - Review: `PROJECT_WORK_HISTORY.md` now covers all 112 commits through `3725ade`. The
+    ledger has exactly 112 rows, the overview churn (+43,856 / -8,558) matches the
+    per-commit Git totals exactly, the alert outcome numbers (32/50 exact, 4 mismatches,
+    judge mean 0.868, SID match 30/34) match the published report and the flat JSON
+    deliverable, and the corpus count (4,039 docs / 6,518 chunks) matches the Chroma
+    manifest. Four proof screenshots are embedded under `assets/screenshots/` (architecture
+    diagram, report top, two JSON sample records, and the report-builder terminal output);
+    regenerating the report with `build_alert_rag_report.py` reproduces the deliverables
+    byte-identically (SHA-256 verified).
+
 ## Phase 9 — Alert-ranking experiment on Groq (no local LLMs in the experiment chain)
 
 Approved plan: `/Users/rowdy/.claude/plans/one-thing-to-change-valiant-lake.md`. The alert
