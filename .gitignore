@@ -25,8 +25,10 @@ docs/*.txt
 docs/samples/ISO_IEC-270012022-ed.3.pdf
 docs/samples/NIST.SP.800-53r5.pdf
 # Snort rule documentation is fetched by scripts/fetch_snort_rule_docs.py
-# (Cisco-copyrighted pages, no NIST-style public-domain exception).
+# (Cisco-copyrighted pages, no NIST-style public-domain exception). The same
+# applies to the preprocessed rule-doc bundle the corpus is now rendered from.
 docs/samples/snort_rule_*.txt
+docs/rule_docs_preprocessed_by_sid.json
 
 # Evaluation runs
 eval/results/
