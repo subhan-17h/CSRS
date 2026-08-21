@@ -1942,3 +1942,48 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     commit days (`git log --date=short`), 4,039 documents / 6,518 chunks (`/api/health`),
     324 tests passed (`-m "not ollama and not docling"`). The built PDF is gitignored; the
     sources and captured figures are committed so it can be rebuilt.
+
+## ALERT-RAG-8 — Detailed Snort rule corpus + clean workspace
+
+- [x] Replace the 4,022 one-line community-rule documents and the 14 scraped rule-doc pages
+      in `docs/samples/` with 4,017 detailed documents rendered from
+      `docs/rule_docs_preprocessed_by_sid.json` (3,945 carry the snort.org documentation
+      fields: rule_category, alert_message_doc, rule_explanation, contributors, CVE and
+      references; 72 are rule-text only). Filename convention `snort_rule_1-<sid>.txt` is
+      unchanged, so the ranker prompt, sid extraction, report builder and manifest keep
+      working untouched.
+- [x] `scripts/build_snort_rule_docs.py` (new) renders the corpus from the JSON; the old
+      `fetch_snort_community_rules.py` and `fetch_snort_rule_docs.py` stay as the provenance
+      of the source data but no longer produce the indexed form.
+- [x] Archive the superseded artefacts out of the CIL root into `CIL/archived/`:
+      `alert_ranking_v1/`, `alert_ranking_v2/` (v1/v2 deliverables, run snapshots, parsed and
+      session dumps) and `corpus/` (the short-form corpus as one tarball). Only
+      `alert_sample_50.json`, `enriched_snort_alerts.json` and `cretria.md` stay in the root.
+- [x] Re-index the corpus and re-run rank -> judge -> report against the detailed documents.
+- Done when: full offline suite green, the manifest lists ~4,020 documents, and the rebuilt
+      deliverables in the CIL root are produced from the detailed corpus.
+  - Review: corpus swapped to 4,017 detailed documents; the index went from
+    4,039 docs / 6,518 chunks to 4,020 / 9,642 (removed=19: the 14 scraped doc pages and
+    the 5 sids absent from the JSON). Full offline suite 339 passed, ruff clean.
+
+    Rule identification improved as intended. SID matching went from 30 correct / 4 wrong /
+    16 not attempted to **40 correct / 0 wrong / 10 abstained**. A pre-flight retrieval check
+    showed the true sid is reachable in the top-8 for exactly 40 of the 50 alerts, so the
+    ranker hit that ceiling precisely and never guessed beyond it. The 10 abstentions each
+    had 8 rule documents in evidence and correctly declined: 9 are the generic
+    "SERVER-WEBAPP /.... access" (sid 1142) and 1 is sid 966. The v2 retrieval-ambiguity
+    limitation is unchanged, but it now surfaces as abstention rather than wrong matches.
+
+    Severity ranking regressed and the regression is real, not cosmetic. Exact anchor match
+    fell 32/50 (64%) -> 29/50 (58%), mismatches rose 4 -> 9, judge mean 0.868 -> 0.780
+    (judge qwen/qwen3.6-27b, 50/50, 0 failures). Scores by |model_rank - anchored_rank|:
+    delta 0 (n=29) mean 1.00, delta 1 (n=12) mean 0.78, delta 2 (n=9) mean 0.08 with seven
+    flat zeros. The judge sees ground truth and rejects nearly every two-step departure, so
+    these are not defensible refinements: with rule_explanation and CVE text now in context,
+    the ranker over-weights narrative severity ("CVSS 10.0", "complete compromise") against
+    the Snort priority. The prompt's "REFINE when evidence warrants" latitude was chosen when
+    evidence was one line of rule code; it is the prime suspect and the obvious next lever.
+
+    Cost: ranker 181,288 tokens / 50 requests (previous key, resumed once after an Ollama
+    outage with no lost rows); judge 68,205 tokens / 50 requests (new key, tracker
+    .csrs_cache/groq_daily_usage_account5.json).
