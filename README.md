@@ -22,6 +22,11 @@ Built on [Ollama](https://ollama.com), with
 **New here?** [Submission.md](project-docs/Submission.md) is the component-by-component walkthrough:
 what each module does, which task requirement it satisfies, and how the pieces connect.
 
+**Reading the work day by day?** [DAY_INDEX.md](project-docs/DAY_INDEX.md) maps all 32 days of the
+internship to their commits, artefacts and tags; [PROJECT_WORK_HISTORY.md](project-docs/PROJECT_WORK_HISTORY.md)
+is the verified narrative. Thirteen annotated tags (`git tag -n99 -l 'day-*'`) let you check out any
+working day.
+
 ### Two interfaces, one pipeline
 
 Both talk to the same `Pipeline` facade and give the same grounded answers.
@@ -560,6 +565,8 @@ eval/
   final/                    tracked outputs created after the 250-row acceptance gate
 
 project-docs/
+  DAY_INDEX.md              all 32 days mapped to commits, artefacts and tags
+  PROJECT_WORK_HISTORY.md   the verified day-by-day narrative and full commit ledger
   Submission.md             requirements walkthrough, decisions, and measurements
   ROADMAP.md                the task breakdown, phase by phase
   RESEARCH.md               the techniques surveyed before building
