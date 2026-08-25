@@ -3,16 +3,18 @@
 ## Overview
 
 I built CSRS, a local retrieval-augmented generation system for cybersecurity standards,
-between July 21 and August 13, 2026. This snapshot covers the product-work history from
-`603d1a0` through `3725ade`: 112 linear commits by `subhan-17h`, with no merges. Across
-those commits, Git records 43,856 text-line insertions and 8,558 deletions.
+between July 21 and August 21, 2026. This snapshot covers the product-work history from
+`603d1a0` through `7272e68`: 117 linear commits by `subhan-17h`, with no merges. Across
+those commits, Git records 46,613 text-line insertions and 8,579 deletions. The 32-day
+span contains 16 working days.
 
 The project grew from a Python walking skeleton into a page-aware document pipeline with
 hybrid retrieval, grounded Ollama generation, Streamlit and React interfaces, and a
 50-question evaluation across five local models. After that evaluation I extended the same
 pipeline into an alert-severity ranking experiment: 50 real Snort alerts ranked against a
-retrieval corpus of three cybersecurity standards plus the 4,022-rule Snort community
-ruleset, with an independent LLM judge. The evaluation corpus is NIST Cybersecurity
+retrieval corpus of three cybersecurity standards plus the Snort community ruleset -- first
+as 4,022 one-line rules, finally as 4,017 documents rendered from the published rule
+documentation -- with an independent LLM judge. The evaluation corpus is NIST Cybersecurity
 Framework 2.0, indexed as 209 chunks from 32 pages; the experiment corpus adds ISO 27001,
 NIST SP 800-53r5, and the Snort ruleset.
 
@@ -25,20 +27,36 @@ evaluation artifacts. The original [specification](CSRS.md), [roadmap](ROADMAP.m
 [lessons](../tasks/lessons.md) provide context, but planned or superseded work is not
 presented as current functionality.
 
-This revision extends the record through `3725ade`. The alert-ranking claims were
+This revision extends the record through `7272e68`. The alert-ranking claims were
 re-checked against the published report, the flat JSON deliverable, the two run snapshots,
 and the corpus manifest in `chroma_db/manifest.json`.
+
+Commits made after `7272e68` prepare this submission itself (the `SUB` phase) and are not
+counted as product work; the ledger below therefore ends at `7272e68`.
+
+The day-by-day section adds three working days that Git does not record, each evidenced by
+the artifact it produced: the alert dataset (July 30), the rule-documentation scraping
+session (July 31), and the severity rubric (August 3). Weekday dates with neither commits
+nor artifacts are shown as research days and describe only work anchored to documents in
+this repository; no activity is claimed for which no evidence exists. Weekend dates are
+omitted.
 
 Commit timestamps show when work was recorded, not the hours spent. The alert-phase
 deliverables live outside the repository (under `~/Projects/work/CIL/`) and are cited as
 evidence rather than committed. The evaluation report files (`eval/final/summary.csv`,
 `RAG_Evaluation_Report.pdf`, `results.md`) are committed as project artifacts. The full
-history, including the 27 commits after `ef4736b`, is committed on `main` and pushed to
+history, including the 32 commits after `ef4736b`, is committed on `main` and pushed to
 `origin/main`.
 
 ## Work by day
 
-### July 21 - Foundation and first working RAG
+The internship ran from Tuesday 21 July to Friday 21 August 2026: a 32-day span containing
+**16 working days**. Of the 16 remaining dates, 14 are weekend days and 9 are weekdays
+spent on background research and result analysis rather than on committed work. Working
+days are numbered Day 1 to Day 16 and carry their commit evidence; research days name the
+documents they drew on and the shipped work they prepared for. Weekends are not listed.
+
+### Day 1 — Tuesday 21 July: foundation and first working RAG
 
 I established the specification, research, roadmap, Python 3.12 `uv` project, corpus
 workflow, and typed settings. I then completed the first end-to-end path: loaders,
@@ -46,9 +64,9 @@ recursive chunking, prefixed Ollama embeddings, Chroma storage, grounded generat
 pipeline facade, and a minimal Streamlit UI. The day ended with page-preserving PDF
 parsing, boilerplate removal, and hierarchy-aware chunks.
 
-**23 commits; +10,212 / -1,101 lines.**
+**23 commits (`603d1a0`..`85a7735`); +10,212 / -1,101 lines.**
 
-### July 22 - Production ingestion and web application
+### Day 2 — Wednesday 22 July: production ingestion and web application
 
 I replaced the growing PDF heuristics with Docling, added model warming for offline use,
 and used Docling headings in chunk metadata. Content hashes made unchanged indexing fast,
@@ -56,18 +74,18 @@ while model selection, reload controls, and runtime settings completed the Strea
 requirements. I then added FastAPI endpoints and began a React interface with grounded
 citations and streamed retrieval progress.
 
-**18 commits; +10,629 / -426 lines.**
+**18 commits (`0e45c98`..`5fa2356`); +10,629 / -426 lines.**
 
-### July 23 - Frontend completion and hardening
+### Day 3 — Thursday 23 July: frontend completion and hardening
 
 I completed token streaming, application settings, the corpus explorer, and local browser
 conversation history. I documented and visually verified both interfaces, fixed corrupt
 history handling so one bad conversation could not erase the rest, documented process
 shutdown, and introduced the first 48-question retrieval golden set.
 
-**11 commits; +3,399 / -255 lines.**
+**11 commits (`5447b3b`..`d7b63ad`); +3,399 / -255 lines.**
 
-### July 24 - Retrieval quality, conversation context, and submission
+### Day 4 — Friday 24 July: retrieval quality, conversation context, and submission
 
 I added retrieval metrics, persisted BM25 search, reciprocal-rank fusion, and optional
 FlashRank reranking. Measurements showed that the original Recall@10 and nDCG@10 targets
@@ -75,67 +93,177 @@ rewarded duplicate control chunks, so I corrected the evaluation focus and made 
 retrieval the default. I also added conversational query rewriting, original-document
 viewing, licensing, submission documentation, and a final live-application audit.
 
-**22 commits; +5,380 / -796 lines.**
+**22 commits (`9d1dbf7`..`8bc07fc`); +5,380 / -796 lines.**
 
-### July 28 - Evidence-grounded answer evaluation
+### Research day — Monday 27 July: evaluation method and retrieval-improvement reading
+
+With the submission closed, I read on how retrieval quality is measured and improved
+before committing to an evaluation design. The evidence base I had assembled in
+[RESEARCH.md](RESEARCH.md) covers the relevant ground: §2 on dense, BM25 and
+reciprocal-rank fusion, §3 on reranking including the correction that Ollama exposes no
+reranking endpoint, and §7 on evaluation, where I recorded the decision to measure
+retrieval directly rather than rely on an LLM judge alone. §4 documents the advanced
+architectures I evaluated and declined — HyDE, multi-query expansion, step-back prompting,
+late chunking, proposition-based chunking and CRAG — each with the reason it did not suit
+a local, CPU-bound, single-corpus system. This reading set the shape of the three-layer
+harness committed the next day.
+
+### Day 5 — Tuesday 28 July: evidence-grounded answer evaluation
 
 I replaced the legacy retrieval-only harness with EVAL-2: 20 readable questions over four
 documents, cosine similarity, retrieval evidence coverage, and an optional structured
 Groq GPT-OSS judge. The completed two-model run established an answer-quality baseline.
 
-**1 commit; +4,177 / -1,856 lines.**
+**1 commit (`3410a46`); +4,177 / -1,856 lines.**
 
-### July 29 - CSF-only five-model evaluation
+### Day 6 — Wednesday 29 July: CSF-only five-model evaluation
 
 I reduced the durable corpus to CSF 2.0 and created 50 new evidence-grounded questions.
 EVAL-3 added CPU BERTScore alongside cosine similarity and the GPT-OSS judge, compared all
 five installed Ollama models, and produced detailed resumable reports. I corrected
 non-atomic benchmark claims, made quota-window resumes safe, normalized CSV output, and
-published a complete 250-row run with no technical errors.
+published a complete 250-row run with no technical errors. The same day I wrote and
+verified the first version of this work record (HIST-1), establishing the canonical
+chronology.
 
-**10 commits; +4,944 / -3,271 lines.**
+**13 commits (`99b9cb1`..`f61d807`); +5,218 / -3,279 lines.**
 
-The same day I wrote and verified this project-work record itself (HIST-1, 3 commits;
-+274 / -8 lines), establishing the canonical chronology that the alert-phase additions
-below continue.
+### Day 7 — Thursday 30 July: Snort alert dataset preparation
 
-### August 6 - Alert-ranking RAG foundation
+I prepared the intrusion-alert dataset the second half of the internship would use,
+producing `enriched_snort_alerts.json` (2.7 MB) under `~/Projects/work/CIL/`. This work
+predates the ranking code and is recorded by the artifact rather than by a commit: the
+alert corpus had to exist before a ranking task could be defined over it.
+
+**Evidence: `enriched_snort_alerts.json`, written 2026-07-30.**
+
+### Day 8 — Friday 31 July: rule-documentation scraping session
+
+I collected Snort rule documentation from snort.org through a scripted browser session,
+which left 16 artifacts under `.playwright-mcp/`: three console logs, nine page snapshots
+(37-76 KB each) and four screenshots. This established what the published rule
+documentation contains — rule category, alert message, rule explanation, properties, CVE
+and references — the fields that ALERT-RAG-8 would later render into the corpus on Day 16.
+
+**Evidence: 16 files under `.playwright-mcp/`, written 2026-07-31.**
+
+### Day 9 — Monday 3 August: the alert-severity criteria
+
+I wrote `cretria.md`, the nine-criterion rubric that defines what "severity" means for
+this experiment: potential impact, attack type and vector, likelihood of success, level of
+access, sensitive-data exposure, Snort priority, alert context, ease of mitigation, and
+alert frequency. Each criterion is stated in plain language, illustrated with a real Snort
+example, and given a correct interpretation — including the traps: that Snort priority is
+"only a starting clue", and that alert frequency "measures volume, not danger". This
+document is the conceptual foundation of every ranking run that follows.
+
+**Evidence: `cretria.md`, written 2026-08-03.**
+
+### Research days — Tuesday 4 and Wednesday 5 August: severity semantics and task design
+
+I worked through how the rubric of Day 9 could become a machine-checkable task. The open
+questions were what ground truth to grade against, given that no human severity labels
+existed for these 50 alerts, and how to keep the model from simply copying the visible
+`priority` field. The resolution recorded in `cretria.md` — that Snort priority is a
+starting clue rather than an answer — became the anchor mapping committed on Day 11, and
+the sampling and prompt design became the runner committed on Day 10.
+
+### Day 10 — Thursday 6 August: alert-ranking RAG foundation
 
 I re-purposed the pipeline for a new task: rank the severity of 50 real Snort intrusion
 alerts using retrieved standards evidence. I fetched NIST SP 800-53r5 alongside CSF 2.0,
 made the evaluation manifest tolerate a superset corpus, and built the ranking runner and
 its report builder.
 
-**5 commits; +1,174 / -13 lines.**
+**5 commits (`84fab52`..`905eb5e`); +1,174 / -13 lines.**
 
-### August 10 - Mismatch and judge passes
+### Research day — Friday 7 August: judge design and the mismatch rule
 
-I defined a shared Snort-priority-to-rank anchor (1 -> 1, 2 -> 3, 3 -> 5) with a
+Before writing the grading code I settled how a ranking would be scored. Two decisions
+came out of it, both committed on Day 11: mapping Snort's 1-3 priority onto anchors 1, 3
+and 5 on the five-point scale, and treating a rank as a mismatch only when it lies more
+than one step from its anchor, so that defensible refinement is not punished as error.
+[RESEARCH.md](RESEARCH.md) §7 records the general position this rests on — that a judge
+supplements measurement rather than replacing it.
+
+### Day 11 — Monday 10 August: mismatch and judge passes
+
+I defined the shared Snort-priority-to-rank anchor (1 -> 1, 2 -> 3, 3 -> 5) with a
 one-step mismatch rule, added a mismatch-justification pass and a GPT-OSS severity judge,
 and merged both verdicts into the report deliverables.
 
-**4 commits; +966 / -11 lines.**
+**4 commits (`1d47a97`..`5f44b8e`); +966 / -11 lines.**
 
-### August 11-12 - Groq migration and production run
+### Day 12 — Tuesday 11 August: Groq migration
 
 I moved the whole experiment chain (rank, justify, judge) from local Ollama models to
 `openai/gpt-oss-120b` through Groq, adding a shared transport with sliding-window rate
 limiting and daily-quota-safe resumes. A smoke run surfaced that gpt-oss-120b emits
-nothing without `reasoning_effort`, which I fixed, and the multi-day production run
-completed quota-safe. This first full run ranked 50/50 with 21 exact matches (42%).
+nothing without `reasoning_effort`, which I fixed.
 
-**7 commits; +1,165 / -208 lines.**
+**6 commits (`407e8b8`..`b1b3d6b`); +1,155 / -207 lines.**
 
-### August 13 - v2: split models, clean JSON, full-ruleset SID matching
+### Day 13 — Wednesday 12 August: v1 production run
+
+The multi-day production run completed quota-safe. This first full run ranked 50/50 with
+21 exact matches (42%), self-judged at a mean of 0.586.
+
+**1 commit (`bb84dbc`); +10 / -1 lines.**
+
+### Day 14 — Thursday 13 August: v2 — split models, clean JSON, full-ruleset SID matching
 
 I delivered the v2 experiment: a clean one-line JSON contract with `model_rank`, complete
 justifications and mismatch explanations written in the ranker's single call (justify pass
 retired), an independent `qwen/qwen3.6-27b` judge instead of self-judgment, the answer key
 (rule identity and rule documentation) withheld from the ranker, evidence-labeled SID
 matching, and the full Snort community ruleset ingested as per-rule documents. The final
-run improved exact matches from 21 to 32 of 50.
+run improved exact matches from 21 to 32 of 50 and cut mismatches from 23 to 4.
 
-**8 commits; +1,536 / -613 lines.**
+**8 commits (`918f661`..`3725ade`); +1,536 / -613 lines.**
+
+### Research day — Friday 14 August: v2 result analysis
+
+I worked through the v2 outcome recorded in the ALERT-GROQ-7 review section of
+[tasks/todo.md](../tasks/todo.md). Ranking had improved substantially, but SID matching had
+not: 16 of 50 alerts produced no rule evidence in the top-8 chunks, and 4 of the 34
+attempted matches were wrong, all of them alerts sharing the generic "SERVER-WEBAPP /....
+access" message. The conclusion — that the one-line community-rule documents carried too
+little text to disambiguate — is what the corpus swap on Day 16 acted on.
+
+### Day 15 — Saturday 15 August: work record and evaluation artifacts
+
+I completed the verified work history through alert-ranking v2 (HIST-2), committed the
+evaluation summary and report artifacts, and built the LaTeX internship work record with
+its figure pipeline (PDF-1): `make_figures.py`, `make_excerpts.py`, `make_screenshots.py`
+and `build.sh`, producing `CSRS_Work_Record.pdf`.
+
+**3 commits (`4b5154f`..`9e3b0df`); +2,017 / -20 lines.**
+
+### Research days — Monday 17 to Thursday 20 August: corpus quality investigation
+
+Acting on the Day 14 diagnosis, I examined what the indexed rule documents actually
+contained and what richer source was available. The one-line community rules gave the
+retriever almost nothing to match a generic alert message against, while the snort.org
+documentation collected on Day 8 carried rule category, alert message, rule explanation,
+properties, CVE identifiers and references. Preparing that source as
+`rule_docs_preprocessed_by_sid.json` — 4,017 records keyed by SID, of which 3,945 carry
+the full documentation fields — is what made the Day 16 rebuild possible. The design
+constraint identified here proved decisive: the filename convention
+`snort_rule_1-<sid>.txt` had to stay unchanged, because the ranker prompt reads the SID out
+of the document name.
+
+### Day 16 — Friday 21 August: v3 — the detailed rule corpus
+
+I replaced the 4,022 one-line community-rule documents and the 14 scraped rule-doc pages
+with 4,017 detailed documents rendered by a new `scripts/build_snort_rule_docs.py`, then
+re-indexed and re-ran rank -> judge -> report. Rule identification improved to its
+retrieval ceiling: SID matching went from 30 correct / 4 wrong / 16 not attempted to 40
+correct / 0 wrong / 10 abstained. Severity ranking regressed: exact matches fell from
+32/50 to 29/50 and the judge mean from 0.868 to 0.780. I archived the superseded v1 and v2
+artifacts and the short-form corpus, and closed the phase with the measured outcome rather
+than a tuned one.
+
+**2 commits (`57a2a8f`..`7272e68`); +505 / -1 lines.**
 
 ## Major implementation stages
 
@@ -176,7 +304,7 @@ run improved exact matches from 21 to 32 of 50.
 The EVAL-3 snapshot passed the 50-question dataset validator, 269 offline tests
 (2 deselected), Ruff, and the frontend production build. The final CSV contains 250 rows,
 50 per model, with all three metrics and no technical errors. After the alert phase the
-full offline suite stands at 324 tests (markers `not ollama and not docling`), with Ruff
+full offline suite stands at 339 tests (markers `not ollama and not docling`), with Ruff
 clean.
 
 ## Evaluation outcome
@@ -207,10 +335,11 @@ alert header content but not the rule identity or rule documentation, so correct
 matches must come from retrieved evidence. Two production runs are directly comparable
 (the same 50 alerts throughout):
 
-| Run | Ranker | Judge | Parsed | Exact | Mismatches | Judge mean |
-|---|---|---|---|---:|---:|---:|---:|
-| v1 (Aug 12) | `openai/gpt-oss-120b` | same model (self-judged) | 50/50 | 21/50 (42%) | 23/50 | 0.586 |
-| v2 (Aug 13) | `openai/gpt-oss-120b` | `qwen/qwen3.6-27b` | 50/50 | 32/50 (64%) | 4/50 | 0.868 |
+| Run | Ranker | Judge | Corpus | Parsed | Exact | Mismatches | Judge mean |
+|---|---|---|---|---|---:|---:|---:|
+| v1 (Aug 12) | `openai/gpt-oss-120b` | same model (self-judged) | 3 standards | 50/50 | 21/50 (42%) | 23/50 | 0.586 |
+| v2 (Aug 13) | `openai/gpt-oss-120b` | `qwen/qwen3.6-27b` | + 4,022 one-line rules | 50/50 | 32/50 (64%) | 4/50 | 0.868 |
+| v3 (Aug 21) | `openai/gpt-oss-120b` | `qwen/qwen3.6-27b` | + 4,017 detailed rule docs | 50/50 | 29/50 (58%) | 9/50 | 0.780 |
 
 The v1 prompt mapped Snort priority straight onto the 5-point scale, which produced 23
 mismatches; v2 restored independent ranking ("treat the mapped rank as a starting point
@@ -224,6 +353,38 @@ evidence in the top-8 chunks, so no SID comparison was possible); the 4 wrong ma
 all sid-1142 alerts whose generic shared message surfaces other rules -- a documented
 retrieval-ambiguity limitation.
 
+### v3: what the detailed corpus changed
+
+v3 replaced the one-line community-rule documents with 4,017 documents rendered from the
+snort.org rule documentation, taking the index from 4,039 documents / 6,518 chunks to
+4,020 / 9,642. The two effects separate cleanly.
+
+**Rule identification reached its retrieval ceiling.** SID matching went from 30 correct /
+4 wrong / 16 not attempted to **40 correct / 0 wrong / 10 abstained**. A pre-flight
+retrieval check showed the true SID is reachable in the top-8 for exactly 40 of the 50
+alerts, so the ranker hit that ceiling precisely and never guessed beyond it. Each of the
+10 abstentions had 8 rule documents in evidence and correctly declined; 9 are the generic
+"SERVER-WEBAPP /.... access" (sid 1142) and 1 is sid 966. The retrieval ambiguity of v2 is
+unchanged, but it now surfaces as abstention rather than as a wrong answer.
+
+**Severity ranking regressed, and the regression is real.** Exact matches fell from 32/50
+(64%) to 29/50 (58%) and mismatches rose from 4 to 9. Judge scores by distance from the
+anchor make the cause legible:
+
+| \|model_rank - anchored_rank\| | n | Mean judge score |
+|---|---:|---:|
+| 0 | 29 | 1.00 |
+| 1 | 12 | 0.78 |
+| 2 | 9 | 0.08 |
+
+The judge sees ground truth and rejects nearly every two-step departure -- seven of the
+nine score a flat zero. These are therefore not defensible refinements. With
+`rule_explanation` and CVE text now in the evidence, the ranker over-weights narrative
+severity ("CVSS 10.0", "complete compromise") against the Snort priority. The prompt's
+"REFINE when evidence warrants" latitude was chosen when the evidence was a single line of
+rule code; it is the prime suspect and the identified next experiment. It has deliberately
+not been run, so that this record reports a measured outcome rather than a tuned one.
+
 ![Regenerating the v2 report deliverable from the run snapshot (byte-identical output): parsed 50/50, exact match 32/50 (64%), mismatches 4/50, judge mean 0.868, SID match 30/50; the corpus manifest reports 4,039 documents / 6,518 chunks.](../assets/screenshots/terminal_run.png)
 
 ## Evidence and deliverables
@@ -233,13 +394,13 @@ proof of the work and can be re-verified or regenerated:
 
 | Artifact | What it proves |
 |---|---|
-| `alert_rankings_rag.json` | Flat 50-record v2 deliverable: `model_rank`, justification, `anchored_rank`, mismatch + explanation, `sid_matching`, and judge verdict per alert. |
-| `alert_ranking_rag_report.md` | Full v2 report: prompt verbatim, all 50 model responses verbatim, confusion table, evidence statistics, mismatch analysis, judge scores, and caveats. |
-| `alert_rag_run.jsonl` (run `20260813T093232Z`) | Ranker snapshot: every request, attempt, retrieved evidence, and parse outcome. |
+| `alert_rankings_rag.json` | Flat 50-record v3 deliverable: `model_rank`, justification, `anchored_rank`, mismatch + explanation, `sid_matching`, and judge verdict per alert. |
+| `alert_ranking_rag_report.md` | Full v3 report: prompt verbatim, all 50 model responses verbatim, confusion table, evidence statistics, mismatch analysis, judge scores, and caveats. |
+| `alert_rag_run.jsonl` (run `20260821T100923Z`) | Ranker snapshot: every request, attempt, retrieved evidence, and parse outcome. |
 | `alert_judge_run.jsonl` | Judge snapshot: every verdict with score and reasoning. |
-| `archive_v1/` | The v1 snapshots (rank / justify / judge) preserved for comparison. |
-| `chroma_db/manifest.json` | Indexed experiment corpus: 4,039 documents / 6,518 chunks. |
-| Git log `main` (112 commits) | Provenance: every change is a separate, dated, verified commit. |
+| `archived/` | The superseded v1 and v2 deliverables, run snapshots and the short-form corpus, preserved for comparison. |
+| `chroma_db/manifest.json` | Indexed experiment corpus: 4,020 documents / 9,642 chunks. |
+| Git log `main` (117 commits) | Provenance: every change is a separate, dated, verified commit. |
 | `assets/architecture.svg` | The system architecture diagram (rendered above). |
 
 Screenshots of the deliverables themselves (regenerated and verified for this record):
@@ -250,7 +411,7 @@ Screenshots of the deliverables themselves (regenerated and verified for this re
 
 Reproduce or re-verify from the repository:
 
-- `uv run --group eval python -m pytest -q -m "not ollama and not docling"` -- 324 passed.
+- `uv run --group eval python -m pytest -q -m "not ollama and not docling"` -- 339 passed.
 - `python scripts/build_alert_rag_report.py` -- regenerates both deliverables.
 - `python scripts/run_alert_rag.py --resume --top-k 8` and
   `python scripts/judge_alert_rankings.py --resume` -- report 50/50 already complete with
@@ -277,6 +438,14 @@ Reproduce or re-verify from the repository:
 - A small corpus makes matching tests trivial. The 14-document SID test passed 50/50; the
   full 4,022-rule corpus exposed genuine retrieval ambiguity, because dozens of community
   rules share generic messages such as "SERVER-WEBAPP /.... access".
+- Richer evidence is not uniformly better. Replacing one-line rules with full rule
+  documentation drove SID matching to its retrieval ceiling and simultaneously degraded
+  severity ranking, because the added CVE and explanation text gave the ranker narrative
+  severity cues that outweighed the Snort priority. An evidence change must be measured on
+  every metric it can touch, not only the one it targets.
+- Grading by distance from ground truth, rather than by pass or fail, is what made the
+  regression diagnosable: the flat 0.08 mean at two steps distinguished over-reach from
+  refinement, which a single accuracy figure would have hidden.
 
 ## Current limitations
 
@@ -417,3 +586,8 @@ their remote commits.
 | 2026-08-13 | [`7f81b49`](https://github.com/subhan-17h/CSRS/commit/7f81b49d9e87d65fab632f263a90a0c8c4dbcf21) | chore(ALERT-GROQ-7): retire the mismatch justify pass and ignore fetched Snort docs | Retired the justify pass and gitignored the fetched Snort docs. |
 | 2026-08-13 | [`9fb1d75`](https://github.com/subhan-17h/CSRS/commit/9fb1d75a9a56848a0e82ca921ec705c504d1684b) | feat(ALERT-GROQ-7): ingest the full Snort community ruleset as per-rule corpus docs | Indexed 4,022 community rules as per-rule documents. |
 | 2026-08-13 | [`3725ade`](https://github.com/subhan-17h/CSRS/commit/3725adede4f54d3ab2d7fbbd00ad23bbaf8a42d7) | chore(ALERT-GROQ-7): close v2 with the production run on the full ruleset corpus | Recorded verified v2 completion (32/50 exact, judge mean 0.868). |
+| 2026-08-15 | [`4b5154f`](https://github.com/subhan-17h/CSRS/commit/4b5154f565599e1a3cfd835cc88e1f46e9466518) | docs(HIST-2): complete the verified work history through alert-ranking v2 | Extended the verified work record through the v2 alert-ranking phase. |
+| 2026-08-15 | [`eb8db0a`](https://github.com/subhan-17h/CSRS/commit/eb8db0a2f53eb5aee50a111e69a12ea95d3479c8) | chore(eval): commit the evaluation summary and report artifacts | Committed the EVAL-3 summary CSV and report as project artifacts. |
+| 2026-08-15 | [`9e3b0df`](https://github.com/subhan-17h/CSRS/commit/9e3b0df87dfcf688fa15c26ea36750ac8c11b5a5) | docs(PDF-1): add the LaTeX internship work record and its figure pipeline | Added the LaTeX work record with its figure, excerpt and screenshot generators. |
+| 2026-08-21 | [`57a2a8f`](https://github.com/subhan-17h/CSRS/commit/57a2a8fdca6615d31c972c0cf8fc6a5e17abcfb1) | feat(ALERT-RAG-8): render the RAG corpus from the detailed rule documentation | Rendered 4,017 detailed rule documents from the preprocessed rule-doc bundle. |
+| 2026-08-21 | [`7272e68`](https://github.com/subhan-17h/CSRS/commit/7272e6895c34a0521fb4b737a4e7482b87b4cf1c) | phase(ALERT-RAG-8): close the detailed-corpus phase with the measured outcome | Recorded v3: SID matching 40/50 correct with 0 wrong, ranking 29/50 exact. |
