@@ -1987,3 +1987,51 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     Cost: ranker 181,288 tokens / 50 requests (previous key, resumed once after an Ollama
     outage with no lost rows); judge 68,205 tokens / 50 requests (new key, tracker
     .csrs_cache/groq_daily_usage_account5.json).
+
+## SUB — Internship final submission
+
+- [x] Extend the day-wise record through 21 August and restructure it as Day 1..Day 16 over
+      the full 32-day span, in both `project-docs/PROJECT_WORK_HISTORY.md` and a new
+      section 3 of `latex/CSRS_Work_Record.tex`. Add the three working days Git does not
+      record (the alert dataset, the scraping session, the severity rubric), each evidenced
+      by its artefact, and the nine research weekdays, each anchored to a document in this
+      repository.
+- [x] Finalise the repository day-wise: `project-docs/DAY_INDEX.md`, thirteen annotated
+      `day-NN-YYYY-MM-DD` tags, README navigation, and push `main` to `origin`.
+- [x] `latex/CSRS_Presentation.tex` — a 26-slide Beamer deck sharing the work record's
+      palette and figures; `./latex/build.sh --slides` builds it.
+- [x] `scripts/stage_submission_bundle.sh` stages the Drive bundle, excluding the licensed
+      and Cisco-copyrighted sources and refusing to finish if any of them or an API key
+      reaches the staging tree.
+- [x] `project-docs/SUBMISSION_EMAIL.md` — the email draft, with placeholders marked.
+- Done when: both PDFs build clean, the manifest of the bundle contains no restricted file,
+      `origin/main` carries the day index and tags, and the full offline suite is green.
+  - Review: shipped as five commits, `445bc39`..`c1806ab`.
+
+    **Report.** The work record gained section 3 and now covers 21 July to 21 August. The
+    day-by-day record numbers the 16 working days and shows the whole span in a calendar
+    figure; the nine research weekdays name the documents they drew on rather than asserting
+    unevidenced activity, and weekends are omitted. Two new figures: `judge_delta.pdf`, the
+    judge score against distance from the anchor, and `calendar.pdf`. `alert_v1_v2.pdf`
+    became `alert_runs.pdf` with v3 and a rule-matching panel added; v1's absent measure is
+    drawn as "not measured" rather than as a zero, since SID matching did not exist in v1.
+
+    **Repository.** The 117 commits are untouched. Thirteen tags mark the working days that
+    produced commits; days 7, 8 and 9 produced artefacts instead, so no commit exists to tag
+    and the index says so rather than tagging a neighbour.
+
+    **Presentation.** 26 slides, zero overfull boxes. Two defects were found only by
+    rendering and looking at every slide, neither of which raised a TeX error: overriding
+    the frametitle template leaves the frame body in horizontal mode, so a table opening a
+    body was silently swallowed and four slides rendered blank; and two figures overflowed
+    their frames vertically. `\leavevmode` and height caps fix them. The lesson is recorded
+    as L-11.
+
+    **Bundle.** 64 files, 16 MB. The staging script verifies its own output rather than
+    trusting the copy list.
+
+    **Not done, and deliberately:** the ranker prompt was not re-tuned. v3 is reported as
+    measured, with the diagnosis, and the prompt change is named as the next experiment.
+
+    Verified: 339 offline tests pass, ruff clean, both PDFs rebuild, bundle staging reports
+    zero restricted files and zero keys.

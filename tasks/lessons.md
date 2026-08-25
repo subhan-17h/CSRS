@@ -221,3 +221,19 @@ negative control.
 **Why.** Models served by the same API do not necessarily accept the same request schema.
 Sending reasoning options unconditionally made an otherwise valid non-reasoning model call
 fail before generation.
+
+## L-11 · A clean build is not a rendered document
+
+**Date:** 2026-08-25 · **Trigger:** `tectonic` exited 0 with an error-free log while four
+slides of the presentation were blank.
+
+**Rule.** For any generated document, render it to images and inspect every page before
+calling it done. When a failure looks selective, bisect a minimal reproduction instead of
+guessing at the difference.
+
+**Why.** Overriding beamer's `frametitle` template leaves the frame body in horizontal
+mode, so a `tabular` opening the body is absorbed and never drawn — silently, with no
+error. Tables inside a `columns` environment were unaffected, which made the fault look
+like a `tabularx` problem and cost two plausible, wasted fixes before a four-line minimal
+file isolated the real cause. Exit codes and logs prove the compiler was satisfied, not
+that the content is present.
