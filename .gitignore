@@ -36,6 +36,8 @@ eval/results/
 # macOS
 .DS_Store
 
-# Built work-record PDF (rebuild with ./latex/build.sh)
+# Built PDFs (rebuild with ./latex/build.sh and ./latex/build.sh --slides)
 CSRS_Work_Record.pdf
 latex/CSRS_Work_Record.pdf
+CSRS_Presentation.pdf
+latex/CSRS_Presentation.pdf

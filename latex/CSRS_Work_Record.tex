@@ -196,11 +196,182 @@ generation. No document content leaves the host during normal operation.
 \end{figure}
 
 % =====================================================================
+\section{Day-by-day record}
+
+The internship ran from Tuesday 21 July to Friday 21 August 2026. The 32-day span
+contains \textbf{16 working days}, on each of which either commits were made or a dated
+artefact was produced. Of the remaining dates, seven are weekends and nine are weekdays
+spent on background reading and result analysis rather than on committed work.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figures/calendar.pdf}
+  \caption{The whole internship at a glance. Dark cells are working days and carry
+  their day number; mid cells are research days; pale cells are weekends.}
+\end{figure}
+
+Three of the sixteen working days produced no commit, because the work was data
+preparation carried out outside the repository. Each is evidenced by the file it wrote,
+and each was a precondition for the code that followed.
+
+\subsection{Week 1 --- building the system (21--24 July)}
+
+{\small
+\begin{tabularx}{\textwidth}{@{}p{15mm} p{11mm} L@{}}
+\toprule
+\textbf{Day} & \textbf{Date} & \textbf{Work and result} \\
+\midrule
+\endhead
+Day 1 & 21 Jul & Specification, roadmap, typed configuration, then the first
+  end-to-end path: loaders, chunking, prefixed embeddings, vector storage, grounded
+  generation, a pipeline facade and a minimal Streamlit UI. Page-aware PDF parsing
+  closed the day. \emph{23 commits, +10{,}212/--1{,}101.} \\
+Day 2 & 22 Jul & Docling replaced the hand-written PDF heuristics; content-hash
+  indexing made re-runs cheap; model warming made offline operation a setup step. The
+  Streamlit UI was completed and the FastAPI service and React front end begun.
+  \emph{18 commits, +10{,}629/--426.} \\
+Day 3 & 23 Jul & Token streaming, settings, the corpus explorer and saved
+  conversations. Both interfaces documented and visually verified; corrupt-history
+  handling fixed; the first 48-question retrieval golden set added.
+  \emph{11 commits, +3{,}399/--255.} \\
+Day 4 & 24 Jul & Retrieval measurement, persisted BM25, reciprocal-rank fusion and
+  optional reranking. The original target was found to reward duplicate passages from
+  one control, so the metric was re-baselined on rank-one relevance and hybrid
+  retrieval became the default. Conversational rewriting, document viewing and
+  licensing followed. \emph{22 commits, +5{,}380/--796.} \\
+\bottomrule
+\end{tabularx}
+}
+
+\subsection{Week 2 --- measuring it, and turning to alerts (27--31 July)}
+
+{\small
+\begin{tabularx}{\textwidth}{@{}p{15mm} p{11mm} L@{}}
+\toprule
+\textbf{Day} & \textbf{Date} & \textbf{Work and result} \\
+\midrule
+\endhead
+--- & 27 Jul & \emph{Research day.} Reading on how retrieval quality is measured and
+  improved, before committing to an evaluation design. \code{RESEARCH.md} records the
+  ground covered: fusion and reranking, the finding that Ollama exposes no reranking
+  endpoint, and the advanced architectures evaluated and declined --- HyDE, multi-query
+  expansion, step-back prompting, late chunking and CRAG --- each with the reason it did
+  not suit a local, CPU-bound system. \\
+Day 5 & 28 Jul & The retrieval-only harness was replaced by an answer-quality
+  evaluation: 20 questions over four documents, cosine similarity, evidence coverage
+  and an optional structured judge. \emph{1 commit, +4{,}177/--1{,}856.} \\
+Day 6 & 29 Jul & The corpus was reduced to NIST CSF 2.0 and 50 new evidence-grounded
+  questions written. All five installed models were compared on three independent
+  metrics, producing a complete 250-row result set with no technical errors. The first
+  verified work record was written the same day.
+  \emph{13 commits, +5{,}218/--3{,}279.} \\
+Day 7 & 30 Jul & \emph{No commit; evidenced by its artefact.} The intrusion-alert
+  dataset was prepared as \code{enriched\_snort\_alerts.json} (2.7\,MB). The alert
+  corpus had to exist before a ranking task could be defined over it. \\
+Day 8 & 31 Jul & \emph{No commit; evidenced by its artefacts.} Snort rule
+  documentation was collected from snort.org in a scripted browser session, leaving 16
+  artefacts: three console logs, nine page snapshots and four screenshots. This
+  established which fields the published documentation carries --- category, alert
+  message, explanation, properties, CVE and references --- the fields Day 16 would
+  render into the corpus. \\
+\bottomrule
+\end{tabularx}
+}
+
+\subsection{Week 3 --- defining severity and ranking alerts (3--7 August)}
+
+{\small
+\begin{tabularx}{\textwidth}{@{}p{15mm} p{11mm} L@{}}
+\toprule
+\textbf{Day} & \textbf{Date} & \textbf{Work and result} \\
+\midrule
+\endhead
+Day 9 & 3 Aug & \emph{No commit; evidenced by its artefact.} \code{cretria.md} was
+  written: the nine-criterion rubric defining what severity means here --- potential
+  impact, attack vector, likelihood of success, level of access, sensitive-data
+  exposure, Snort priority, alert context, ease of mitigation and alert frequency.
+  Each is illustrated with a real alert and given a correct interpretation, including
+  the two traps: that Snort priority is only a starting clue, and that alert frequency
+  measures volume rather than danger. This document underlies every ranking run that
+  follows. \\
+--- & 4--5 Aug & \emph{Research days.} Turning that rubric into a machine-checkable
+  task: what to grade against, given that no human severity labels existed for these
+  50 alerts, and how to stop the model simply copying the visible priority field. \\
+Day 10 & 6 Aug & The pipeline was re-purposed to rank the severity of 50 real Snort
+  alerts from retrieved standards evidence; NIST SP 800-53r5 was added to the corpus.
+  \emph{5 commits, +1{,}174/--13.} \\
+--- & 7 Aug & \emph{Research day.} Settling how a ranking would be scored: mapping
+  Snort's three priorities onto anchors 1, 3 and 5, and counting a rank as a mismatch
+  only beyond one step, so that defensible refinement is not punished as error. \\
+\bottomrule
+\end{tabularx}
+}
+
+\subsection{Week 4 --- production runs and version 2 (10--14 August)}
+
+{\small
+\begin{tabularx}{\textwidth}{@{}p{15mm} p{11mm} L@{}}
+\toprule
+\textbf{Day} & \textbf{Date} & \textbf{Work and result} \\
+\midrule
+\endhead
+Day 11 & 10 Aug & The shared priority-to-rank anchor and one-step mismatch rule, a
+  mismatch-justification pass and a severity judge, merged into the report
+  deliverables. \emph{4 commits, +966/--11.} \\
+Day 12 & 11 Aug & The experiment chain moved from local models to a hosted one, with a
+  shared transport, sliding-window rate limiting and quota-safe resumes. A smoke run
+  revealed the model emits nothing without a reasoning setting, which was fixed.
+  \emph{6 commits, +1{,}155/--207.} \\
+Day 13 & 12 Aug & The first full production run completed quota-safe: all 50 alerts
+  ranked, 21 matching Snort exactly, self-judged at 0.586.
+  \emph{1 commit, +10/--1.} \\
+Day 14 & 13 Aug & Version 2: a clean one-line JSON contract, justifications written in
+  the ranker's single call, an independent judge model, the answer key withheld from
+  the ranker, evidence-labelled rule matching, and the full 4{,}022-rule ruleset
+  indexed. Exact matches rose from 21 to 32 and mismatches fell from 23 to 4.
+  \emph{8 commits, +1{,}536/--613.} \\
+--- & 14 Aug & \emph{Research day.} Analysis of the version 2 outcome. Ranking had
+  improved, but rule matching had not: 16 of 50 alerts returned no rule evidence, and
+  four of the 34 attempted matches were wrong --- all of them alerts sharing one
+  generic message. The conclusion, that one-line rule documents carry too little text
+  to disambiguate, is what Day 16 acted on. \\
+\bottomrule
+\end{tabularx}
+}
+
+\subsection{Week 5 --- the record, and version 3 (15--21 August)}
+
+{\small
+\begin{tabularx}{\textwidth}{@{}p{15mm} p{11mm} L@{}}
+\toprule
+\textbf{Day} & \textbf{Date} & \textbf{Work and result} \\
+\midrule
+\endhead
+Day 15 & 15 Aug & The verified work history was completed through version 2, the
+  evaluation artefacts committed, and this record's own LaTeX source and figure
+  pipeline built. \emph{3 commits, +2{,}017/--20.} \\
+--- & 17--20 Aug & \emph{Research days.} Corpus-quality investigation following the
+  Day 14 diagnosis: what the indexed rule documents actually contained, and what
+  richer source was available. Preparing the scraped documentation as a
+  4{,}017-record bundle keyed by rule identifier --- 3{,}945 of them carrying the full
+  documentation fields --- is what made the rebuild possible. One constraint proved
+  decisive: the document filenames had to stay unchanged, because the ranker prompt
+  reads the rule identifier out of the filename. \\
+Day 16 & 21 Aug & Version 3: the one-line rule documents were replaced by 4{,}017
+  detailed ones, and the corpus re-indexed and re-run. Rule identification reached its
+  retrieval ceiling --- 40 correct, none wrong, 10 honest abstentions --- while
+  severity ranking regressed from 32 exact matches to 29. The phase was closed on the
+  measured outcome rather than a tuned one. \emph{2 commits, +505/--1.} \\
+\bottomrule
+\end{tabularx}
+}
+
+% =====================================================================
 \section{How the work progressed}
 
 Work ran in three arcs: a working RAG system and its interfaces (July 21--24), a
 measured evaluation of answer quality (July 28--29), and an applied experiment that
-reused the retriever for alert triage (August 6--13).
+reused the retriever for alert triage (August 6--21).
 
 {\small
 \begin{tabularx}{\textwidth}{@{}l R L@{}}
@@ -236,10 +407,15 @@ reused the retriever for alert triage (August 6--13).
 13 Aug & 8 & Version 2: a clean JSON contract, the answer key withheld from the
   ranker, a separate judge model, and the full 4{,}022-rule Snort ruleset indexed.
   Exact matches rose from 21 to 32. \\
+15 Aug & 3 & The verified work history was completed, the evaluation artefacts
+  committed, and this record's source and figure pipeline built. \\
+21 Aug & 2 & Version 3: the corpus was rebuilt from the detailed rule documentation.
+  Rule identification reached its retrieval ceiling; severity ranking regressed. \\
 \bottomrule
 \end{tabularx}
-\captionof*{table}{The 112 commits by working day. Each commit records one completed task and
-was made only after its acceptance check passed.}
+\captionof*{table}{The 117 commits by working day. Each commit records one completed task and
+was made only after its acceptance check passed. Days 7, 8 and 9 produced dated artefacts
+rather than commits and are covered in the day-by-day record above.}
 }
 
 \subsection{Course corrections worth recording}
@@ -353,7 +529,7 @@ made five very different models look interchangeable.
 The second phase asked whether the same retrieval pipeline could help triage security
 alerts. Fifty real Snort alerts were sampled. For each one, the alert's own content
 --- but not its rule identity or rule documentation --- was used to search a corpus of
-three cybersecurity standards plus all 4{,}022 Snort community rules. A model then
+three cybersecurity standards plus the Snort community ruleset. A model then
 assigned a severity rank of 1 to 5 from that evidence alone, and a second, different
 model scored the ranking and its justification.
 
@@ -370,17 +546,22 @@ rule has to come from what retrieval found.
 \midrule
 v1 (12 Aug) & \code{gpt-oss-120b} & the same model & 21/50 & 23/50 & 0.586 \\
 v2 (13 Aug) & \code{gpt-oss-120b} & \code{qwen3.6-27b} & 32/50 & 4/50 & 0.868 \\
+v3 (21 Aug) & \code{gpt-oss-120b} & \code{qwen3.6-27b} & 29/50 & 9/50 & 0.780 \\
 \bottomrule
 \end{tabularx}
-\caption*{Both runs cover the same 50 alerts and all 50 were ranked successfully.}
+\caption*{All three runs cover the same 50 alerts and all 50 were ranked successfully.
+Version 2 indexed the ruleset as 4{,}022 one-line rules; version 3 replaced these with
+4{,}017 documents rendered from the published rule documentation.}
 \end{table}
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\textwidth]{figures/alert_v1_v2.pdf}
-  \caption{What changed between the two runs. Version 1 mapped Snort's priority
-  straight onto the five-point scale; version 2 treated it as a starting point to be
-  revised when the evidence disagreed, and moved judging to an independent model.}
+  \includegraphics[width=\textwidth]{figures/alert_runs.pdf}
+  \caption{The three runs on the four measures that moved. Version 1 mapped Snort's
+  priority straight onto the five-point scale; version 2 treated it as a starting point
+  to be revised when the evidence disagreed and moved judging to an independent model;
+  version 3 changed only the rule evidence. Rule matching was introduced in version 2,
+  so version 1 has no value to show.}
 \end{figure}
 
 Two changes account for the improvement. The first prompt effectively told the model
@@ -392,6 +573,40 @@ self-judgement with an independent model, which raised the mean score from 0.586
 On rule identification, 30 of the 34 attempted matches were correct. Sixteen alerts
 retrieved no rule evidence at all, so no match was possible, and the four wrong
 matches all involve rules that share a generic message with dozens of others.
+
+\subsection{Version 3: richer evidence, and what it cost}
+
+Version 3 changed one thing: the one-line community rules were replaced by 4{,}017
+documents rendered from the published rule documentation, each carrying the rule's
+category, alert message, explanation, properties, CVE identifiers and references. The
+index grew from 4{,}039 documents and 6{,}518 passages to 4{,}020 and 9{,}642. The two
+effects separate cleanly, and they point in opposite directions.
+
+Rule identification reached its ceiling. Correct matches rose from 30 to 40, wrong
+matches fell from four to none, and the remaining ten alerts were declined rather than
+guessed. A retrieval check made before the run showed the correct rule is reachable
+for exactly 40 of the 50 alerts, so the model found every one it could and invented
+none of the rest. Nine of the ten abstentions are the same generic message.
+
+Severity ranking regressed: exact matches fell from 32 to 29 and mismatches rose from
+four to nine. Grading each ranking by its distance from the ground-truth anchor shows
+why this is over-reach rather than refinement.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.66\textwidth]{figures/judge_delta.pdf}
+  \caption{Mean judge score against distance from the ground-truth anchor, over all 50
+  version 3 rankings. Departures of one step are largely accepted; departures of two are
+  almost uniformly rejected, seven of the nine scoring zero.}
+\end{figure}
+
+A one-step departure still scores 0.78, so the judge does accept genuine refinement. A
+two-step departure scores 0.08. With CVE text and rule explanations now in the evidence,
+the ranker weighs narrative severity --- ``CVSS 10.0'', ``complete compromise'' ---
+above the Snort priority, and overshoots. The instruction to revise the anchor
+``when evidence warrants'' was written when the evidence was a single line of rule code;
+it is the likely cause and the obvious next experiment. It has deliberately not been
+run, so that what is reported here is a measured result rather than a tuned one.
 
 \begin{figure}[htbp]
   \centering
@@ -420,8 +635,11 @@ matches all involve rules that share a generic message with dozens of others.
   \item Follow-up question rewriting is shallow, is absent from the Streamlit
     interface, and is not measured.
   \item In the alert experiment the sample is thin at the lowest priority level, and
-    rule matching is limited by retrieval: a third of the alerts returned no rule
-    evidence to match against.
+    rule matching is limited by retrieval: in version 3 the correct rule is simply not
+    reachable for ten of the fifty alerts, and the model abstains on them.
+  \item Richer evidence was not uniformly better. The version 3 corpus drove rule
+    identification to its ceiling while degrading severity ranking, and the prompt
+    change that would test the cause has not been run.
 \end{itemize}
 
 % =====================================================================
@@ -433,7 +651,7 @@ matches all involve rules that share a generic message with dozens of others.
 \toprule
 \textbf{Artefact} & \textbf{What it is} \\
 \midrule
-Source repository & 112 commits, each one completed task, on \code{main}. \\
+Source repository & 117 commits, each one completed task, on \code{main}. \\
 \code{eval/final/} & The 250-row evaluation results, summary and report. \\
 \code{alert\_rankings\_rag.json} & The 50-record alert deliverable: rank,
   justification, ground-truth anchor, rule match and judge verdict per alert. \\
