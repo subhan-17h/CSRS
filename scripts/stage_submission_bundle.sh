@@ -2,9 +2,10 @@
 # Stage the instructor submission bundle at ~/Projects/work/CIL/submission_bundle.
 #
 # Rebuilds the folder from scratch every run, so it always reflects the current
-# deliverables. Build the two PDFs first:
+# deliverables. Build the two PDFs and export the PowerPoint first:
 #
 #     ./latex/build.sh --slides
+#     python scripts/export_pdf_to_pptx.py CSRS_Presentation.pdf CSRS_Presentation.pptx
 #
 # Restricted sources are deliberately excluded and the script refuses to finish
 # if any of them, or an API key, reaches the staging directory. See
@@ -22,16 +23,19 @@ mkdir -p "$OUT"/{05_evaluation,06_figures/charts,06_figures/screenshots,07_archi
 cp "$CSRS/project-docs/SUBMISSION_BUNDLE_README.md" "$OUT/00_README.md"
 cp "$CSRS/project-docs/SUBMISSION_EMAIL.md"         "$OUT/EMAIL_DRAFT.md"
 
-for pdf in CSRS_Work_Record.pdf CSRS_Presentation.pdf; do
-  if [ -f "$CSRS/$pdf" ]; then
-    case "$pdf" in
-      CSRS_Work_Record.pdf) cp "$CSRS/$pdf" "$OUT/01_report/" ;;
-      *)                    cp "$CSRS/$pdf" "$OUT/02_presentation/" ;;
+missing=0
+for artifact in CSRS_Work_Record.pdf CSRS_Presentation.pdf CSRS_Presentation.pptx; do
+  if [ -f "$CSRS/$artifact" ]; then
+    case "$artifact" in
+      CSRS_Work_Record.pdf) cp "$CSRS/$artifact" "$OUT/01_report/" ;;
+      *)                    cp "$CSRS/$artifact" "$OUT/02_presentation/" ;;
     esac
   else
-    echo "WARNING: $pdf missing -- run ./latex/build.sh --slides" >&2
+    echo "WARNING: $artifact missing -- build the final report and presentation" >&2
+    missing=1
   fi
 done
+[ "$missing" -eq 0 ] || exit 1
 cp "$CSRS/RAG_Evaluation_Report.pdf"            "$OUT/01_report/"
 cp "$CSRS/project-docs/PROJECT_WORK_HISTORY.md" "$OUT/01_report/"
 cp "$CSRS/project-docs/DAY_INDEX.md"            "$OUT/01_report/"

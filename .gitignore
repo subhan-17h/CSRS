@@ -36,8 +36,9 @@ eval/results/
 # macOS
 .DS_Store
 
-# Built PDFs (rebuild with ./latex/build.sh and ./latex/build.sh --slides)
+# Built report and presentation files (rebuild from the LaTeX and export scripts)
 CSRS_Work_Record.pdf
 latex/CSRS_Work_Record.pdf
 CSRS_Presentation.pdf
 latex/CSRS_Presentation.pdf
+CSRS_Presentation.pptx
