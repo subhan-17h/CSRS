@@ -9,6 +9,20 @@ Ask questions about cybersecurity standards and get answers grounded in the docu
 themselves, with page-level citations. Everything runs locally: the language models, the
 embeddings, and the vector store. **No cloud API is used or permitted.**
 
+## Internship final submission
+
+This submission maps directly to the three required deliverables:
+
+| Requirement | Submission evidence | How to inspect or reproduce it |
+|---|---|---|
+| 1. Final report | `CSRS_Work_Record.pdf`; source: `latex/CSRS_Work_Record.tex` | Run `./latex/build.sh` to rebuild the report PDF. The PDF is a generated submission artefact and is intentionally excluded from Git. |
+| 2. Presentation (at least 30 slides) | `CSRS_Presentation.pptx` — **33 slides**; PDF backup: `CSRS_Presentation.pdf`; source: `latex/CSRS_Presentation.tex` | Open the PPTX for the primary deck or the PDF backup for a fixed-layout copy. Run `./latex/build.sh --slides` to rebuild the PDF source deck. |
+| 3. Public GitHub repository with week-wise/day-wise code, data, and execution documentation | [github.com/subhan-17h/CSRS](https://github.com/subhan-17h/CSRS); day index: [`project-docs/DAY_INDEX.md`](project-docs/DAY_INDEX.md); verified history: [`project-docs/PROJECT_WORK_HISTORY.md`](project-docs/PROJECT_WORK_HISTORY.md); code: [`src/csrs/`](src/csrs/) and [`frontend/`](frontend/); committed data: [`docs/samples/`](docs/samples/) and [`eval/data/`](eval/data/); execution documentation: this README and [`project-docs/Submission.md`](project-docs/Submission.md) | Run `git tag -n99 -l 'day-*'` to list annotated working-day checkpoints, then `git show day-01-2026-07-21` (or another tag) to inspect a day. Follow [Quick start](#quick-start) to run the application. |
+
+The repository preserves copyright and licensing boundaries: its source code is MIT licensed,
+while restricted standards and generated local indexes are not redistributed. See
+[What ships, and what doesn't](#what-ships-and-what-doesnt).
+
 <img src="assets/architecture.svg" alt="CSRS architecture: the ingest and query pipelines, the Pipeline facade both interfaces call, and the offline boundary enclosing Ollama" width="100%">
 
 ```

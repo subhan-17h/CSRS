@@ -1,6 +1,6 @@
 # CSRS — Internship Submission Bundle
 
-Subhan Amir · 21 July – 21 August 2026 · https://github.com/subhan-17h/CSRS
+Muhammad Subhan Amir · 21 July – 21 August 2026 · https://github.com/subhan-17h/CSRS
 
 Everything here was produced by the project itself. No figure is transcribed and no result
 is retyped: the charts are generated from the committed evaluation artefacts, and both alert
@@ -13,7 +13,7 @@ Rebuild this folder at any time with `scripts/stage_submission_bundle.sh`.
 | Folder | Contents |
 |---|---|
 | `01_report/` | The final report (`CSRS_Work_Record.pdf`), the evaluation report, the day-by-day narrative in Markdown, and the day index. |
-| `02_presentation/` | The 26-slide presentation. |
+| `02_presentation/` | The 33-slide presentation (`CSRS_Presentation.pptx`) and its PDF backup (`CSRS_Presentation.pdf`). |
 | `03_deliverables/` | The alert-ranking JSON and Markdown deliverables, the 50-alert sample, the nine-criterion severity rubric, and the evaluation results summary. |
 | `04_run_snapshots/` | Every request, retrieved passage, model response and judge verdict, as JSONL. These are what make the results reproducible without calling a model. |
 | `05_evaluation/` | The 250-row five-model benchmark: summary CSV, detailed CSVs, and the report. |
