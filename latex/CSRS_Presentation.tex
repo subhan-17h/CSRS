@@ -88,11 +88,11 @@
 
   \vspace{1.6em}
   \begin{tabular}{@{}ll@{}}
-    {\color{soft}\small Intern} & \small Subhan Amir \\
+    {\color{soft}\small Intern} & \small Muhammad Subhan Amir \\
+    {\color{soft}\small Student ID} & \small BSCS23016 \\
+    {\color{soft}\small Institution} & \small Information Technology University \\
     {\color{soft}\small Period} & \small 21 July -- 21 August 2026 \quad (16 working days) \\
     {\color{soft}\small Repository} & \small\ttfamily github.com/subhan-17h/CSRS \\
-    {\color{soft}\small Institution} & \small\color{warn}[institution and programme] \\
-    {\color{soft}\small Supervisor} & \small\color{warn}[instructor name] \\
   \end{tabular}
 \end{frame}
 
@@ -109,6 +109,32 @@
 \end{frame}
 
 % --- 3 ---------------------------------------------------------------
+\begin{frame}{Success would mean four things}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{accent}Grounded answers}\\[0.25em]
+      {\small Respond from retrieved standards evidence, cite its page and section, and
+      refuse when the corpus cannot support an answer.}
+      \vspace{1.0em}
+
+      \textbf{\color{accent}Local core}\\[0.25em]
+      {\small Parse, embed, retrieve and generate on the host after models are warmed.}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{accent}A usable product}\\[0.25em]
+      {\small Deliver the required Streamlit interface and a richer React + FastAPI path,
+      both driving the same pipeline.}
+      \vspace{1.0em}
+
+      \textbf{\color{accent}Measured, reproducible work}\\[0.25em]
+      {\small Evaluate answer quality on a fixed question set, then preserve every alert
+      experiment request, passage and verdict for replay.}
+    \end{column}
+  \end{columns}
+  \keytake{Success is not ``the model produced text'' --- it is evidence, restraint, usability and measurement.}
+\end{frame}
+
+% --- 4 ---------------------------------------------------------------
 \begin{frame}{What this presentation covers}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.48\textwidth}
@@ -134,7 +160,7 @@
   \end{columns}
 \end{frame}
 
-% --- 4 ---------------------------------------------------------------
+% --- 5 ---------------------------------------------------------------
 \begin{frame}{The constraint that decided everything}
   \lede{``Local'' rules out the easy version of every component.}
   \begin{itemize}
@@ -146,7 +172,7 @@
   \keytake{Every architecture choice in this project traces back to this line.}
 \end{frame}
 
-% --- 5 ---------------------------------------------------------------
+% --- 6 ---------------------------------------------------------------
 \begin{frame}{System architecture}
   \begin{center}
     \includegraphics[width=0.92\textwidth,height=0.60\textheight,keepaspectratio]{figures/architecture.pdf}
@@ -155,7 +181,7 @@
   \lede{Everything inside the dashed boundary runs locally. The only outbound calls are the opt-in evaluation judge and the alert experiment's hosted models.}
 \end{frame}
 
-% --- 6 ---------------------------------------------------------------
+% --- 7 ---------------------------------------------------------------
 \begin{frame}{Ingestion: getting a standard into the index}
   \begin{itemize}
     \item \textbf{Docling} parses PDFs with layout awareness, preserving page boundaries.
@@ -169,7 +195,7 @@
   \keytake{Indexed for the experiment: 3 standards + 4,017 rule documents = 4,020 documents, 9,642 passages.}
 \end{frame}
 
-% --- 7 ---------------------------------------------------------------
+% --- 8 ---------------------------------------------------------------
 \begin{frame}{Retrieval: two searches, fused}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.46\textwidth}
@@ -191,7 +217,7 @@
   \keytake{Hybrid by default; optional CPU reranking implemented but shipped disabled.}
 \end{frame}
 
-% --- 8 ---------------------------------------------------------------
+% --- 9 ---------------------------------------------------------------
 \begin{frame}{Generation: grounded, cited, and willing to refuse}
   \begin{itemize}
     \item Top passages go to a local Ollama model with a grounding instruction.
@@ -204,7 +230,7 @@
   \keytake{A candidate pool and a generation context are different things. Only the final top evidence should spend the model's context window.}
 \end{frame}
 
-% --- 9 ---------------------------------------------------------------
+% --- 10 --------------------------------------------------------------
 \begin{frame}{Two interfaces, one pipeline}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.49\textwidth}
@@ -218,7 +244,37 @@
   \end{columns}
 \end{frame}
 
-% --- 10 --------------------------------------------------------------
+% --- 11 --------------------------------------------------------------
+\begin{frame}{Live demo: one question, four checks}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.34\textwidth}
+      {\small
+      \textbf{\color{accent}1. Configure}\\
+      Choose the installed model and retrieval settings.
+      \vspace{0.65em}
+
+      \textbf{\color{accent}2. Ask}\\
+      Submit a standards question in plain language.
+      \vspace{0.65em}
+
+      \textbf{\color{accent}3. Observe}\\
+      Watch retrieval stages and answer tokens stream.
+      \vspace{0.65em}
+
+      \textbf{\color{accent}4. Verify}\\
+      Expand the source card, then open the cited document.}
+    \end{column}
+    \begin{column}{0.62\textwidth}
+      \begin{center}
+        \includegraphics[width=\textwidth,height=0.63\textheight,keepaspectratio]{figures/ui_web_answer.png}
+      \end{center}
+      {\footnotesize\color{soft}The useful demo is not the prose alone; it is the path from
+      a question to inspectable evidence.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% --- 12 --------------------------------------------------------------
 \begin{frame}{The internship, day by day}
   \begin{center}
     \includegraphics[width=\textwidth]{figures/calendar.pdf}
@@ -230,7 +286,7 @@
   \keytake{117 commits, each one completed task, committed only after its acceptance check passed.}
 \end{frame}
 
-% --- 11 --------------------------------------------------------------
+% --- 13 --------------------------------------------------------------
 \begin{frame}{Week 1 --- from nothing to a working system (Days 1--4)}
   % \leavevmode is required: this deck overrides the frametitle template, which
   % leaves the body in horizontal mode. A table that opens the body is then
@@ -253,7 +309,7 @@
   \keytake{A working RAG system with two interfaces existed at the end of week one.}
 \end{frame}
 
-% --- 12 --------------------------------------------------------------
+% --- 14 --------------------------------------------------------------
 \begin{frame}{Week 2 --- measuring it, then changing the question (Days 5--8)}
   % \leavevmode is required: this deck overrides the frametitle template, which
   % leaves the body in horizontal mode. A table that opens the body is then
@@ -276,7 +332,63 @@
   \keytake{Days 7 and 8 have no commits --- and they are why the second half was possible.}
 \end{frame}
 
-% --- 13 --------------------------------------------------------------
+% --- 15 --------------------------------------------------------------
+\begin{frame}{Week 3 --- define severity before ranking it (Days 9--10)}
+  \leavevmode
+  {\footnotesize
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.10\textwidth}
+                    >{\raggedright\arraybackslash}p{0.12\textwidth}
+                    >{\raggedright\arraybackslash}p{0.715\textwidth}@{}}
+    \toprule
+    \textbf{When} & \textbf{Date} & \textbf{Decision or delivery} \\
+    \midrule
+    Day 9 & 3 Aug & Wrote the nine-criterion severity rubric; priority is a clue and frequency is volume, not danger. \\
+    Research & 4--5 Aug & Made the task gradeable without human labels and decided how the visible priority could remain a clue, not the answer. \\
+    Day 10 & 6 Aug & Added SP 800-53r5, the 50-alert ranking runner and its report builder. \\
+    Research & 7 Aug & Set anchors 1, 3 and 5, with a mismatch only beyond one step. \\
+    \bottomrule
+  \end{tabular}}
+  \keytake{Week 3 made severity explicit and machine-checkable.}
+\end{frame}
+
+% --- 16 --------------------------------------------------------------
+\begin{frame}{Week 4 --- production runs expose the real errors (Days 11--14)}
+  \leavevmode
+  {\footnotesize
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.10\textwidth}
+                    >{\raggedright\arraybackslash}p{0.09\textwidth}
+                    >{\raggedright\arraybackslash}p{0.745\textwidth}@{}}
+    \toprule
+    \textbf{Day} & \textbf{Date} & \textbf{What changed} \\
+    \midrule
+    Day 11 & 10 Aug & Shared anchor logic, mismatch analysis and a severity judge entered the report. \\
+    Day 12 & 11 Aug & Hosted rank/judge chain gained rate limits and quota-safe resume; a smoke run caught the required reasoning flag. \\
+    Day 13 & 12 Aug & v1 ranked all 50 alerts: 21 exact, 23 mismatches, self-judge mean 0.586. \\
+    Day 14 & 13 Aug & v2 withheld the answer key, split model families and indexed 4,022 rules: 32 exact, 4 mismatches. \\
+    Research & 14 Aug & The remaining rule-match errors traced to generic one-line rule documents. \\
+    \bottomrule
+  \end{tabular}}
+\end{frame}
+
+% --- 17 --------------------------------------------------------------
+\begin{frame}{Week 5 --- improve the corpus, keep the regression (Days 15--16)}
+  \leavevmode
+  {\small
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.10\textwidth}
+                    >{\raggedright\arraybackslash}p{0.13\textwidth}
+                    >{\raggedright\arraybackslash}p{0.70\textwidth}@{}}
+    \toprule
+    \textbf{When} & \textbf{Date} & \textbf{Outcome} \\
+    \midrule
+    Day 15 & 15 Aug & Completed the verified history, committed evaluation artefacts and built the report figure pipeline. \\
+    Research & 17--20 Aug & Prepared 4,017 detailed rule documents; 3,945 carry full published documentation fields. \\
+    Day 16 & 21 Aug & v3 reached 40 correct rule matches, none wrong and 10 abstentions --- while exact severity matches fell from 32 to 29. \\
+    \bottomrule
+  \end{tabular}}
+  \keytake{The internship closed on the measured v3 outcome, not on a prompt tuned after seeing it.}
+\end{frame}
+
+% --- 18 --------------------------------------------------------------
 \begin{frame}{Measuring answer quality: the design}
   \lede{One document, 50 evidence-grounded questions, five local models, three metrics that do not talk to each other.}
   \begin{itemize}
@@ -289,7 +401,7 @@
   \keytake{The three metrics are deliberately never combined into one score. They measure different things and disagree usefully.}
 \end{frame}
 
-% --- 14 --------------------------------------------------------------
+% --- 19 --------------------------------------------------------------
 \begin{frame}{Five models, three metrics, 250 rows}
   \begin{center}
     \includegraphics[width=0.86\textwidth]{figures/eval_models.pdf}
@@ -298,7 +410,7 @@
   \lede{Every cell is a real run: 50 questions per model, no technical errors, fully resumable across quota windows.}
 \end{frame}
 
-% --- 15 --------------------------------------------------------------
+% --- 20 --------------------------------------------------------------
 \begin{frame}{What the evaluation found}
   % \leavevmode is required: this deck overrides the frametitle template, which
   % leaves the body in horizontal mode. A table that opens the body is then
@@ -326,7 +438,7 @@
   \keytake{A 2B model, running locally on a laptop, answers 9 in 10 questions acceptably.}
 \end{frame}
 
-% --- 16 --------------------------------------------------------------
+% --- 21 --------------------------------------------------------------
 \begin{frame}{Changing the question: from answering to triaging}
   \lede{A security analyst does not usually have a question. They have a queue.}
   \begin{itemize}
@@ -341,7 +453,7 @@
   \keytake{Same retriever, same index, entirely different question --- and a much harder one to grade.}
 \end{frame}
 
-% --- 17 --------------------------------------------------------------
+% --- 22 --------------------------------------------------------------
 \begin{frame}{First, define what ``severity'' means (Day 9)}
   \lede{Before any code: nine criteria, each with a real alert and a correct interpretation.}
   \begin{columns}[T,onlytextwidth]
@@ -373,7 +485,7 @@
   \end{itemize}
 \end{frame}
 
-% --- 18 --------------------------------------------------------------
+% --- 23 --------------------------------------------------------------
 \begin{frame}{How a ranking gets graded}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.47\textwidth}
@@ -403,7 +515,7 @@
   \keytake{Grading by distance from truth, not pass/fail, is what makes the later regression diagnosable.}
 \end{frame}
 
-% --- 19 --------------------------------------------------------------
+% --- 24 --------------------------------------------------------------
 \begin{frame}{v1 $\rightarrow$ v2: fixing the prompt and the judge}
   % \leavevmode is required: this deck overrides the frametitle template, which
   % leaves the body in horizontal mode. A table that opens the body is then
@@ -429,7 +541,7 @@
   \keytake{The v1 prompt was telling the model the answer. Removing that instruction cut mismatches from 23 to 4.}
 \end{frame}
 
-% --- 20 --------------------------------------------------------------
+% --- 25 --------------------------------------------------------------
 \begin{frame}{v2 $\rightarrow$ v3: change only the evidence}
   \lede{One variable: replace 4,022 one-line rules with 4,017 documents rendered from the published rule documentation.}
   \begin{columns}[T,onlytextwidth]
@@ -453,7 +565,7 @@
   \keytake{Filenames had to stay identical --- the ranker prompt reads the rule id out of the document name.}
 \end{frame}
 
-% --- 21 --------------------------------------------------------------
+% --- 26 --------------------------------------------------------------
 \begin{frame}{v3 result 1: rule identification hit its ceiling}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.52\textwidth}
@@ -486,7 +598,7 @@
   \end{columns}
 \end{frame}
 
-% --- 22 --------------------------------------------------------------
+% --- 27 --------------------------------------------------------------
 \begin{frame}{v3 result 2: but severity ranking got worse}
   \begin{center}
     \includegraphics[width=0.94\textwidth]{figures/alert_runs.pdf}
@@ -497,7 +609,7 @@
   \keytake{Richer evidence improved one thing and degraded another. Reporting only the first would have been dishonest.}
 \end{frame}
 
-% --- 23 --------------------------------------------------------------
+% --- 28 --------------------------------------------------------------
 \begin{frame}{Why the regression is over-reach, not refinement}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.5\textwidth}
@@ -522,7 +634,36 @@
   \keytake{The ``revise when evidence warrants'' latitude was written for one line of rule code. It has not been re-tuned --- so this is a measured result, not a fitted one.}
 \end{frame}
 
-% --- 24 --------------------------------------------------------------
+% --- 29 --------------------------------------------------------------
+\begin{frame}{Representative alert: when strong evidence over-corrects}
+  \lede{Alert 354 is a documented CVSS-10.0 spot-check and a useful example of the ranking failure mode.}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.30\textwidth}
+      \textbf{\color{accent}Ground-truth anchor}\\[0.35em]
+      {\small Snort Priority 2 maps to severity rank \textbf{3}.}
+    \end{column}
+    \begin{column}{0.30\textwidth}
+      \textbf{\color{accent}Model decision}\\[0.35em]
+      {\small CVSS-10.0 evidence pulled the model to rank \textbf{1}: two steps more severe.}
+    \end{column}
+    \begin{column}{0.30\textwidth}
+      \textbf{\color{accent}Independent verdict}\\[0.35em]
+      {\small Judge score \textbf{0.00}; the departure was rejected, not treated as useful refinement.}
+    \end{column}
+  \end{columns}
+  \vspace{1.2em}
+  \noindent\colorbox{accenttint}{%
+    \begin{minipage}{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}
+      \vspace{5pt}
+      \small\color{ink}
+      \textbf{What the case teaches.} Better retrieval can expose genuine technical danger
+      and still make the end decision worse when the prompt gives that evidence too much
+      freedom to override its calibration anchor.
+      \vspace{5pt}
+    \end{minipage}}
+\end{frame}
+
+% --- 30 --------------------------------------------------------------
 \begin{frame}{What this system does not do}
   \begin{itemize}
     \item The benchmark asks \textbf{answerable, single-turn} questions about \textbf{one document}.
@@ -538,7 +679,7 @@
   \end{itemize}
 \end{frame}
 
-% --- 25 --------------------------------------------------------------
+% --- 31 --------------------------------------------------------------
 \begin{frame}{How the work was done}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.47\textwidth}
@@ -561,14 +702,14 @@
   \keytake{The corrections are in the record too: the metric that rewarded duplicates, the self-flattering judge, the model that returned nothing without a reasoning flag.}
 \end{frame}
 
-% --- 26 --------------------------------------------------------------
+% --- 32 --------------------------------------------------------------
 \begin{frame}{Deliverables, and the next experiment}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.52\textwidth}
       \textbf{\color{accent}Shipped}
       {\small
       \begin{itemize}\setlength{\itemsep}{1pt}
-        \item Source repository, 117 tagged commits
+        \item Source repository, 117 verified commits
         \item Work record (this report) + evaluation report
         \item \code{eval/final/} --- the 250-row benchmark
         \item \code{alert\_rankings\_rag.json} --- 50 records
@@ -588,6 +729,37 @@
   \end{columns}
   \vspace{0.5em}
   \keytake{The most useful result of the last phase is a diagnosis, not a number.}
+\end{frame}
+
+% --- 33 --------------------------------------------------------------
+\begin{frame}[plain]
+  \vspace{1.0em}
+  {\color{accent}\Large\bfseries Three takeaways}\par
+  \vspace{0.9em}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.30\textwidth}
+      \textbf{\color{accent}01}\\[0.25em]
+      {\small A local, cited RAG system can be useful with small models when its evidence
+      path is explicit.}
+    \end{column}
+    \begin{column}{0.30\textwidth}
+      \textbf{\color{accent}02}\\[0.25em]
+      {\small Metrics shape engineering decisions; a flattering target is worse than no
+      target because it rewards the wrong behavior.}
+    \end{column}
+    \begin{column}{0.30\textwidth}
+      \textbf{\color{accent}03}\\[0.25em]
+      {\small Richer evidence is not automatically better. Measure every output it can
+      change, and keep the regressions.}
+    \end{column}
+  \end{columns}
+
+  \vfill
+  {\color{rulegrey}\rule{\textwidth}{0.8pt}}\\[0.8em]
+  {\color{accent}\fontsize{24}{28}\selectfont\bfseries Questions?}\par
+  \vspace{0.25em}
+  {\color{soft}\small Muhammad Subhan Amir \quad BSCS23016 \quad Information Technology University}
 \end{frame}
 
 \end{document}
