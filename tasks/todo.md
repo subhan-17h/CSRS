@@ -2035,3 +2035,28 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
 
     Verified: 339 offline tests pass, ruff clean, both PDFs rebuild, bundle staging reports
     zero restricted files and zero keys.
+
+## SUB-6 — Certificate submission requirements (28 August 2026)
+
+- [x] Final report metadata is submission-ready: full legal name, student ID, ITU, final
+      period, no unconfirmed instructor/host/programme fields, and no visual defects.
+- [x] Presentation is expanded to exactly 33 substantive slides, builds as PDF, exports as
+      PPTX, contains no placeholders, and passes complete visual inspection.
+- [x] The public GitHub landing documentation maps the instructor's week-wise/day-wise
+      code, data, Markdown documentation, and execution requirements to concrete paths.
+- [x] A lean `ready_to_submit/` directory contains the report, PPTX, PDF backup, GitHub
+      guide, email draft, and checklist; the full evidence bundle remains reproducible.
+- [ ] Submission changes are verified, committed in focused increments, pushed to
+      `origin/main`, and confirmed publicly accessible.
+- Done when: the report and every slide render cleanly; the PPTX opens with 33 slides;
+      placeholder, restricted-file, and secret scans are clean; Ruff and the 343-test
+      offline suite pass; and the public GitHub pages resolve.
+  - Review: the final report is 15 pages; all pages were rendered and inspected after the
+    metadata correction. The presentation is 33 substantive slides, has zero overfull boxes,
+    and was inspected in three contact sheets plus focused checks of revised slides. Its PPTX
+    contains 33 slides and 33 full-slide images, opens in LibreOffice Impress, and round-trips
+    to a 33-page 16:9 PDF. The deterministic exporter and strict bundle staging added four
+    integration tests. Ruff is clean and the complete offline suite passes 343 tests with one
+    integration test deselected. The lean package contains eight files; its PDFs/PPTX match
+    the verified sources byte-for-byte and restricted-file, placeholder, and secret scans are
+    clean. The full evidence bundle contains 66 files and is 19 MB.
