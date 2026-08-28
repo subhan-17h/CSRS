@@ -2046,7 +2046,7 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
       code, data, Markdown documentation, and execution requirements to concrete paths.
 - [x] A lean `ready_to_submit/` directory contains the report, PPTX, PDF backup, GitHub
       guide, email draft, and checklist; the full evidence bundle remains reproducible.
-- [ ] Submission changes are verified, committed in focused increments, pushed to
+- [x] Submission changes are verified, committed in focused increments, pushed to
       `origin/main`, and confirmed publicly accessible.
 - Done when: the report and every slide render cleanly; the PPTX opens with 33 slides;
       placeholder, restricted-file, and secret scans are clean; Ruff and the 343-test
@@ -2060,3 +2060,6 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     integration test deselected. The lean package contains eight files; its PDFs/PPTX match
     the verified sources byte-for-byte and restricted-file, placeholder, and secret scans are
     clean. The full evidence bundle contains 66 files and is 19 MB.
+    Public verification: unauthenticated `git ls-remote` and raw GitHub reads resolved
+    `origin/main` at `7b75e2e9b46f0a013cbc607e31b4e5f56b1d43d2`, with the submission map,
+    33-slide wording, day index, export command, and final email visible.
