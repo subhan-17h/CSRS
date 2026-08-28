@@ -39,7 +39,7 @@ The same exclusions are enforced by the repository's `.gitignore`, for the same 
 From a clone of the repository:
 
 ```bash
-uv run --group eval python -m pytest -q -m "not ollama and not docling"   # 339 tests
+uv run --group eval python -m pytest -q -m "not ollama and not docling"   # 343 tests
 uv run ruff check .
 uv run python scripts/build_snort_rule_docs.py                            # rebuild the corpus
 uv run python scripts/build_alert_rag_report.py                           # rebuild both deliverables

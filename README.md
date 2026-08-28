@@ -3,7 +3,7 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab)
 ![Ollama](https://img.shields.io/badge/LLM-Ollama%20(local)-000000)
 ![Offline](https://img.shields.io/badge/runtime-100%25%20offline-fb7185)
-![Tests](https://img.shields.io/badge/tests-239%20offline-34d399)
+![Tests](https://img.shields.io/badge/tests-343%20offline-34d399)
 
 Ask questions about cybersecurity standards and get answers grounded in the documents
 themselves, with page-level citations. Everything runs locally: the language models, the
@@ -542,7 +542,7 @@ uv run pytest -q -m ollama                                       # needs a live 
 uv run --group eval python -m eval.run --limit 1 --models llama3.2:latest
 ```
 
-The offline suite (239 tests) points at a dead port on purpose: it proves nothing silently
+The offline suite (343 tests) points at a dead port on purpose: it proves nothing silently
 reaches the network. Tests needing real models are marked and deselected by default.
 
 ### Project layout
