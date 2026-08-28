@@ -2063,3 +2063,21 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     Public verification: unauthenticated `git ls-remote` and raw GitHub reads resolved
     `origin/main` at `7b75e2e9b46f0a013cbc607e31b4e5f56b1d43d2`, with the submission map,
     33-slide wording, day index, export command, and final email visible.
+
+## SUB-7 — Publish the curated v3 alert-ranking data
+
+- [x] Add the final 50-record `alert_rankings_rag.json` under a clearly named artefact
+      directory and document its schema, result summary, provenance, and checksum.
+- [x] Link the final alert-ranking data directly from the internship submission map.
+- [x] Confirm the public artefact contains no API keys, local paths, full retrieved passages,
+      ISO document content, or embedded Cisco rule documentation.
+- [ ] Commit, push to `origin/main`, and verify unauthenticated public access.
+- Done when: the committed file is byte-identical to the final 21 August output, its summary
+      recomputes to 29 exact ranks, 9 mismatches, 40 correct SID matches, 0 wrong and 10
+      abstentions, and the public raw GitHub file has the recorded SHA-256.
+  - Review: the curated file is 89,037 bytes and byte-identical to the final root output at
+    SHA-256 `0c2c63b4afdc9bef1957395ab73dee29aae1a9a72512a089d0d961e20a40b1c7`.
+    Schema and result totals recompute from all 50 unique alert ids. Recursive key and text
+    scans found no raw evidence, prompts, responses, rule-documentation objects, API keys,
+    private keys, absolute local paths or ISO file content. Ruff is clean and the complete
+    offline suite remains at 343 passed with one integration test deselected.

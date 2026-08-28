@@ -1,0 +1,1867 @@
+[
+ {
+  "alert_id": 23,
+  "rule_id": "1:1122:16",
+  "alert_message": "SERVER-WEBAPP /etc/passwd file access attempt",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /etc/passwd file access attempt Attempted Information Leak TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates an HTTP request for /etc/passwd, which is classified as an attempted information leak and matches a recon-type rule. While the Snort priority is 2 (medium), the activity is limited to information gathering without direct exploitation, fitting a medium severity level. The source and destination details show a typical client\u2011to\u2011server request, and the packet size is small, reinforcing a non\u2011critical nature.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1122,
+   "rag_matched_sid": 1122,
+   "evidence_document": "snort_rule_1-1122.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 3, which exactly matches the anchored ground truth of 3 (derived from Snort priority 2). The justification is high-quality, correctly identifying the alert as an information gathering attempt rather than a direct exploitation, and explicitly linking the medium severity to the lack of immediate critical impact."
+  }
+ },
+ {
+  "alert_id": 60,
+  "rule_id": "1:2056:12",
+  "alert_message": "SERVER-WEBAPP TRACE attempt",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP TRACE attempt Web Application Attack TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 2,
+  "justification": "The alert indicates a TRACE method attempt on a web server, which can expose headers and cookies, representing a high\u2011impact web application attack. The rule documentation (S2) describes partial confidentiality, integrity, and availability impact with a CVSS base score of 5.8, suggesting serious but not critical exploitation. The Snort priority is 1, but the described impact aligns more with a high severity rather than a critical one. Therefore, the alert is ranked as high severity.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 2056,
+   "rag_matched_sid": 2056,
+   "evidence_document": "snort_rule_1-2056.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.9,
+   "reasoning": "The model assigned a rank of 2, which is within one step of the anchored ground truth rank of 1 (derived from Snort priority 1). The justification is strong and evidence-based, correctly citing the CVSS score and impact details to explain why it adjusted the severity slightly downward from the maximum, despite the high Snort priority."
+  }
+ },
+ {
+  "alert_id": 65,
+  "rule_id": "1:2056:12",
+  "alert_message": "SERVER-WEBAPP TRACE attempt",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP TRACE attempt Web Application Attack TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 2,
+  "justification": "The alert indicates a TRACE method attempt, which is used for information gathering and can expose headers, but does not directly execute code or gain privileges. The Snort rule (sid 2056) describes this as a web-application attack with moderate CVSS scores, suggesting a high but not critical impact. While the alert priority is 1 (high), the nature of the activity aligns more with a high-level reconnaissance rather than an immediate exploit. Therefore, a rank of 2 (HIGH) best reflects the potential risk.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 2056,
+   "rag_matched_sid": 2056,
+   "evidence_document": "snort_rule_1-2056.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.8,
+   "reasoning": "The model assigned a rank of 2, which is within one step of the anchored ground truth rank of 1 (derived from Snort priority 1). The justification is well-reasoned and evidence-grounded, correctly identifying the alert as a reconnaissance/information gathering attempt (TRACE method) rather than a direct code execution exploit, which supports a slightly lower severity than the highest possible rank. However, since the ground truth anchors Snort priority 1 directly to rank 1, the model's deviation to rank 2 results in a score below 1.0, though the high quality of the explanation keeps it in the upper band."
+  }
+ },
+ {
+  "alert_id": 77,
+  "rule_id": "1:509:18",
+  "alert_message": "SERVER-WEBAPP PCCS mysql database admin tool access",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP PCCS mysql database admin tool access Web Application Attack TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert matches a Snort rule (sid 509) that detects access to the PCCS MySQL admin tool, which can expose administrative credentials and enable further compromise. The rule\u2019s classification as a web\u2011application attack and the high Snort priority (1) indicate a direct exploitation attempt with serious impact. The traffic is TCP to port 80 from an external host, confirming a malicious request to the vulnerable service. Therefore this event is assessed as critical severity.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 509,
+   "rag_matched_sid": 509,
+   "evidence_document": "snort_rule_1-509.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 1, which exactly matches the anchored ground truth of 1 derived from Snort priority 1. The justification is strong, correctly identifying the specific vulnerability (PCCS MySQL admin tool access) and citing the high Snort priority and classification as evidence for the critical severity assessment."
+  }
+ },
+ {
+  "alert_id": 98,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a directory traversal attempt against a Compaq Insight web application, which is a web-application attack that can lead to information disclosure but does not directly execute code or gain privileges. While the Snort priority is high (1), the nature of the activity is probing rather than an active exploit, fitting a medium severity level. The alert fields such as alert_message, classification, protocol, service, and network endpoints confirm the context of a web-based reconnaissance attempt.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1 (critical), but the specific technique (directory traversal) is generally considered a medium threat, so the rank is adjusted to 3.",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.0,
+   "reasoning": "The model assigned a rank of 3, which differs by 2 steps from the anchored ground truth of 1 (Snort priority 1 maps to rank 1), placing it in the lowest scoring band. The justification incorrectly downgrades the severity by characterizing the alert as mere 'probing' rather than an active exploit attempt, despite the rule explicitly detecting the '../' payload indicative of a directory traversal attack. This misinterpretation of the attack's nature led to a significant deviation from the correct severity assessment."
+  }
+ },
+ {
+  "alert_id": 120,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an Attempted Information Leak and the service is unknown, indicating a reconnaissance or low-impact activity rather than a direct exploit. The Snort priority of 2 maps to a medium baseline, but the lack of specific exploit details and the generic alert message suggest a lower severity. Therefore, the alert is best rated as low severity. ",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "classification",
+   "priority",
+   "service",
+   "alert_message"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.8,
+   "reasoning": "The model assigned a rank of 4, which is within one step of the anchored ground truth rank of 3 (derived from Snort priority 2). The justification is well-structured and correctly identifies the classification and priority, though it arguably underestimates the severity by dismissing the 'Attempted Information Leak' and 'attempted-recon' context as low-impact without fully weighing the potential for unauthorized access described in the rule documentation."
+  }
+ },
+ {
+  "alert_id": 158,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a SERVER-WEBAPP iChat directory traversal attempt, which is an information\u2011disclosure technique rather than direct code execution. The Snort priority is 2, which maps to a medium severity level, and the rule details (S1) describe a partial confidentiality impact with no integrity or availability impact. This aligns with a medium (rank 3) classification for the single event.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 3, which exactly matches the anchored ground truth derived from Snort priority 2. The justification is high-quality, explicitly linking the medium severity to the CVSS impact scores (partial confidentiality, no integrity/availability) and correctly interpreting the nature of the directory traversal attack."
+  }
+ },
+ {
+  "alert_id": 204,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against a web application, which can lead to information disclosure but does not directly execute code or gain privileged access. While the Snort priority is high (1), the nature of the attack is limited to probing and potential data exposure rather than immediate system compromise. Therefore the severity is assessed as medium. The alert fields such as alert_message, classification, priority, protocol, service, destination_port, and packet_length support this assessment.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1 (critical), but the specific attack type (directory traversal) is less severe, so the rank is adjusted to 3 (medium).",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "destination_port",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.0,
+   "reasoning": "The model assigned a rank of 3, while the anchored ground truth is 1, resulting in a difference of 2 steps, which places the score in the lowest band (0.0-0.4). The justification is flawed because it incorrectly downgrades the severity of a directory traversal attack (CVE-1999-0771) by claiming it does not lead to immediate compromise, ignoring that Snort Priority 1 indicates a high-severity exploit attempt that warrants the highest rank in this mapping."
+  }
+ },
+ {
+  "alert_id": 220,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a SERVER-WEBAPP iChat directory traversal attempt, which is an information\u2011disclosure technique rather than a direct code execution or privilege escalation. The Snort priority is 2, which maps to a medium severity baseline, and the evidence (S1) describes the same rule with a CVSS base score of 5.0, confirming a moderate impact. Therefore the appropriate rank is medium (3).",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 3 exactly matches the anchored ground truth of 3 (derived from Snort priority 2). The justification is high-quality, correctly identifying the attack as an information disclosure technique rather than code execution, and substantiating the medium severity with the CVSS base score of 5.0 found in the rule documentation."
+  }
+ },
+ {
+  "alert_id": 236,
+  "rule_id": "1:974:23",
+  "alert_message": "SERVER-IIS Microsoft Windows IIS directory traversal attempt",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-IIS Microsoft Windows IIS directory traversal attempt Web Application Attack TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert reports a directory traversal attempt against Microsoft IIS, which can lead to information disclosure or remote code execution as described in the rule evidence. The Snort priority is 1, which maps to a critical severity, and the nature of the attack (direct exploitation of a known vulnerability) justifies the highest rank. The source and destination details confirm a client\u2011to\u2011server HTTP request targeting port 80, matching the rule conditions.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 974,
+   "rag_matched_sid": 974,
+   "evidence_document": "snort_rule_1-974.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 1, which exactly matches the anchored ground truth of 1 (derived from Snort priority 1). The justification is strong, correctly identifying the high severity of the directory traversal attack and its potential for remote code execution, while accurately mapping the Snort priority to the model's scale."
+  }
+ },
+ {
+  "alert_id": 249,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against a Compaq Insight web application, which can lead to information disclosure but does not directly execute code or gain privileged access. While the Snort priority is high (1), the nature of the attack is limited to path manipulation rather than a critical exploit. The classification as a web application attack and the presence of TCP/HTTP traffic confirm the relevance, but the impact remains moderate. Therefore, a medium severity rating is appropriate.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1 (critical), but the directory traversal technique described is only capable of information disclosure, warranting a downgrade to medium severity (rank 3).",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "destination_port",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.0,
+   "reasoning": "The model assigned a rank of 3, which differs by 2 steps from the anchored ground truth of 1 (Snort priority 1 maps to rank 1), placing it in the lowest scoring band. The justification incorrectly downplays the severity of a directory traversal attack, which is a critical vulnerability allowing access to sensitive system files, and fails to align with the high-priority classification provided by Snort."
+  }
+ },
+ {
+  "alert_id": 254,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a directory traversal attempt against iChat, which can disclose files but does not directly execute code or gain privileges. The Snort priority is 2, which maps to a medium severity baseline, and the nature of the attack aligns with information disclosure rather than critical compromise. Therefore a medium (rank 3) rating is appropriate.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 3 exactly matches the anchored ground truth of 3 (derived from Snort priority 2). The justification is high-quality, correctly identifying the attack as information disclosure rather than code execution, which supports the medium severity assessment."
+  }
+ },
+ {
+  "alert_id": 267,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert indicates a directory traversal attempt against Compaq Insight, a known web\u2011application vulnerability (CVE\u20111999\u20110771) and is classified as a web application attack. The Snort priority is 1, which maps to the highest severity, and the content matches the rule for sid 1199 that specifically detects this exploit. Such an attempt can lead to unauthorized file access and potential system compromise, warranting a critical rating. Therefore the alert is ranked as the most severe (1).",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 1, which exactly matches the anchored ground truth derived from Snort priority 1. The justification is strong, citing the specific vulnerability (directory traversal), the CVE, and the potential for system compromise to support the highest severity rating."
+  }
+ },
+ {
+  "alert_id": 269,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against a web application, which can lead to information disclosure but does not directly execute code or gain privileged access. The Snort priority is high (1), but the nature of the attack is limited to file path manipulation rather than direct exploitation, placing it at a medium severity level. The alert fields such as alert_message, classification, protocol, service, and network endpoints confirm the web\u2011application context and the traversal technique. Therefore, a medium (3) ranking best reflects the realistic impact.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1 (critical), but the attack type (directory traversal) is less severe, so the rank is adjusted down to 3, a two\u2011step difference.",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.0,
+   "reasoning": "The model assigned a rank of 3, while the anchored ground truth is 1, resulting in a difference of 2 steps, which places the score in the lowest band (0.0-0.4). The justification is flawed because it incorrectly downgrades the severity of a directory traversal attack (CVE-1999-0771) by claiming it does not directly execute code, ignoring that such attacks often lead to critical information disclosure or serve as a precursor to remote code execution, warranting the highest severity."
+  }
+ },
+ {
+  "alert_id": 301,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an Attempted Information Leak and the service is unknown, indicating a reconnaissance or low-impact activity rather than a direct exploit. The Snort priority of 2 maps to a medium baseline, but the lack of specific exploit details and the generic message suggest a lower severity. Therefore, the alert is ranked as low severity. ",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "classification",
+   "priority",
+   "service",
+   "alert_message"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.8,
+   "reasoning": "The model ranked the alert as 4, which is within one step of the anchored ground truth of 3 (Snort priority 2). The justification is well-structured and correctly identifies the classification and priority, though it slightly overemphasizes the 'unknown' service field to argue for a lower severity than the ground truth suggests. The reasoning is substantive and evidence-based, warranting a high score within the acceptable band."
+  }
+ },
+ {
+  "alert_id": 327,
+  "rule_id": "1:1947:15",
+  "alert_message": "SERVER-WEBAPP answerbook2 arbitrary command execution attempt",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP answerbook2 arbitrary command execution attempt Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert indicates a SERVER-WEBAPP arbitrary command execution attempt against AnswerBook2, which has a CVSS base score of 10.0 indicating complete compromise of confidentiality, integrity, and availability. The Snort priority is 1, mapping to the highest severity, and the presence of a known critical vulnerability confirms a critical exploitation attempt. The source and destination details show an external host targeting a web service, reinforcing the high risk. Therefore, the alert is ranked as critical.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1947,
+   "rag_matched_sid": 1947,
+   "evidence_document": "snort_rule_1-1947.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 1, which exactly matches the anchored ground-truth rank of 1 derived from Snort priority 1. The justification is strong, correctly citing the CVSS base score of 10.0 and the nature of the arbitrary command execution vulnerability to support the highest severity rating."
+  }
+ },
+ {
+  "alert_id": 331,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against a web application, which can lead to information disclosure but does not directly execute code or gain privileged access. The Snort priority is high (1), but the nature of the attack is limited to path manipulation rather than a critical exploit. Therefore the severity is assessed as medium.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1, but the attack\u2019s limited impact warrants a lower rank, resulting in a two\u2011step downgrade.",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.0,
+   "reasoning": "The model assigned a rank of 3, while the anchored ground truth is 1 (Snort priority 1 maps to rank 1). The difference is 2 steps, placing the score in the 0.0-0.4 band. The justification is flawed because it incorrectly downgrades the severity of a directory traversal attack, which is a critical vulnerability allowing access to sensitive system files, and contradicts the high Snort priority without sufficient evidence to override it."
+  }
+ },
+ {
+  "alert_id": 334,
+  "rule_id": "1:1947:15",
+  "alert_message": "SERVER-WEBAPP answerbook2 arbitrary command execution attempt",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP answerbook2 arbitrary command execution attempt Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert indicates an arbitrary command execution attempt against the AnswerBook2 web server, which has a CVSS base score of 10.0 indicating a critical impact. The Snort priority is 1, which maps to the highest severity level. Combined with the classification as a web application attack and the presence of a known exploit, this warrants a CRITICAL rank.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1947,
+   "rag_matched_sid": 1947,
+   "evidence_document": "snort_rule_1-1947.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 1, which exactly matches the anchored ground truth derived from Snort priority 1. The justification is strong, citing the specific CVSS score of 10.0 and the nature of the arbitrary command execution to support the critical severity assessment."
+  }
+ },
+ {
+  "alert_id": 354,
+  "rule_id": "1:1487:22",
+  "alert_message": "SERVER-IIS /iisadmpwd/aexp2.htr access",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-IIS /iisadmpwd/aexp2.htr access Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert targets /iisadmpwd/aexp2.htr, a known IIS admin password probe with CVSS 10.0 indicating complete confidentiality, integrity, and availability impact. Such access can lead to credential harvesting and full system compromise, fitting a critical exploitation attempt. The Snort priority of 2 (mapped to rank 3) underestimates the severity given the documented impact. Therefore the alert is ranked as CRITICAL.",
+  "anchored_rank": 3,
+  "mismatch": true,
+  "mismatch_explanation": "The mapped rank from priority 2 is 3 (medium), but the evidence shows a CVSS 10.0 exploit, warranting a higher severity of rank 1.",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1487,
+   "rag_matched_sid": 1487,
+   "evidence_document": "snort_rule_1-1487.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.5,
+   "reasoning": "The model assigned a rank of 1, while the anchored ground truth is 3, resulting in a distance of 2 steps, which places the score in the 0.0-0.4 band. However, the model's justification is substantive and evidence-grounded, correctly citing the CVSS 10.0 score and the potential for complete system compromise to argue for a higher severity than Snort's default priority. Despite the strong reasoning, the rank decision deviates significantly from the provided ground truth anchor, so the score is capped at the lower end of the acceptable range for incorrect ranks, but acknowledging the quality of the explanation prevents a zero score if the rubric allows for nuance in justification quality within the band. Actually, strictly following the rules: distance > 1 means 0.0-0.4. The justification is good, so I will assign the highest value in that band, 0.4."
+  }
+ },
+ {
+  "alert_id": 355,
+  "rule_id": "1:1018:23",
+  "alert_message": "SERVER-IIS iisadmpwd attempt",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-IIS iisadmpwd attempt Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert matches the SERVER-IIS iisadmpwd attempt rule which has a CVSS base score of 10.0 and complete confidentiality, integrity, and availability impact, indicating a critical exploitation attempt. The Snort priority is 1, which maps to the highest severity level. Combined with the high\u2011impact description, this warrants a CRITICAL rank.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1018,
+   "rag_matched_sid": 1018,
+   "evidence_document": "snort_rule_1-1018.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 1, which exactly matches the anchored ground truth derived from Snort priority 1. The justification is strong, citing the specific CVSS 10.0 score and complete impact metrics from the rule documentation to substantiate the critical severity, rather than merely restating the priority."
+  }
+ },
+ {
+  "alert_id": 356,
+  "rule_id": "1:987:32",
+  "alert_message": "FILE-IDENTIFY .htr access file download request",
+  "snort_priority": 3,
+  "classification": "Misc activity",
+  "classtype": "misc-activity",
+  "query": "FILE-IDENTIFY .htr access file download request Misc activity TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 5,
+  "justification": "The alert indicates a request for a .htr file, which is a known reconnaissance technique to read source code fragments and does not directly exploit a vulnerability. The rule classification is misc-activity with a low Snort priority (3), mapping to informational severity. No evidence of command execution, privilege escalation, or payload delivery is present, so the impact is minimal. Therefore the alert is best treated as informational noise.",
+  "anchored_rank": 5,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 987,
+   "rag_matched_sid": 987,
+   "evidence_document": "snort_rule_1-987.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 5, which exactly matches the anchored ground truth derived from Snort priority 3. The justification is high-quality, correctly identifying the alert as informational reconnaissance rather than an active exploit, and accurately citing the low Snort priority and misc-activity classification as evidence."
+  }
+ },
+ {
+  "alert_id": 357,
+  "rule_id": "1:978:21",
+  "alert_message": "SERVER-IIS ASP contents view",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-IIS ASP contents view Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert indicates a SERVER-IIS ASP contents view, which matches a known rule for viewing ASP source code and can lead to information disclosure. The Snort priority is 1, mapping to the highest severity, and the rule\u2019s impact is classified as a web application attack with potential confidentiality impact. Given the direct attempt to access source files and the high priority, this warrants a critical rating.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 978,
+   "rag_matched_sid": 978,
+   "evidence_document": "snort_rule_1-978.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 1, which exactly matches the anchored ground-truth rank of 1 derived from Snort priority 1. The justification is strong, correctly identifying the specific vulnerability (ASP source code disclosure via IIS Index Server) and linking the high Snort priority to the critical nature of the information disclosure impact."
+  }
+ },
+ {
+  "alert_id": 371,
+  "rule_id": "1:987:32",
+  "alert_message": "FILE-IDENTIFY .htr access file download request",
+  "snort_priority": 3,
+  "classification": "Misc activity",
+  "classtype": "misc-activity",
+  "query": "FILE-IDENTIFY .htr access file download request Misc activity TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 5,
+  "justification": "The alert flags a .htr file request, which is a known benign reconnaissance pattern for older IIS vulnerabilities and does not indicate an active exploit. The Snort priority is 3 (low), mapping to an informational severity, and the rule\u2019s classification is misc-activity, reinforcing the low impact. The packet length and ports are typical of normal web traffic, providing no evidence of a critical attack. Therefore the alert is best rated as informational.",
+  "anchored_rank": 5,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "service",
+   "destination_port",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 987,
+   "rag_matched_sid": 987,
+   "evidence_document": "snort_rule_1-987.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 5 exactly matches the anchored ground-truth rank of 5, which is derived from Snort priority 3. The justification is accurate and complete, correctly identifying the alert as low-severity informational activity based on the 'misc-activity' classification and the nature of the .htr file request as a known, older vulnerability pattern rather than an active critical exploit."
+  }
+ },
+ {
+  "alert_id": 377,
+  "rule_id": "1:987:32",
+  "alert_message": "FILE-IDENTIFY .htr access file download request",
+  "snort_priority": 3,
+  "classification": "Misc activity",
+  "classtype": "misc-activity",
+  "query": "FILE-IDENTIFY .htr access file download request Misc activity TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 5,
+  "justification": "The alert indicates a request for a .htr file, which is a known reconnaissance technique to read source code fragments and does not directly exploit a vulnerability. The rule is classified as misc-activity with low priority (3), and the traffic is simple HTTP GET on port 80, suggesting low impact. No evidence of command execution or privilege escalation is present, so the risk is informational at most. Therefore the alert is ranked as the least severe level.",
+  "anchored_rank": 5,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 987,
+   "rag_matched_sid": 987,
+   "evidence_document": "snort_rule_1-987.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 5, which exactly matches the anchored ground truth derived from Snort priority 3. The justification is high-quality, correctly identifying the alert as informational reconnaissance rather than an active exploit, and appropriately citing the low impact and misc-activity classification to support the lowest severity ranking."
+  }
+ },
+ {
+  "alert_id": 390,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an Attempted Information Leak and has a Snort priority of 2, which maps to a medium severity baseline. However, the generic message and unknown service indicate only reconnaissance activity rather than an exploit, fitting a low severity level. The source and destination are internal hosts, further reducing the immediate risk. Therefore, the alert is ranked as low severity.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "classification",
+   "priority",
+   "service",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.9,
+   "reasoning": "The model assigned a rank of 4, which is within one step of the anchored ground truth rank of 3 (derived from Snort priority 2). The justification is strong and evidence-based, correctly identifying the alert as reconnaissance ('Attempted Information Leak') rather than an active exploit, and noting the internal nature of the traffic to support a slightly lower severity assessment than the baseline. The reasoning is clear, concise, and directly addresses the specific fields provided."
+  }
+ },
+ {
+  "alert_id": 429,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an attempted information leak with a medium Snort priority (2), which maps to a baseline severity of medium (rank 3). However, the description indicates only a reconnaissance attempt without evidence of successful exploitation or privilege escalation, suggesting a lower impact. The generic service \"unknown\" and lack of specific vulnerable payload further reduce the threat level. Therefore, the alert is best rated as low severity.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.5,
+   "reasoning": "The model assigned a rank of 4, which is one step away from the anchored ground truth of 3 (Snort priority 2 maps to rank 3). Since the rank is within one step of the anchor, the score falls in the 0.5-0.9 band. The justification is reasonable and evidence-grounded, correctly identifying the Snort priority and classification, and logically arguing that the lack of confirmed exploitation or specific payload details warrants a slightly lower severity than the baseline medium. However, the rank deviates from the ground truth, preventing a perfect score."
+  }
+ },
+ {
+  "alert_id": 431,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an Attempted Information Leak and has a low priority (2) which maps to a medium baseline severity. The service is unknown and the message is generic, indicating no clear exploitation of a critical vulnerability. Given the lack of evidence of direct compromise or high-impact behavior, the activity is best viewed as low-level reconnaissance. Therefore, a low severity rank is appropriate.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "classification",
+   "priority",
+   "service",
+   "direction"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.8,
+   "reasoning": "The model assigned a rank of 4, which is within one step of the anchored ground truth rank of 3 (derived from Snort priority 2). The justification is well-structured and correctly identifies the alert as reconnaissance rather than a critical exploit, supporting a lower severity assessment, although it slightly over-corrects towards the least severe end of the scale."
+  }
+ },
+ {
+  "alert_id": 457,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against an iChat web service, which can lead to information disclosure but does not directly execute code or gain privileges. The Snort priority is 2, which maps to a medium severity baseline, and the nature of the attack aligns with a medium\u2011level risk. The source and destination details show a client\u2011to\u2011server request over HTTP, consistent with typical web\u2011application probing. Therefore, a medium (3) severity rank is appropriate.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 3, which exactly matches the anchored ground truth derived from Snort priority 2. The justification is high-quality, correctly identifying the attack as a directory traversal with partial confidentiality impact (information disclosure) rather than code execution, and explicitly linking this assessment to the medium severity baseline."
+  }
+ },
+ {
+  "alert_id": 499,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a directory traversal attempt against iChat, which can disclose files but does not directly execute code or gain privileges. This type of web\u2011application activity is typically considered a medium\u2011severity threat. The Snort priority of 2 maps to a medium baseline, and the evidence (S1) confirms the rule is for information gathering rather than critical exploitation.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 3 exactly matches the anchored ground truth of 3 (derived from Snort priority 2). The justification is high-quality, correctly identifying the attack as a directory traversal with partial confidentiality impact rather than code execution, and explicitly linking the Snort priority to the medium severity assessment."
+  }
+ },
+ {
+  "alert_id": 514,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a directory traversal attempt against iChat, which can lead to information disclosure but does not indicate immediate code execution or privilege escalation. The Snort priority is 2, which maps to a medium severity baseline, and the nature of the attack aligns with typical medium\u2011risk web\u2011application probing. No evidence suggests a critical or high\u2011impact exploit, so a medium (rank 3) rating is appropriate.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 3, which exactly matches the anchored ground truth derived from Snort priority 2. The justification is high-quality, correctly identifying the attack as a directory traversal with partial confidentiality impact (information disclosure) rather than critical code execution, and explicitly linking the Snort priority to the medium severity rating."
+  }
+ },
+ {
+  "alert_id": 534,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an Attempted Information Leak and has a Snort priority of 2, which maps to a medium severity baseline. However, the generic message and unknown service indicate a reconnaissance activity rather than a direct exploit, suggesting a lower impact. The TCP protocol on port 80 and modest packet size further support a low-risk information gathering event. Therefore, the alert is ranked as low severity.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "destination_port",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.9,
+   "reasoning": "The model ranked the alert as 4, which is within one step of the anchored ground truth of 3 (derived from Snort priority 2). The justification is well-reasoned, correctly identifying the alert as reconnaissance ('Attempted Information Leak') and noting the generic nature of the rule, which supports a slightly lower severity than a direct exploit, though the final rank is slightly too low."
+  }
+ },
+ {
+  "alert_id": 582,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against a Compaq Insight web application, which can lead to information disclosure but does not directly execute code or gain privileged access. While the Snort priority is high (1), the nature of the attack is limited to file path manipulation rather than immediate system compromise, placing it at a medium severity level. The alert fields such as alert_message, classification, priority, protocol, service, source_ip, destination_ip, destination_port, direction, and packet_length collectively support this assessment.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1 (critical), but the specific attack type (directory traversal) typically results in information disclosure rather than direct exploitation, justifying a downgrade to medium severity (rank 3).",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.2,
+   "reasoning": "The model assigned a rank of 3, which differs by 2 steps from the anchored ground truth of 1 (Snort priority 1 maps to rank 1). This places the score in the lowest band (0.0-0.4) because the deviation exceeds the allowed one-step tolerance. The justification is weak because it incorrectly downgrades the severity of a directory traversal attack, which is a critical vulnerability allowing access to sensitive system files, and fails to align with the high severity indicated by the Snort priority."
+  }
+ },
+ {
+  "alert_id": 613,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP unknown",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an attempted information leak and has a Snort priority of 2, which maps to a medium severity baseline. However, the generic message and unknown service indicate only reconnaissance activity rather than a direct exploit. The traffic is a simple client-to-server HTTP request on port 80 with a modest packet size, suggesting low impact. Therefore the overall risk is low.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "classification",
+   "priority",
+   "service",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.8,
+   "reasoning": "The model assigned a rank of 4, which is within one step of the anchored ground truth rank of 3 (derived from Snort priority 2). The justification is well-reasoned, correctly identifying the alert as reconnaissance ('attempted-recon') rather than a successful exploit, and appropriately weighing the generic nature of the rule against the baseline severity. It provides a clear, evidence-based explanation for downgrading the severity slightly from the baseline, fitting the criteria for a high score within the 'close' band."
+  }
+ },
+ {
+  "alert_id": 664,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an Attempted Information Leak and has a Snort priority of 2, which maps to a medium baseline severity. However, the classification and the generic \"SERVER-WEBAPP /.... access\" message indicate only reconnaissance of web resources rather than an active exploit. The TCP/HTTP service and client-to-server direction further suggest a low-impact probing attempt. Therefore the overall risk is low but not merely informational.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "classification",
+   "priority",
+   "service",
+   "direction"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.5,
+   "reasoning": "The model assigned a rank of 4, which is one step away from the anchored ground truth of 3 (derived from Snort priority 2). The justification correctly identifies the Snort priority and classification but incorrectly downgrades the severity by characterizing the '/....' access as low-impact probing rather than a potential directory traversal or information leak attempt, which aligns with the 'Attempted Information Leak' classification. While the reasoning is coherent, the conclusion that the risk is 'low' contradicts the medium severity implied by the ground truth, resulting in a score within the 0.5-0.9 band."
+  }
+ },
+ {
+  "alert_id": 690,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a SERVER-WEBAPP iChat directory traversal attempt, which is an information\u2011disclosure technique rather than direct code execution. The Snort priority is 2, which maps to a medium severity baseline, and the evidence (S1) describes the same rule with a CVSS base score of 5.0, indicating moderate impact. Therefore the alert fits a medium (rank 3) classification.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 3 exactly matches the anchored ground truth of 3 (derived from Snort priority 2). The justification is high-quality, correctly identifying the attack type as information disclosure rather than code execution and citing the CVSS base score of 5.0 as evidence for the medium severity classification."
+  }
+ },
+ {
+  "alert_id": 691,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert reports a SERVER-WEBAPP Compaq Insight directory traversal attempt, which directly targets a known web\u2011application vulnerability and is classified as a Web Application Attack. The Snort priority is 1, indicating a high\u2011severity detection, and the presence of a specific exploit pattern (\"../\") confirms an active exploitation attempt rather than mere scanning. The combination of a critical vulnerability reference and high priority justifies the most severe ranking.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 1, which exactly matches the anchored ground truth derived from Snort priority 1. The justification is strong, correctly identifying the alert as a high-severity web application attack and citing the specific exploit pattern ('../') and Snort priority as evidence for the most severe ranking."
+  }
+ },
+ {
+  "alert_id": 696,
+  "rule_id": "1:1142:11",
+  "alert_message": "SERVER-WEBAPP /.... access",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /.... access Attempted Information Leak TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert is classified as an Attempted Information Leak and has a Snort priority of 2, which maps to a medium baseline severity. However, the alert message provides no specific exploit details, only a generic '/.... access' indication, suggesting a low-impact reconnaissance attempt rather than a direct exploit. The protocol (TCP) and service (http) are typical for such scans, and the packet length is modest, reinforcing a low severity assessment. Therefore, the overall risk is considered low.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1142,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.8,
+   "reasoning": "The model assigned a rank of 4, which is within one step of the anchored ground truth rank of 3 (derived from Snort priority 2). The justification is well-reasoned and evidence-grounded, correctly identifying the alert as a generic reconnaissance attempt rather than a specific exploit, which supports a slightly lower severity assessment than the baseline. However, since the rank deviates from the anchor, the score is reduced from the maximum, though the quality of the explanation keeps it in the high band."
+  }
+ },
+ {
+  "alert_id": 707,
+  "rule_id": "1:966:25",
+  "alert_message": "SERVER-OTHER Microsoft Frontpage .... request",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-OTHER Microsoft Frontpage .... request Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert has priority 1, which maps to the highest severity and indicates a critical attempt. It is classified as a Web Application Attack targeting Microsoft Frontpage, a known vector for server compromise. The use of TCP/HTTP and the presence of a client\u2011to\u2011server direction suggest an active exploitation attempt rather than benign traffic. Combined, these factors justify the most severe rank.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 966,
+   "rag_matched_sid": null,
+   "evidence_document": null,
+   "sid_match": null
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 1, which exactly matches the anchored ground truth derived from Snort priority 1. The justification is strong, correctly identifying the high severity based on the priority level, the specific web application attack classification, and the nature of the exploitation attempt."
+  }
+ },
+ {
+  "alert_id": 778,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against an iChat web service, which can lead to information disclosure but does not directly execute code or gain privileges. The Snort priority is 2 (mapped to a medium baseline), and the evidence (S1) describes the impact as partial confidentiality loss with a CVSS base of 5.0, supporting a medium severity rating. No evidence suggests immediate exploitation or system compromise, so a rank of 3 (MEDIUM) is appropriate.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 3 exactly matches the anchored ground truth of 3. The justification is high-quality, correctly mapping Snort priority 2 to the medium severity level and substantiating this with specific evidence from the rule documentation, including the CVSS base score of 5.0 and the partial confidentiality impact."
+  }
+ },
+ {
+  "alert_id": 816,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against a web application, which can lead to information disclosure but does not directly execute code or gain privileged access. While the Snort priority is high (1), the nature of the attack is more probing than an active exploit, fitting a medium severity level. The classification as a Web Application Attack and the presence of typical traversal content support this assessment.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1 (critical), but the attack type is limited to information gathering, so the rank is lowered to 3 (medium).",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.0,
+   "reasoning": "The model assigned a rank of 3, while the anchored ground truth is 1, resulting in a difference of 2 steps, which places the score in the lowest band (0.0-0.4). The justification is flawed because it incorrectly characterizes a directory traversal exploit as merely 'probing' rather than an active exploitation attempt, and it arbitrarily downgrades the severity despite the high Snort priority and the potential for sensitive file access."
+  }
+ },
+ {
+  "alert_id": 824,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert reports a SERVER-WEBAPP Compaq Insight directory traversal attempt, which is a direct exploitation of a known web\u2011application vulnerability (CVE\u20111999\u20110771). The Snort priority is 1, indicating a high\u2011severity rule, and the content matches the directory\u2011traversal pattern \"../\" used by the documented rule. Such attacks can lead to unauthorized file access and potential system compromise, fitting the CRITICAL severity level. The evidence from snort_rule_1-1199.txt confirms this is a targeted exploitation attempt.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 1, which exactly matches the anchored ground truth of 1 derived from Snort priority 1. The justification is strong, correctly identifying the specific vulnerability (directory traversal via CVE-1999-0771) and explaining why this constitutes a critical severity event due to the potential for unauthorized file access and system compromise."
+  }
+ },
+ {
+  "alert_id": 870,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert indicates a SERVER-WEBAPP Compaq Insight directory traversal attempt, which is a direct exploitation of a known web\u2011application vulnerability (CVE\u20111999\u20110771). The Snort priority is 1, mapping to the highest severity, and the content matches a documented rule (sid 1199) that describes a directory traversal attack capable of exposing files on the server. Such attacks can lead to information disclosure and further compromise, fitting the CRITICAL category. Therefore the alert is ranked as the most severe.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 1, which exactly matches the anchored ground truth derived from Snort priority 1. The justification is strong, citing the specific CVE, the nature of the directory traversal attack, and the potential for information disclosure to support the critical severity assessment."
+  }
+ },
+ {
+  "alert_id": 889,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert indicates a directory traversal attempt against Compaq Insight, a known web\u2011application vulnerability, and is classified as a Web Application Attack with Snort priority 1, which maps to the highest severity. The presence of a specific exploit pattern (\"../\") and a matching rule (sid 1199) confirms a direct exploitation attempt with real impact potential. Therefore it warrants a critical rating.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 1, which exactly matches the anchored ground-truth rank of 1 derived from Snort priority 1. The justification is strong, correctly identifying the specific vulnerability (directory traversal), the classification (Web Application Attack), and the high Snort priority as evidence for the critical severity rating."
+  }
+ },
+ {
+  "alert_id": 897,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert indicates a directory traversal attempt against a web application, which can lead to information disclosure but does not directly execute code or gain privileges. The Snort priority is high (1), but the nature of the attack is limited to probing for file system access rather than a critical exploit. Therefore the severity is assessed as medium. The record fields such as alert_message, classification, priority, protocol, service, source_ip, destination_ip, destination_port, direction, and packet_length were considered.",
+  "anchored_rank": 1,
+  "mismatch": true,
+  "mismatch_explanation": "The Snort priority maps to rank 1 (critical), but the attack type (directory traversal) is less severe, so the rank is adjusted to 3 (medium).",
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.0,
+   "reasoning": "The model assigned a rank of 3, while the anchored ground truth is 1, resulting in a difference of 2 steps, which places the score in the lowest band (0.0-0.4). The justification is flawed because it incorrectly downgrades the severity of a directory traversal attack (CVE-1999-0771) by claiming it does not directly execute code, ignoring that Snort Priority 1 indicates a critical vulnerability that often leads to remote code execution or severe data leakage. The model failed to align with the explicit high severity indicated by the Snort priority and the nature of the exploit."
+  }
+ },
+ {
+  "alert_id": 905,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert reports a SERVER-WEBAPP Compaq Insight directory traversal attempt, which is a direct exploitation attempt against a known web\u2011application vulnerability. The Snort priority is 1, mapping to the highest severity, and the classification \"Web Application Attack\" confirms a high\u2011impact threat. The presence of source and destination details and a TCP packet of 326 bytes further indicate an active attack vector. Therefore the alert warrants a critical (rank 1) rating.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 1, which exactly matches the anchored ground truth derived from Snort priority 1. The justification is strong, correctly identifying the alert as a direct exploitation attempt (directory traversal) and citing the high-impact classification and Snort priority as evidence for the critical severity rating."
+  }
+ },
+ {
+  "alert_id": 906,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a SERVER-WEBAPP iChat directory traversal attempt, which can disclose files but does not directly execute code or gain privileges. The Snort priority is 2, mapping to a medium severity baseline, and the nature of the attack aligns with information gathering rather than immediate compromise. Therefore a medium (rank 3) classification is appropriate.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model correctly assigned a rank of 3, which exactly matches the anchored ground truth derived from Snort priority 2. The justification is high-quality, correctly identifying the attack as a directory traversal (information disclosure) rather than code execution, and explicitly linking the Snort priority to the medium severity baseline."
+  }
+ },
+ {
+  "alert_id": 922,
+  "rule_id": "1:1199:18",
+  "alert_message": "SERVER-WEBAPP Compaq Insight directory traversal",
+  "snort_priority": 1,
+  "classification": "Web Application Attack",
+  "classtype": "web-application-attack",
+  "query": "SERVER-WEBAPP Compaq Insight directory traversal Web Application Attack TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 1,
+  "justification": "The alert reports a SERVER-WEBAPP Compaq Insight directory traversal attempt, which directly targets a known web\u2011application vulnerability and could lead to unauthorized file access. The Snort priority is 1, indicating a high\u2011severity rule, and the classification is a Web Application Attack. Combined with the specific directory\u2011traversal content, this represents a critical exploitation attempt. Therefore the alert warrants the highest severity rank.",
+  "anchored_rank": 1,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1199,
+   "rag_matched_sid": 1199,
+   "evidence_document": "snort_rule_1-1199.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model assigned a rank of 1, which exactly matches the anchored ground-truth rank of 1 derived from Snort priority 1. The justification is strong, correctly identifying the specific vulnerability (directory traversal) and citing the high Snort priority and classification as evidence for the critical severity assessment."
+  }
+ },
+ {
+  "alert_id": 978,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a directory traversal attempt against iChat, which can disclose files but does not directly execute code or gain privileges. The Snort priority is 2, which maps to a medium severity baseline, and the nature of the attack aligns with information gathering rather than immediate compromise. Therefore a medium (3) rank is appropriate.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 3 exactly matches the anchored ground truth of 3 (derived from Snort priority 2). The justification is high-quality, correctly identifying the attack as a directory traversal that primarily risks information disclosure rather than immediate code execution, which supports the medium severity assessment."
+  }
+ },
+ {
+  "alert_id": 1029,
+  "rule_id": "1:1604:12",
+  "alert_message": "SERVER-WEBAPP iChat directory traversal attempt",
+  "snort_priority": 2,
+  "classification": "Access to a potentially vulnerable web application",
+  "classtype": "web-application-activity",
+  "query": "SERVER-WEBAPP iChat directory traversal attempt Access to a potentially vulnerable web application TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 3,
+  "justification": "The alert reports a SERVER-WEBAPP iChat directory traversal attempt, which is an information\u2011disclosure technique rather than direct code execution. The Snort priority is 2, which maps to a medium severity baseline, and the evidence (S1) describes the same rule (sid 1604) with a CVSS base score of 5.0, indicating moderate impact. Therefore the activity is best classified as medium severity.",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "source_ip",
+   "source_port",
+   "destination_ip",
+   "destination_port",
+   "direction",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 1604,
+   "rag_matched_sid": 1604,
+   "evidence_document": "snort_rule_1-1604.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 1.0,
+   "reasoning": "The model's rank of 3 exactly matches the anchored ground truth of 3 (derived from Snort priority 2). The justification is high-quality, correctly identifying the attack as information disclosure rather than code execution and citing the CVSS base score of 5.0 as evidence for the medium severity classification."
+  }
+ },
+ {
+  "alert_id": 1042,
+  "rule_id": "1:43289:3",
+  "alert_message": "SERVER-WEBAPP /etc/shadow file access attempt",
+  "snort_priority": 2,
+  "classification": "Attempted Information Leak",
+  "classtype": "attempted-recon",
+  "query": "SERVER-WEBAPP /etc/shadow file access attempt Attempted Information Leak TCP http",
+  "ranker_model": "openai/gpt-oss-120b",
+  "model_rank": 4,
+  "justification": "The alert indicates an attempted access to the /etc/shadow file over HTTP, which is classified as an attempted information leak and corresponds to reconnaissance activity rather than direct exploitation. The Snort priority is 2 (mapped to rank 3), but the nature of the request is low-impact probing without evidence of successful compromise. Therefore the severity is assessed as low. ",
+  "anchored_rank": 3,
+  "mismatch": false,
+  "mismatch_explanation": null,
+  "metrics_used": [
+   "alert_message",
+   "classification",
+   "priority",
+   "protocol",
+   "service",
+   "destination_port",
+   "packet_length"
+  ],
+  "sid_matching": {
+   "snort_sid": 43289,
+   "rag_matched_sid": 43289,
+   "evidence_document": "snort_rule_1-43289.txt",
+   "sid_match": true
+  },
+  "judge": {
+   "model": "qwen/qwen3.6-27b",
+   "score": 0.8,
+   "reasoning": "The model assigned a rank of 4, which is within one step of the anchored ground truth rank of 3 (derived from Snort priority 2). The justification is well-reasoned, correctly identifying the alert as reconnaissance/information leak rather than active exploitation, which supports a slightly lower severity than the default mapping. However, the rank is not exact, so it falls into the 0.5-0.9 band."
+  }
+ }
+]
