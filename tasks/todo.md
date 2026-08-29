@@ -2071,7 +2071,7 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
 - [x] Link the final alert-ranking data directly from the internship submission map.
 - [x] Confirm the public artefact contains no API keys, local paths, full retrieved passages,
       ISO document content, or embedded Cisco rule documentation.
-- [ ] Commit, push to `origin/main`, and verify unauthenticated public access.
+- [x] Commit, push to `origin/main`, and verify unauthenticated public access.
 - Done when: the committed file is byte-identical to the final 21 August output, its summary
       recomputes to 29 exact ranks, 9 mismatches, 40 correct SID matches, 0 wrong and 10
       abstentions, and the public raw GitHub file has the recorded SHA-256.
@@ -2081,3 +2081,6 @@ scripts stop cleanly (exit 2) at the daily cap and resume with `--resume`.
     scans found no raw evidence, prompts, responses, rule-documentation objects, API keys,
     private keys, absolute local paths or ISO file content. Ruff is clean and the complete
     offline suite remains at 343 passed with one integration test deselected.
+    Public verification: `origin/main` resolved to
+    `37538c7c6780a6a7c5ae657611c0f6cc83632934`; unauthenticated raw GitHub reads returned
+    the artefact README and JSON, and the downloaded JSON reproduced the recorded SHA-256.
